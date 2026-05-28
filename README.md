@@ -1,131 +1,101 @@
-````md
-# 🧠 Hydro-Scout Development Workspace
+# 💧 Hydro-Scout
 
-Welcome to the official development repository for **Hydro-Scout** — a centralized web-based mapping system for hydrant status and emergency water resources.
+> Web-based GIS for emergency hydrant mapping & water resource management
 
-This repository serves as the primary workspace for planning, development, testing, documentation, and collaboration throughout the thesis development cycle.
+![Agile Scrum](https://img.shields.io/badge/methodology-Agile%20Scrum-blue)
+![Status](https://img.shields.io/badge/status-In%20Development-yellow)
+![Branch](https://img.shields.io/badge/main-protected-red)
 
 ---
 
-# 🚒 About Hydro-Scout
+## About
 
 Hydro-Scout is a web-based Geographic Information System (GIS) designed to help emergency responders:
 
-- Locate operational fire hydrants in real time
-- Monitor hydrant status updates
-- Identify alternative emergency water sources
-- Improve water-source response efficiency during fire incidents
-
-The system is being developed using:
-
-- Next.js
-- React.js
-- Firebase Firestore
-- Mapbox GL JS
-- Tailwind CSS
-
-Development follows the Agile Scrum methodology within a limited academic development timeline.
+- 📍 Locate operational fire hydrants in real time
+- 📡 Monitor hydrant status updates
+- 💧 Identify alternative emergency water sources
+- ⚡ Improve water-source response efficiency during fire incidents
 
 ---
 
-# 📁 Repository Structure
+## Tech Stack
 
-```txt
-/app            → Main application source code
-/components     → Reusable UI components
-/lib            → Firebase, utilities, helper functions
-/public         → Static assets
-/docs           → Documentation and research files
-````
-
----
-
-# 🌿 Branching & Contribution Rules
-
-## 🚫 Never Push Directly to `main`
-
-The `main` branch is protected.
-
-All development must be done through separate branches and merged using Pull Requests (PRs).
+| Technology | Role |
+|---|---|
+| **Next.js** | Frontend framework |
+| **React.js** | UI library |
+| **Firebase Firestore** | Database |
+| **Mapbox GL JS** | Interactive mapping |
+| **Tailwind CSS** | Styling |
 
 ---
 
-# 🌱 Branch Naming Convention
+## Repository Structure
 
-Use the following format when creating branches:
-
-```bash
-type/short-description
+```
+/app          → Main application source code
+/components   → Reusable UI components
+/lib          → Firebase, utilities, helper functions
+/public       → Static assets
+/docs         → Documentation and research files
 ```
 
-Examples:
+---
 
+## Branch Naming Convention
+
+Format: `type/short-description`
+
+| Prefix | Use case |
+|---|---|
+| `feature/` | New features |
+| `fix/` | Bug fixes |
+| `ui/` | UI/UX changes |
+| `docs/` | Documentation updates |
+
+**Examples:**
 ```bash
 feature/hydrant-map
 feature/auth-system
 feature/otw-mode
 feature/heatmap-overlay
-
 fix/login-bug
 fix/map-loading
-
 ui/dashboard-redesign
 ui/mobile-navbar
-
 docs/readme-update
 ```
 
 ---
 
-# 🛠️ Contribution Workflow
+## Contribution Workflow
 
-## 1. Pull Latest Changes
-
-Before starting work:
-
+### 1. Pull latest changes
+Always sync before starting work:
 ```bash
 git checkout main
 git pull origin main
 ```
 
----
-
-## 2. Create a Branch
-
-Example:
-
+### 2. Create a branch
 ```bash
 git checkout -b feature/hydrant-map
 ```
 
----
-
-## 3. Commit Changes Properly
-
-Use clear commit messages.
-
-Examples:
-
+### 3. Commit with clear messages
 ```bash
 git commit -m "Added hydrant marker clustering"
 git commit -m "Implemented OTW routing mode"
 git commit -m "Fixed Firebase auth redirect issue"
 ```
 
----
-
-## 4. Push Your Branch
-
+### 4. Push your branch
 ```bash
 git push origin feature/hydrant-map
 ```
 
----
-
-## 5. Open a Pull Request
-
-After pushing:
-
+### 5. Open a Pull Request
 1. Open the repository on GitHub
 2. Create a Pull Request into `main`
 3. Wait for review and approval
@@ -133,35 +103,36 @@ After pushing:
 
 ---
 
-# 📌 Development Guidelines
+## Development Guidelines
 
-* Keep components modular and reusable
-* Avoid unnecessary dependencies
-* Prioritize mobile responsiveness
-* Write readable and maintainable code
-* Test features before pushing
-* Keep commits focused and concise
-
----
-
-# 🔒 Repository Rules
-
-* No force pushing to `main`
-* No direct commits to `main`
-* Pull Requests are required before merging
-* Keep branch names readable and organized
+- Keep components modular and reusable
+- Avoid unnecessary dependencies
+- Prioritize mobile responsiveness
+- Write readable and maintainable code
+- Test features before pushing
+- Keep commits focused and concise
 
 ---
 
-# 👥 Team Hivemind
+## Repository Rules
 
-* Mark Luis Barican
-* Jabez Zecariah Tan
-* John Patrick Yusingco
-* Karl Andrei Manangan
+> ⚠️ **The `main` branch is protected. Never push directly to it.**
 
-CIIT College of Innovation and Integrated Technology
+- ❌ No force pushing to `main`
+- ❌ No direct commits to `main`
+- ✅ Pull Requests are required before merging
+- ✅ Keep branch names readable and organized
+
+---
+
+## Team Hivemind
+
+| Name | Initials |
+|---|---|
+| Mark Luis Barican | MLB |
+| Jabez Zecariah Tan | JZT |
+| John Patrick Yusingco | JPY |
+| Karl Andrei Manangan | KAM |
+
+**CIIT College of Innovation and Integrated Technology**
 Bachelor of Science in Computer Science
-
-```
-```
