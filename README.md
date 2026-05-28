@@ -1,56 +1,167 @@
-# 🧠 Hivemind Thesis Repository (Planning Workspace)
+````md
+# 🧠 Hydro-Scout Development Workspace
 
-Welcome to the central repository for Team Hivemind! 
+Welcome to the official development repository for **Hydro-Scout** — a centralized web-based mapping system for hydrant status and emergency water resources.
 
-Right now, our team has three incredible thesis proposals on the table (**ReLoop**, **Hydro-Scout**, and **Throttle**). While we wait to lock in the final topic, we are using this "Planning Phase" to establish a highly optimized, AI-assisted development workspace. 
-
-By setting this up now, the exact hour our topic is greenlit, our workspace will be ready to sprint instantly.
-
----
-
-## 🚀 Why are we optimizing Claude Code right now?
-Even though our three proposals have different topics, they share **80% of the same software DNA**. They are all:
-1. **Location-aware, community-driven CRUD applications.**
-2. **Strictly bounded by a 9-week academic timeline.**
-3. **Prototypes designed to be evaluated using the System Usability Scale (SUS).**
-
-We have pre-programmed these constraints into a file called `CLAUDE.md`. Because of this file, Claude Code acts less like a generic chatbot and more like a senior engineer who explicitly understands our thesis deadlines, architectural goals, and testing criteria.
+This repository serves as the primary workspace for planning, development, testing, documentation, and collaboration throughout the thesis development cycle.
 
 ---
 
-## 🛠️ Repository Architecture (What's in here?)
+# 🚒 About Hydro-Scout
 
-* `CLAUDE.md` — **DO NOT DELETE.** This is the configuration blueprint that tells Claude Code how to behave. It restricts Claude from writing over-engineered, enterprise-scale structures so we can focus strictly on rapid prototyping.
-* `README.md` — This file! The guide for the team.
+Hydro-Scout is a web-based Geographic Information System (GIS) designed to help emergency responders:
+
+- Locate operational fire hydrants in real time
+- Monitor hydrant status updates
+- Identify alternative emergency water sources
+- Improve water-source response efficiency during fire incidents
+
+The system is being developed using:
+
+- Next.js
+- React.js
+- Firebase Firestore
+- Mapbox GL JS
+- Tailwind CSS
+
+Development follows the Agile Scrum methodology within a limited academic development timeline.
 
 ---
 
-## 💻 How to Use Claude Code on This Project (Step-by-Step)
+# 📁 Repository Structure
 
-If you want to use Anthropic's official terminal-based assistant (`claude`) to help you draft database models, map out UI directories, or plan agile sprints, follow these instructions:
+```txt
+/app            → Main application source code
+/components     → Reusable UI components
+/lib            → Firebase, utilities, helper functions
+/public         → Static assets
+/docs           → Documentation and research files
+````
 
-### 1. Install Claude Code Globally
-Open your machine's terminal (or PowerShell on Windows) and run the installer:
-* **Mac / Linux / WSL:** `curl -fsSL https://claude.ai/install.sh | bash`
-* **Windows (PowerShell):** `irm https://claude.ai/install.ps1 | iex`
+---
 
-### 2. Enter the Workspace
-Navigate into this repository directory on your computer:
+# 🌿 Branching & Contribution Rules
+
+## 🚫 Never Push Directly to `main`
+
+The `main` branch is protected.
+
+All development must be done through separate branches and merged using Pull Requests (PRs).
+
+---
+
+# 🌱 Branch Naming Convention
+
+Use the following format when creating branches:
+
 ```bash
-cd path/to/Hivemind-Prototype
+type/short-description
+```
 
-### 3. Wake Up Claude
-Open terminal and type in claude
+Examples:
 
+```bash
+feature/hydrant-map
+feature/auth-system
+feature/otw-mode
+feature/heatmap-overlay
 
-# 🎯 What to ask Claude during this Planning Phase
-Since we don't have active project code yet, you can use Claude to handle the heavy academic planning lift. Try typing these commands directly into your claude session terminal:
+fix/login-bug
+fix/map-loading
 
-## For Database Planning: 
-"Based on our CLAUDE.md, draft a universal data model blueprint for our core asset entity. Show me how it looks as a relational table for Supabase vs. a flexible document for MongoDB."
+ui/dashboard-redesign
+ui/mobile-navbar
 
-## For UI/UX Planning:
-"Let's map out a universal UI component directory layout for our thesis. What core reusable component files will we need to satisfy high System Usability Scale (SUS) marks?"
+docs/readme-update
+```
 
-## For Sprint Planning:
-"Act as our Agile project manager. Based on our 9-week deadline, break down Sprint 1 (Weeks 1-2) into concrete user stories and tasks for a 4-person development team."
+---
+
+# 🛠️ Contribution Workflow
+
+## 1. Pull Latest Changes
+
+Before starting work:
+
+```bash
+git checkout main
+git pull origin main
+```
+
+---
+
+## 2. Create a Branch
+
+Example:
+
+```bash
+git checkout -b feature/hydrant-map
+```
+
+---
+
+## 3. Commit Changes Properly
+
+Use clear commit messages.
+
+Examples:
+
+```bash
+git commit -m "Added hydrant marker clustering"
+git commit -m "Implemented OTW routing mode"
+git commit -m "Fixed Firebase auth redirect issue"
+```
+
+---
+
+## 4. Push Your Branch
+
+```bash
+git push origin feature/hydrant-map
+```
+
+---
+
+## 5. Open a Pull Request
+
+After pushing:
+
+1. Open the repository on GitHub
+2. Create a Pull Request into `main`
+3. Wait for review and approval
+4. Merge only after approval
+
+---
+
+# 📌 Development Guidelines
+
+* Keep components modular and reusable
+* Avoid unnecessary dependencies
+* Prioritize mobile responsiveness
+* Write readable and maintainable code
+* Test features before pushing
+* Keep commits focused and concise
+
+---
+
+# 🔒 Repository Rules
+
+* No force pushing to `main`
+* No direct commits to `main`
+* Pull Requests are required before merging
+* Keep branch names readable and organized
+
+---
+
+# 👥 Team Hivemind
+
+* Mark Luis Barican
+* Jabez Zecariah Tan
+* John Patrick Yusingco
+* Karl Andrei Manangan
+
+CIIT College of Innovation and Integrated Technology
+Bachelor of Science in Computer Science
+
+```
+```
