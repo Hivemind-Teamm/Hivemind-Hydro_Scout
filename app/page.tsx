@@ -1,5 +1,9 @@
-import DilimanMap from "../app/src/components/DilimanMap";
+import MapView from './src/components/MapView';
 
 export default function Home() {
-  return <DilimanMap />;
+  return (
+    <div style={{ height: '100vh', width: '100vw' }}>
+      <MapView />
+    </div>
+  );
 }
