@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import 'leaflet/dist/leaflet.css';
-
+import { AuthProvider } from "@/lib/auth-context";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -28,7 +28,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
-      <body className="h-screen w-screen flex flex-col" style={{ margin: 0 }}>{children}</body>
+     <body className="h-screen w-screen flex flex-col" style={{ margin: 0 }}>
+  <AuthProvider>{children}</AuthProvider>
+</body>
     </html>
   );
 }

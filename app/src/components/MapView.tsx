@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import DilimanMap from './DilimanMap';
+import UserStatusBadge from '../components/UserStatusBadge';
 
 // react-leaflet touches `window` on import, so it must be loaded client-side only.
 const LeafletMap = dynamic(() => import('./LeafletMap'), { ssr: false });
@@ -16,7 +17,6 @@ export default function MapView() {
 
   // Auto-fallback: no Mapbox token configured at all.
   useEffect(() => {
-    console.log('Token check:', process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
     if (!process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
       setAutoFallback(true);
       setProvider('leaflet');
@@ -39,6 +39,8 @@ export default function MapView() {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <UserStatusBadge />
+
       <div
         style={{
           position: 'absolute',
