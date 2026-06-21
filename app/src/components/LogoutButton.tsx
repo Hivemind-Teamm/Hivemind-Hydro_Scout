@@ -1,33 +1,23 @@
-// components/LogoutButton.tsx
+'use client';
 
-"use client";
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
-
-export default function LogoutButton() {
+export default function LogoutButton({ fullWidth = false }: { fullWidth?: boolean }) {
   const { logout } = useAuth();
   const router = useRouter();
 
   async function handleLogout() {
     await logout();
-    router.push("/login");
+    router.push('/login');
   }
 
   return (
     <button
       onClick={handleLogout}
-      style={{
-        padding: "6px 12px",
-        borderRadius: 6,
-        border: "1px solid #ccc",
-        background: "white",
-        cursor: "pointer",
-        fontSize: 13,
-        fontWeight: 600,
-      }}
+      className={`rounded-xl border border-neutral-200 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 ${fullWidth ? 'w-full' : 'px-3'}`}
     >
-      Log out
+      Log Out
     </button>
   );
 }

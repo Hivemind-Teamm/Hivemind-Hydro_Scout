@@ -1,9 +1,5 @@
-import MapView from './src/components/MapView';
+import HydroScoutDashboard from './src/components/HydroScoutDashboard';
 
 export default function Home() {
-  return (
-    <div style={{ height: '100vh', width: '100vw' }}>
-      <MapView />
-    </div>
-  );
+  return <HydroScoutDashboard />;
 }
