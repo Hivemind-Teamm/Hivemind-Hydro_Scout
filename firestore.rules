@@ -37,23 +37,30 @@ service cloud.firestore {
         || (isSignedIn() && request.auth.uid == uid
             && onlyChangedFields(['lastLoginAt']));
 
-      allow create, delete: if isAdmin();
+      // New users can create their own document (signup flow).
+      // Only admins can create documents for other users or delete any.
+      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow delete: if isAdmin();
     }
 
     // ---------- hydrants ----------
 
     match /hydrants/{hydrantId} {
-      allow read: if isAnyRole();
+      // Public landing page: anyone can VIEW hydrants without signing in.
+      allow read: if true;
 
       allow create: if isAuthorized() || isAdmin();
 
       allow update: if isAdmin()
         || (isAuthorized() && onlyChangedFields([
-              'status', 'operationalStatus', 'notes', 'photoURL', 'photoUrl',
-              'hazardFlags', 'hazards', 'pressureStatus', 'waterCleanliness',
+              'status', 'operationalStatus', 'notes', 'fieldNotes', 'register',
+              'photoURL', 'photoUrl', 'hazardFlags', 'hazards',
+              'pressureStatus', 'waterCleanliness',
               'updatedBy', 'updatedAt'
             ]))
         || (isHead() && onlyChangedFields([
+              'operationalStatus', 'pressureStatus', 'waterCleanliness',
+              'hazards', 'notes', 'fieldNotes', 'register',
               'lastMaintenanceDate', 'nextMaintenanceDate',
               'updatedBy', 'updatedAt'
             ]));
@@ -61,9 +68,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /reports/{reportId} {
-        allow read: if isAnyRole();
-        allow create, update, delete: if isHead() || isAdmin();
+        // Direct-path access (read a hydrant's own reports, file new ones).
+        allow read: if true;
+        allow create: if isAuthorized() || isHead() || isAdmin();
+        allow update, delete: if isHead() || isAdmin();
       }
+    }
+
+    // ---------- reports collection group ----------
+    // The ReportsPanel uses a collectionGroup('reports') query to gather
+    // reports across ALL hydrants. Collection-group queries are NOT covered
+    // by the nested rule above — they need this recursive-wildcard match.
+    match /{path=**}/reports/{reportId} {
+      allow read: if true;
     }
 
     // ---------- default deny ----------

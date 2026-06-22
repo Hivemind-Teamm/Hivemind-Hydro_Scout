@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
+@import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
 
 :root {
   --background: #ffffff;
@@ -23,6 +25,56 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ── Panel / modal entrance animations ── */
+@keyframes slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(28px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-28px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+@keyframes fade-scale-in {
+  from { transform: scale(0.96); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.anim-slide-up    { animation: slide-up       0.22s cubic-bezier(0.22,1,0.36,1) both; }
+.anim-slide-right { animation: slide-in-right  0.22s cubic-bezier(0.22,1,0.36,1) both; }
+.anim-slide-left  { animation: slide-in-left   0.22s cubic-bezier(0.22,1,0.36,1) both; }
+.anim-fade-scale  { animation: fade-scale-in   0.2s  ease-out both; }
+.anim-fade        { animation: fade-in         0.18s ease-out both; }
+
+/* NOTE: never put a `transform` animation on `.leaflet-marker-icon` — Leaflet
+   positions each marker via an inline `transform: translate3d(...)`, and a CSS
+   animation on transform overrides it, collapsing every pin to the map origin.
+   Animate only opacity if a marker fade-in is wanted. */
+.leaflet-marker-icon { animation: fade-in 0.2s ease-out both; }
+
+@keyframes stripe-scroll {
+  from { background-position: 0 0; }
+  to   { background-position: 28px 28px; }
+}
+
+.add-hydrant-active {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #FED42E 0px,
+    #FED42E 7px,
+    #91191E 7px,
+    #91191E 14px
+  );
+  animation: stripe-scroll 1.2s linear infinite;
 }
 
 @keyframes hydrant-pulse {

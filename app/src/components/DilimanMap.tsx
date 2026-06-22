@@ -5,7 +5,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './hydrantIcon';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
-import type { MapController } from './MapView';
+import type { MapController, PendingPin } from './MapView';
 
 interface DilimanMapProps {
   hydrants: Hydrant[];
@@ -14,9 +14,12 @@ interface DilimanMapProps {
   onError?: (error: unknown) => void;
   onMapReady?: (controller: MapController) => void;
   onSelectHydrant: (hydrant: Hydrant) => void;
+  addHydrantMode: boolean;
+  onMapClick: (lat: number, lng: number) => void;
+  pendingPin: PendingPin | null;
 }
 
-export default function DilimanMap({ hydrants, selectedHydrantId, onLoad, onError, onMapReady, onSelectHydrant }: DilimanMapProps) {
+export default function DilimanMap({ hydrants, selectedHydrantId, onLoad, onError, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, pendingPin }: DilimanMapProps) {
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       <Map
@@ -26,7 +29,7 @@ export default function DilimanMap({ hydrants, selectedHydrantId, onLoad, onErro
           latitude: DILIMAN_CENTER.lat,
           zoom: DEFAULT_ZOOM,
         }}
-        style={{ position: 'absolute', inset: 0 }}
+        style={{ position: 'absolute', inset: 0, cursor: addHydrantMode ? 'crosshair' : undefined }}
         mapStyle="mapbox://styles/mapbox/streets-v12"
         onLoad={(e: { target: { resize: () => void; zoomIn: () => void; zoomOut: () => void; flyTo: (opts: object) => void } }) => {
           e.target.resize();
@@ -38,12 +41,23 @@ export default function DilimanMap({ hydrants, selectedHydrantId, onLoad, onErro
           onLoad?.();
         }}
         onError={(e: unknown) => onError?.(e)}
+        onClick={(e: { lngLat: { lat: number; lng: number } }) => {
+          if (addHydrantMode) onMapClick(e.lngLat.lat, e.lngLat.lng);
+        }}
       >
+        {pendingPin && (
+          <Marker longitude={pendingPin.lng} latitude={pendingPin.lat} anchor="center">
+            <div style={{ width: 14, height: 14, background: '#FED42E', border: '2.5px solid #91191E', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }} />
+          </Marker>
+        )}
         {hydrants.map((h) => {
           const isSelected = selectedHydrantId === h.id;
           return (
             <Marker key={h.id} longitude={h.lng} latitude={h.lat} anchor="bottom">
-              <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => onSelectHydrant(h)}>
+              <div
+                style={{ position: 'relative', cursor: addHydrantMode ? 'crosshair' : 'pointer' }}
+                onClick={() => { if (!addHydrantMode) onSelectHydrant(h); }}
+              >
                 {isSelected && <div className="hydrant-pulse-ring" />}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img

@@ -3,11 +3,15 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { type Hydrant, type HydrantStatus } from '../data/hydrants';
+import { updateHydrantStatus } from '../data/store';
+
+const ROLE_LABELS: Record<string, string> = {
+  general: 'General', authorized: 'Authorized', head: 'Head', admin: 'Admin',
+};
 
 interface EditStatusPanelProps {
   hydrant: Hydrant;
   onClose: () => void;
-  onSubmit: (hydrantId: string, newStatus: HydrantStatus, note: string) => void;
   onOpenAccount: () => void;
 }
 
@@ -17,15 +21,18 @@ const STATUS_OPTIONS: { value: HydrantStatus; label: string; color: string; bg: 
   { value: 'out',         label: 'Out of Service',   color: '#ffffff', bg: '#9aa0a6' },
 ];
 
-export default function EditStatusPanel({ hydrant, onClose, onSubmit, onOpenAccount }: EditStatusPanelProps) {
-  const { user } = useAuth();
+export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: EditStatusPanelProps) {
+  const { user, role } = useAuth();
   const [selectedStatus, setSelectedStatus] = useState<HydrantStatus>(hydrant.status);
   const [cleanliness, setCleanliness] = useState('');
   const [hazard, setHazard] = useState('');
   const [note, setNote] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
+  const roleLabel = role ? (ROLE_LABELS[role] ?? role) : 'Authorized';
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
@@ -34,13 +41,29 @@ export default function EditStatusPanel({ hydrant, onClose, onSubmit, onOpenAcco
     setPhotos((p) => [...p, '']);
   }
 
-  function handleSubmit() {
-    onSubmit(hydrant.id, selectedStatus, note);
-    onClose();
+  async function handleSubmit() {
+    if (!user) { setError('You must be signed in to edit a hydrant.'); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await updateHydrantStatus(hydrant.id, {
+        status: selectedStatus,
+        waterCleanliness: cleanliness,
+        hazard,
+        note,
+        by: displayName,
+        role: roleLabel,
+      });
+      onClose();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(/permission/i.test(msg) ? 'You do not have permission to edit this hydrant.' : msg);
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="pointer-events-auto absolute bottom-0 right-0 top-[69px] z-[3000] flex w-[420px] flex-col bg-white shadow-2xl">
+    <div className="anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[69px] z-[3000] flex w-[420px] flex-col bg-white shadow-2xl">
 
       {/* Header */}
       <div className="flex items-start justify-between bg-[#91191E] px-5 py-3">
@@ -165,19 +188,24 @@ export default function EditStatusPanel({ hydrant, onClose, onSubmit, onOpenAcco
       </div>
 
       {/* Footer */}
-      <div className="flex gap-3 border-t border-neutral-200 px-5 py-3">
-        <button
-          onClick={onClose}
-          className="flex-1 rounded-lg border border-neutral-200 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
-          className="flex-1 rounded-lg bg-[#91191E] py-2 text-sm font-bold text-white hover:bg-[#7a1419]"
-        >
-          Submit
-        </button>
+      <div className="border-t border-neutral-200 px-5 py-3">
+        {error && <p className="mb-2 text-[11px] font-medium text-[#91191E]">{error}</p>}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 rounded-lg border border-neutral-200 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 rounded-lg bg-[#91191E] py-2 text-sm font-bold text-white hover:bg-[#7a1419] disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Submit'}
+          </button>
+        </div>
       </div>
     </div>
   );

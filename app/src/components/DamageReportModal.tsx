@@ -4,6 +4,11 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
+import { createReport } from '../data/store';
+
+const ROLE_LABELS: Record<string, string> = {
+  general: 'General User', authorized: 'Authorized User', head: 'Head', admin: 'Admin',
+};
 
 const MiniMap = dynamic(() => import('./MiniMap'), { ssr: false });
 
@@ -29,25 +34,43 @@ interface DamageReportModalProps {
 }
 
 export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: DamageReportModalProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [damageType, setDamageType] = useState(DAMAGE_TYPES[0]);
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const meta = STATUS_META[hydrant.status];
   const displayName = user?.email ? user.email.replace('@', ' ').split(' ')[0] : 'Unknown';
+  const roleLabel = role ? (ROLE_LABELS[role] ?? role) : 'Authorized User';
   const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace(/\//g, '/');
   const lastInspection = hydrant.register[0]?.date.split(' ')[0] ?? '—';
 
-  function handleSubmit() {
-    console.log('Damage report submitted:', { hydrant: hydrant.id, damageType, description });
-    onClose();
+  async function handleSubmit() {
+    if (!user) { setError('You must be signed in to file a report.'); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await createReport(hydrant.id, {
+        title: damageType,
+        description,
+        location: hydrant.name,
+        reporter: displayName,
+        role: roleLabel,
+      });
+      onClose();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(/permission/i.test(msg) ? 'You do not have permission to file a report.' : msg);
+      setSaving(false);
+    }
   }
 
   return (
     // Backdrop
-    <div className="pointer-events-auto absolute inset-0 z-[4000] flex items-center justify-center bg-black/40">
-      <div className="relative flex h-[90vh] max-h-[600px] w-[90vw] max-w-[720px] overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="anim-fade pointer-events-auto absolute inset-0 z-[4000] flex items-center justify-center bg-black/40">
+      <div className="anim-fade-scale relative flex h-[90vh] max-h-[600px] w-[90vw] max-w-[720px] overflow-hidden rounded-xl bg-white shadow-2xl">
 
         {/* ── Header ── */}
         <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-[#91191E] px-5 py-3">
@@ -174,19 +197,24 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
             )}
 
             {/* Footer */}
-            <div className="mt-auto flex justify-end gap-3 border-t border-neutral-200 pt-3">
-              <button
-                onClick={onClose}
-                className="rounded-lg border border-neutral-200 px-6 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="rounded-lg bg-[#91191E] px-6 py-2 text-sm font-bold text-white hover:bg-[#7a1419]"
-              >
-                Submit
-              </button>
+            <div className="mt-auto border-t border-neutral-200 pt-3">
+              {error && <p className="mb-2 text-right text-[11px] font-medium text-[#91191E]">{error}</p>}
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={onClose}
+                  disabled={saving}
+                  className="rounded-lg border border-neutral-200 px-6 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={saving}
+                  className="rounded-lg bg-[#91191E] px-6 py-2 text-sm font-bold text-white hover:bg-[#7a1419] disabled:opacity-60"
+                >
+                  {saving ? 'Submitting…' : 'Submit'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -80,6 +80,13 @@ export default function LoginPage() {
         >
           {submitting ? "Signing in..." : "Sign in"}
         </button>
+
+        <p style={{ textAlign: "center", fontSize: 13, color: "#555", marginTop: 4 }}>
+          Don&apos;t have an account?{" "}
+          <a href="/signup" style={{ color: "#1a73e8", fontWeight: 600 }}>
+            Create Account
+          </a>
+        </p>
       </form>
     </div>
   );

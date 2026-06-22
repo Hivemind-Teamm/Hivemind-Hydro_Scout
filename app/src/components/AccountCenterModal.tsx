@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import LogoutButton from './LogoutButton';
 
@@ -25,21 +26,36 @@ interface AccountCenterModalProps {
 
 export default function AccountCenterModal({ onClose }: AccountCenterModalProps) {
   const { user, role } = useAuth();
+  const router = useRouter();
 
+  // A visitor who is not signed in is treated as a general-user guest.
+  const isSignedIn = !!user;
   const roleLabel = role ? (ROLE_LABELS[role] ?? role) : 'General User';
   const access = ROLE_ACCESS[role ?? 'general'];
   const email = user?.email ?? '';
-  const displayName = email ? email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User';
+  const displayName = email
+    ? email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    : 'Guest';
   const initials = displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const isGeneral = !role || role === 'general';
+
+  function handleSignIn() {
+    onClose();
+    router.push('/login');
+  }
+
+  function handleSignUp() {
+    onClose();
+    router.push('/signup');
+  }
 
   function green(val: string) {
     return val === 'Full' || val === 'Enabled';
   }
 
   return (
-    <div className="pointer-events-auto absolute inset-0 z-[5000] flex items-center justify-center bg-black/40">
-      <div className="relative flex h-[95vh] w-[95vw] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="anim-fade pointer-events-auto absolute inset-0 z-[5000] flex items-center justify-center bg-black/40">
+      <div className="anim-fade-scale relative flex h-[95vh] w-[95vw] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
 
         {/* Close */}
         <button
@@ -56,7 +72,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
           </div>
           <div className="flex-1">
             <p className="text-xl font-extrabold text-white">{displayName}</p>
-            <p className="text-sm text-red-200">{email}</p>
+            <p className="text-sm text-red-200">{isSignedIn ? email : 'Not signed in'}</p>
           </div>
           <div className="text-right">
             <p className="mb-1 text-xs font-bold uppercase tracking-wide text-red-300">Access Level</p>
@@ -103,8 +119,10 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
                     Sign up to gain access to features such as hydrant status management, signed inspection notes, and damage reporting.
                   </p>
                 </div>
-                <button className="flex shrink-0 items-center gap-2 rounded-lg bg-[#91191E] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#7a1419]">
-                  <HydrantGlyph size={14} /> Sign Up
+                <button
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-[#91191E] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#7a1419]"
+                >
+                  <HydrantGlyph size={14} /> Authorize
                 </button>
               </div>
             )}
@@ -123,15 +141,34 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             </div>
 
             <div className="mt-auto flex flex-col gap-3 pt-2">
-              <button className="w-full rounded-xl border border-neutral-200 py-3 text-base font-semibold text-neutral-700 hover:bg-neutral-50">
-                Change Password
-              </button>
-              <div className="w-full">
-                <LogoutButton fullWidth />
-              </div>
-              <button className="w-full rounded-xl bg-[#91191E] py-3 text-base font-bold text-white hover:bg-[#7a1419]">
-                Save Changes
-              </button>
+              {isSignedIn ? (
+                <>
+                  <button className="w-full rounded-xl border border-neutral-200 py-3 text-base font-semibold text-neutral-700 hover:bg-neutral-50">
+                    Change Password
+                  </button>
+                  <div className="w-full">
+                    <LogoutButton fullWidth />
+                  </div>
+                  <button className="w-full rounded-xl bg-[#91191E] py-3 text-base font-bold text-white hover:bg-[#7a1419]">
+                    Save Changes
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleSignIn}
+                    className="w-full rounded-xl bg-[#91191E] py-3 text-base font-bold text-white hover:bg-[#7a1419]"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={handleSignUp}
+                    className="w-full rounded-xl border border-neutral-200 py-3 text-base font-semibold text-neutral-700 hover:bg-neutral-50"
+                  >
+                    Create Account
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

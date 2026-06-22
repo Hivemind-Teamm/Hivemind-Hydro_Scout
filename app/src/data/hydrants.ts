@@ -1,4 +1,11 @@
-// Mock hydrant dataset for the Hydro-Scout dashboard spike.
+// Hydrant view-model + Firestore adapter for the Hydro-Scout dashboard.
+//
+// Firestore stores hydrants in a different shape than the UI consumes
+// (GeoPoint location, operationalStatus/pressureStatus strings, hazards[],
+// inspector, a single notes string, etc.). `hydrantFromDoc` maps a raw
+// Firestore document into the `Hydrant` view-model the components expect.
+
+import type { DocumentData } from 'firebase/firestore';
 
 export type HydrantStatus   = 'operational' | 'reduced' | 'out';
 export type HydrantPressure = 'Strong' | 'Moderate' | 'Low' | 'None';
@@ -73,169 +80,166 @@ export const STATUS_META: Record<HydrantStatus, StatusMeta> = {
 
 export const STATUS_ORDER: HydrantStatus[] = ['operational', 'reduced', 'out'];
 
-export const HYDRANTS: Hydrant[] = [
-  {
-    id: 'H-01', name: 'Scout Borromeo St.', lat: 14.6555, lng: 121.0700,
-    status: 'operational', pressure: 'Strong', key: 'None',
-    type: 'Barrel', mounting: 'above ground', keyWrench: 'Standard pentagon',
-    area: 'Scout Area', outlets: 2, color: 'Yellow', concessionaire: 'Manila Water',
-    landmark: 'Near Jollibee Scout Borromeo', hazard: 'None', distanceM: 240, distanceMin: 1,
-    notes: [
-      { user: 'M.G. Torres', initials: 'MT', text: 'Clear access from the avenue side. Cap occasionally parked-in on weekends — approach from Maginhawa if blocked.', date: '2026-06-12' },
-      { user: 'J. Tan', initials: 'JT', text: 'Skibidi toilet.', date: '2026-05-11' },
-    ],
-    register: [
-      { statusColor: '#2fbf4f', action: 'Confirmed operational', by: 'M.G. Torres', role: 'Authorized', date: '2026-06-12 / 08:16' },
-      { statusColor: '#f5a623', action: 'Reduced pressure → Forwarded to Manila Water', by: 'A. Morse-Cabalyaran', role: 'Head', date: '2026-05-28 / 17:22' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-11 / 13:07' },
-    ],
-  },
-  {
-    id: 'H-02', name: 'Tomas Morato Ave.', lat: 14.6520, lng: 121.0660,
-    status: 'operational', pressure: 'Strong', key: 'None',
-    type: 'Barrel', mounting: 'above ground', keyWrench: 'Standard pentagon',
-    area: 'Scout Area', outlets: 2, color: 'Red', concessionaire: 'Manila Water',
-    landmark: 'In front of Morato Church', hazard: 'None', distanceM: 380, distanceMin: 2,
-    notes: [],
-    register: [
-      { statusColor: '#2fbf4f', action: 'Confirmed operational', by: 'M.G. Torres', role: 'Authorized', date: '2026-06-10 / 09:00' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-11 / 14:00' },
-    ],
-  },
-  {
-    id: 'H-03', name: 'Pansy Ave.', lat: 14.6500, lng: 121.0690,
-    status: 'operational', pressure: 'Moderate', key: 'None',
-    type: 'Pillar', mounting: 'above ground', keyWrench: 'Standard pentagon',
-    area: 'Heroes Hill', outlets: 1, color: 'Yellow', concessionaire: 'Manila Water',
-    landmark: 'Corner Quezon Ave.', hazard: 'None', distanceM: 500, distanceMin: 3,
-    notes: [],
-    register: [
-      { statusColor: '#2fbf4f', action: 'Confirmed operational', by: 'A. Reyes', role: 'Authorized', date: '2026-06-08 / 10:30' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-12 / 09:00' },
-    ],
-  },
-  {
-    id: 'H-04', name: 'Kamuning Rd.', lat: 14.6540, lng: 121.0722,
-    status: 'operational', pressure: 'Strong', key: 'Required',
-    type: 'Barrel', mounting: 'above ground', keyWrench: 'Triangular',
-    area: 'East Triangle', outlets: 2, color: 'Red', concessionaire: 'Manila Water',
-    landmark: 'Near Kamuning MRT Station', hazard: 'None', distanceM: 620, distanceMin: 4,
-    notes: [
-      { user: 'A. Reyes', initials: 'AR', text: 'Key required — contact barangay hall for access.', date: '2026-06-01' },
-    ],
-    register: [
-      { statusColor: '#2fbf4f', action: 'Confirmed operational', by: 'A. Reyes', role: 'Authorized', date: '2026-06-01 / 11:00' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-13 / 08:00' },
-    ],
-  },
-  {
-    id: 'H-05', name: 'Kalayaan Ave.', lat: 14.6490, lng: 121.0650,
-    status: 'operational', pressure: 'Moderate', key: 'None',
-    type: 'Pillar', mounting: 'above ground', keyWrench: 'Standard pentagon',
-    area: 'Heroes Hill', outlets: 1, color: 'Yellow', concessionaire: 'MWSS',
-    landmark: 'Near Kalayaan Park', hazard: 'None', distanceM: 750, distanceMin: 5,
-    notes: [],
-    register: [
-      { statusColor: '#2fbf4f', action: 'Confirmed operational', by: 'M.G. Torres', role: 'Authorized', date: '2026-06-05 / 14:00' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-14 / 10:00' },
-    ],
-  },
-  {
-    id: 'H-06', name: 'Times St.', lat: 14.6562, lng: 121.0665,
-    status: 'operational', pressure: 'Strong', key: 'None',
-    type: 'Barrel', mounting: 'above ground', keyWrench: 'Standard pentagon',
-    area: 'Nayong Kanluran', outlets: 2, color: 'Red', concessionaire: 'Manila Water',
-    landmark: 'Corner Tomas Morato', hazard: 'None', distanceM: 290, distanceMin: 2,
-    notes: [],
-    register: [
-      { statusColor: '#2fbf4f', action: 'Confirmed operational', by: 'A. Reyes', role: 'Authorized', date: '2026-06-09 / 09:30' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-15 / 08:30' },
-    ],
-  },
-  {
-    id: 'H-07', name: 'Scout Rallos St.', lat: 14.6512, lng: 121.0712,
-    status: 'operational', pressure: 'Moderate', key: 'Required',
-    type: 'Barrel', mounting: 'above ground', keyWrench: 'Triangular',
-    area: 'Scout Area', outlets: 2, color: 'Yellow', concessionaire: 'Manila Water',
-    landmark: 'Near Scout Rallos Elem.', hazard: 'None', distanceM: 460, distanceMin: 3,
-    notes: [],
-    register: [
-      { statusColor: '#2fbf4f', action: 'Confirmed operational', by: 'M.G. Torres', role: 'Authorized', date: '2026-06-07 / 15:00' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-16 / 09:00' },
-    ],
-  },
-  {
-    id: 'H-08', name: 'Scout Madriñan St.', lat: 14.6535, lng: 121.0682,
-    status: 'reduced', pressure: 'Low', key: 'None',
-    type: 'Barrel', mounting: 'above ground', keyWrench: 'Standard pentagon',
-    area: 'Scout Area', outlets: 1, color: 'Yellow', concessionaire: 'Manila Water',
-    landmark: 'Corner Timog Ave.', hazard: 'None', distanceM: 340, distanceMin: 2,
-    notes: [
-      { user: 'A. Morse-Cabalyaran', initials: 'AM', text: 'Pressure drop reported since May. Forwarded to Manila Water for inspection.', date: '2026-05-28' },
-    ],
-    register: [
-      { statusColor: '#f5a623', action: 'Reduced pressure — forwarded to Manila Water', by: 'A. Morse-Cabalyaran', role: 'Head', date: '2026-05-28 / 17:22' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-11 / 15:00' },
-    ],
-  },
-  {
-    id: 'H-09', name: 'Scout Castor St.', lat: 14.6480, lng: 121.0702,
-    status: 'reduced', pressure: 'Low', key: 'Required',
-    type: 'Pillar', mounting: 'above ground', keyWrench: 'Triangular',
-    area: 'Scout Area', outlets: 1, color: 'Red', concessionaire: 'MWSS',
-    landmark: 'Near Don A. Roces Ave.', hazard: 'None', distanceM: 810, distanceMin: 5,
-    notes: [],
-    register: [
-      { statusColor: '#f5a623', action: 'Reduced pressure noted', by: 'A. Reyes', role: 'Authorized', date: '2026-06-01 / 08:00' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-17 / 10:00' },
-    ],
-  },
-  {
-    id: 'H-10', name: 'Mother Ignacia Ave.', lat: 14.6556, lng: 121.0642,
-    status: 'reduced', pressure: 'Low', key: 'None',
-    type: 'Barrel', mounting: 'above ground', keyWrench: 'Standard pentagon',
-    area: 'Nayong Kanluran', outlets: 2, color: 'Yellow', concessionaire: 'Manila Water',
-    landmark: 'Near Mother Ignacia Parish', hazard: 'None', distanceM: 430, distanceMin: 3,
-    notes: [],
-    register: [
-      { statusColor: '#f5a623', action: 'Reduced pressure — monitoring', by: 'M.G. Torres', role: 'Authorized', date: '2026-06-03 / 11:00' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-18 / 09:30' },
-    ],
-  },
-  {
-    id: 'H-11', name: 'Scout Lozano St.', lat: 14.6505, lng: 121.0635,
-    status: 'out', pressure: 'None', key: 'Required',
-    type: 'Barrel', mounting: 'above ground', keyWrench: 'Triangular',
-    area: 'Scout Area', outlets: 1, color: 'Gray', concessionaire: 'Manila Water',
-    landmark: 'Corner Scout De Guia St.', hazard: 'Damaged cap', distanceM: 920, distanceMin: 6,
-    notes: [
-      { user: 'A. Morse-Cabalyaran', initials: 'AM', text: 'Cap damaged — out of service pending replacement parts. Do not use.', date: '2026-06-10' },
-    ],
-    register: [
-      { statusColor: '#9aa0a6', action: 'Marked out of service — damaged cap', by: 'A. Morse-Cabalyaran', role: 'Head', date: '2026-06-10 / 08:00' },
-      { statusColor: '#f5a623', action: 'Reduced pressure flagged', by: 'A. Reyes', role: 'Authorized', date: '2026-06-01 / 09:00' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-19 / 11:00' },
-    ],
-  },
-  {
-    id: 'H-12', name: 'Don A. Roces Ave.', lat: 14.6472, lng: 121.0676,
-    status: 'out', pressure: 'None', key: 'None',
-    type: 'Pillar', mounting: 'below ground', keyWrench: 'Standard pentagon',
-    area: 'Scout Area', outlets: 1, color: 'Gray', concessionaire: 'MWSS',
-    landmark: 'Near SM North EDSA access road', hazard: 'Road obstruction', distanceM: 1050, distanceMin: 7,
-    notes: [
-      { user: 'M.G. Torres', initials: 'MT', text: 'Road crew has blocked access. Reported to barangay.', date: '2026-06-08' },
-    ],
-    register: [
-      { statusColor: '#9aa0a6', action: 'Marked out of service — road obstruction', by: 'M.G. Torres', role: 'Authorized', date: '2026-06-08 / 13:00' },
-      { statusColor: '#9aa0a6', action: 'Initial registration', by: 'J. Tan', role: 'Authorized', date: '2026-05-20 / 14:00' },
-    ],
-  },
-];
-
 export function countByStatus(hydrants: Hydrant[]): Record<HydrantStatus, number> {
   return hydrants.reduce(
     (acc, h) => { acc[h.status] += 1; return acc; },
     { operational: 0, reduced: 0, out: 0 } as Record<HydrantStatus, number>,
   );
+}
+
+/* ───────────────────────── Firestore mapping ───────────────────────── */
+
+// Firestore operationalStatus → UI status
+export function toStatus(operationalStatus: unknown): HydrantStatus {
+  switch (String(operationalStatus ?? '').toLowerCase()) {
+    case 'reduced pressure': return 'reduced';
+    case 'out of service':   return 'out';
+    default:                 return 'operational';
+  }
+}
+
+// UI status → Firestore operationalStatus
+export function toOperationalStatus(status: HydrantStatus): string {
+  switch (status) {
+    case 'reduced': return 'Reduced Pressure';
+    case 'out':     return 'Out of Service';
+    default:        return 'Operational';
+  }
+}
+
+// Firestore pressureStatus → UI pressure label
+function toPressure(pressureStatus: unknown): HydrantPressure {
+  switch (String(pressureStatus ?? '').toLowerCase()) {
+    case 'strong':   return 'Strong';
+    case 'moderate': return 'Moderate';
+    case 'weak':
+    case 'low':      return 'Low';
+    case 'out':
+    case 'none':     return 'None';
+    default:         return 'Moderate';
+  }
+}
+
+// UI status → a sensible Firestore pressureStatus when one isn't supplied
+export function statusToPressureStatus(status: HydrantStatus): string {
+  switch (status) {
+    case 'reduced': return 'Weak';
+    case 'out':     return 'Out';
+    default:        return 'Strong';
+  }
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+// Firestore Timestamp | string | Date → "YYYY-MM-DD" (or '' when absent)
+function toDateString(value: unknown): string {
+  if (!value) return '';
+  // Firestore Timestamp (client SDK) exposes toDate()
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    try { return (value as { toDate: () => Date }).toDate().toISOString().slice(0, 10); }
+    catch { /* fall through */ }
+  }
+  const d = new Date(value as string);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toISOString().slice(0, 10);
+}
+
+// Pull [lat, lng] out of a GeoPoint, {latitude,longitude}, or {_lat,_long}.
+function readLocation(loc: unknown): { lat: number; lng: number } {
+  if (loc && typeof loc === 'object') {
+    const o = loc as Record<string, number>;
+    const lat = o.latitude ?? o._latitude ?? o.lat;
+    const lng = o.longitude ?? o._longitude ?? o.lng;
+    if (typeof lat === 'number' && typeof lng === 'number') return { lat, lng };
+  }
+  return { lat: 0, lng: 0 };
+}
+
+function deriveName(address: unknown, id: string): string {
+  const a = typeof address === 'string' ? address.trim() : '';
+  if (!a) return id;
+  return a.split(',')[0].trim() || id;
+}
+
+function deriveArea(address: unknown): string {
+  const a = typeof address === 'string' ? address.trim() : '';
+  const parts = a.split(',').map((p) => p.trim()).filter(Boolean);
+  return parts[1] ?? parts[0] ?? 'Quezon City';
+}
+
+interface StoredNote { user?: string; initials?: string; text?: string; date?: string }
+interface StoredRegisterEntry { statusColor?: string; action?: string; by?: string; role?: string; date?: string }
+
+// Maps a raw Firestore hydrant document → the UI `Hydrant` view-model.
+export function hydrantFromDoc(id: string, d: DocumentData): Hydrant {
+  const { lat, lng } = readLocation(d.location);
+  const status = toStatus(d.operationalStatus);
+  const inspector: string = d.inspector ?? 'Field Inspector';
+  const inspectionDate = toDateString(d.dateInspected);
+
+  const hazards: string[] = Array.isArray(d.hazards) ? d.hazards : [];
+
+  // Notes: prefer a structured fieldNotes array; otherwise synthesize one
+  // from the single seeded `notes` string + inspector.
+  let notes: HydrantNote[] = [];
+  if (Array.isArray(d.fieldNotes) && d.fieldNotes.length) {
+    notes = (d.fieldNotes as StoredNote[]).map((n) => ({
+      user: n.user ?? inspector,
+      initials: n.initials ?? initialsOf(n.user ?? inspector),
+      text: n.text ?? '',
+      date: n.date ?? inspectionDate,
+    }));
+  } else if (typeof d.notes === 'string' && d.notes.trim()) {
+    notes = [{ user: inspector, initials: initialsOf(inspector), text: d.notes.trim(), date: inspectionDate }];
+  }
+
+  // Register: prefer a stored array; otherwise synthesize the initial inspection.
+  let register: HydrantRegisterEntry[] = [];
+  if (Array.isArray(d.register) && d.register.length) {
+    register = (d.register as StoredRegisterEntry[]).map((e) => ({
+      statusColor: e.statusColor ?? STATUS_META[status].color,
+      action: e.action ?? 'Status update',
+      by: e.by ?? inspector,
+      role: e.role ?? 'Authorized',
+      date: e.date ?? inspectionDate,
+    }));
+  } else {
+    register = [{
+      statusColor: STATUS_META[status].color,
+      action: 'Initial inspection',
+      by: inspector,
+      role: 'Authorized',
+      date: inspectionDate,
+    }];
+  }
+
+  return {
+    id,
+    name: deriveName(d.address, id),
+    lat,
+    lng,
+    status,
+    pressure: toPressure(d.pressureStatus),
+    key: d.keyWrenchNeeded ? 'Required' : 'None',
+    type: d.sourceType ?? 'Fire Hydrant',
+    mounting: d.mounting ?? 'Above ground',
+    keyWrench: d.keyWrenchNeeded ? 'Required' : 'Not required',
+    area: deriveArea(d.address),
+    outlets: typeof d.outletCount === 'number' ? d.outletCount : 0,
+    color: d.hydrantColor ?? 'Unspecified',
+    concessionaire: d.ownershipJurisdiction ?? 'Unspecified',
+    landmark: (typeof d.address === 'string' && d.address) || d.nearestLandmark || '—',
+    hazard: hazards.length ? hazards.join(', ') : 'None',
+    distanceM: 0,
+    distanceMin: 0,
+    notes,
+    register,
+  };
 }

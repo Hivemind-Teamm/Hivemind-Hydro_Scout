@@ -1,7 +1,16 @@
+// Report view-model + Firestore adapter.
+//
+// Reports live in a `reports` subcollection under each hydrant
+// (hydrants/{id}/reports/{reportId}). The ReportsPanel reads them across all
+// hydrants via a collectionGroup query.
+
+import type { DocumentData } from 'firebase/firestore';
+
 export type ReportStatus = 'pending' | 'resolved' | 'denied';
 
 export interface Report {
-  id: string;
+  id: string;          // display ID (reportNo or Firestore doc ID)
+  firestoreId: string; // raw Firestore doc ID — used for status updates
   hydrantId: string;
   title: string;
   location: string;
@@ -18,49 +27,44 @@ export const STATUS_COLORS: Record<ReportStatus, { border: string; badge: string
   denied:   { border: '#91191E', badge: '#fce8e9', text: '#91191E', label: 'Denied'   },
 };
 
-export const REPORTS: Report[] = [
-  {
-    id: 'HYD-82-0647',
-    hydrantId: 'H-01',
-    title: 'No water — main valve stuck shut',
-    location: "Yasmin's Village I",
-    reporter: 'R. Cruz',
-    role: 'Authorized User',
-    date: '2025-04-19',
-    time: '01:27',
-    status: 'pending',
-  },
-  {
-    id: 'HYD-82-0120',
-    hydrantId: 'H-04',
-    title: 'Obstructed by parked vehicle',
-    location: 'Matalino St.',
-    reporter: 'G. Santos',
-    role: 'Authorized User',
-    date: '2025-06-05',
-    time: '06:40',
-    status: 'pending',
-  },
-  {
-    id: 'HYD-82-P75',
-    hydrantId: 'H-08',
-    title: 'Reduced pressure — below 37 PSI',
-    location: 'S. Lino R5',
-    reporter: 'N. Pacaos',
-    role: 'Head',
-    date: '2026-10-12',
-    time: '16:45',
-    status: 'resolved',
-  },
-  {
-    id: 'HYD-82-984',
-    hydrantId: 'H-03',
-    title: 'Reported leak — tested | none found',
-    location: 'Magaya St.',
-    reporter: 'G. Dela Merced',
-    role: 'Head',
-    date: '2026-04-05',
-    time: '12:12',
-    status: 'denied',
-  },
-];
+function toStatus(value: unknown): ReportStatus {
+  const v = String(value ?? '').toLowerCase();
+  if (v === 'resolved' || v === 'denied') return v;
+  return 'pending';
+}
+
+// Firestore createdAt Timestamp | string → { date, time }
+function toDateTime(value: unknown, fallbackDate?: string, fallbackTime?: string): { date: string; time: string } {
+  let d: Date | null = null;
+  if (value && typeof value === 'object' && 'toDate' in value) {
+    try { d = (value as { toDate: () => Date }).toDate(); } catch { /* ignore */ }
+  } else if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) d = parsed;
+  }
+  if (d) {
+    return {
+      date: d.toISOString().slice(0, 10),
+      time: d.toTimeString().slice(0, 5),
+    };
+  }
+  return { date: fallbackDate ?? '—', time: fallbackTime ?? '' };
+}
+
+// Maps a raw Firestore report document → the UI `Report` view-model.
+export function reportFromDoc(id: string, hydrantId: string, d: DocumentData): Report {
+  const { date, time } = toDateTime(d.createdAt, d.date, d.time);
+  const title = d.title ?? d.damageType ?? 'Reported issue';
+  return {
+    id: d.reportNo ?? id,
+    firestoreId: id,
+    hydrantId,
+    title,
+    location: d.location ?? '—',
+    reporter: d.reporter ?? 'Unknown',
+    role: d.role ?? 'Authorized User',
+    date,
+    time,
+    status: toStatus(d.status),
+  };
+}

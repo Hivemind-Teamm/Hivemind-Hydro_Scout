@@ -12,6 +12,7 @@ import {
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   User,
 } from "firebase/auth";
@@ -26,6 +27,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  signup: (email: string, password: string, displayName: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -72,13 +74,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await syncSessionCookie(idToken);
   }
 
+  async function signup(email: string, password: string, displayName: string) {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+    // Create the user document — new accounts always start as 'general'.
+    await setDoc(doc(db, "users", cred.user.uid), {
+      email,
+      displayName,
+      role: "general",
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+    });
+
+    const idToken = await cred.user.getIdToken();
+    await syncSessionCookie(idToken);
+  }
+
   async function logout() {
     await firebaseSignOut(auth);
     await syncSessionCookie(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, role, loading, login, logout, signup }}>
       {children}
     </AuthContext.Provider>
   );

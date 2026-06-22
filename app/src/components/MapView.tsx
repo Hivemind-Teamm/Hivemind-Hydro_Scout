@@ -14,6 +14,11 @@ export interface MapController {
   flyTo: (lat: number, lng: number, zoom?: number) => void;
 }
 
+export interface PendingPin {
+  lat: number;
+  lng: number;
+}
+
 interface MapViewProps {
   provider: MapProvider;
   hydrants: Hydrant[];
@@ -21,15 +26,18 @@ interface MapViewProps {
   onMapboxError: (error: unknown) => void;
   onMapReady: (controller: MapController) => void;
   onSelectHydrant: (hydrant: Hydrant) => void;
+  addHydrantMode: boolean;
+  onMapClick: (lat: number, lng: number) => void;
+  pendingPin: PendingPin | null;
 }
 
-export default function MapView({ provider, hydrants, selectedHydrantId, onMapboxError, onMapReady, onSelectHydrant }: MapViewProps) {
+export default function MapView({ provider, hydrants, selectedHydrantId, onMapboxError, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, pendingPin }: MapViewProps) {
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       {provider === 'mapbox' ? (
-        <DilimanMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onError={onMapboxError} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} />
+        <DilimanMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onError={onMapboxError} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} addHydrantMode={addHydrantMode} onMapClick={onMapClick} pendingPin={pendingPin} />
       ) : (
-        <LeafletMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} />
+        <LeafletMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} addHydrantMode={addHydrantMode} onMapClick={onMapClick} pendingPin={pendingPin} />
       )}
     </div>
   );

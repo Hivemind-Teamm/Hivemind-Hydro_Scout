@@ -7,7 +7,6 @@ import {
   STATUS_ORDER,
   type HydrantStatus,
 } from '../data/hydrants';
-import { REPORTS } from '../data/reports';
 
 interface DashboardOverlayProps {
   activeStatus: HydrantStatus | null;
@@ -21,6 +20,10 @@ interface DashboardOverlayProps {
   showReports: boolean;
   onToggleReports: () => void;
   onOpenAccount: () => void;
+  onOpenDashboard: () => void;
+  addHydrantMode: boolean;
+  onToggleAddHydrant: () => void;
+  hasPendingReports: boolean;
 }
 
 export default function DashboardOverlay({
@@ -35,12 +38,18 @@ export default function DashboardOverlay({
   showReports,
   onToggleReports,
   onOpenAccount,
+  onOpenDashboard,
+  addHydrantMode,
+  onToggleAddHydrant,
+  hasPendingReports,
 }: DashboardOverlayProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const canViewDashboard = role === 'head' || role === 'admin';
+  const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   const [search, setSearch] = useState('');
   const [showCounts, setShowCounts] = useState(true);
 
-  const displayName = user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User';
+  const displayName = user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest';
 
   return (
     // Root is click-through; each widget re-enables pointer events so the map
@@ -52,7 +61,7 @@ export default function DashboardOverlay({
           <Logo />
           <button
             onClick={onOpenAccount}
-            className="flex items-center gap-2 rounded-full bg-white px-4 py-1.5 shadow-md transition-shadow hover:shadow-lg"
+            className="flex items-center gap-2 rounded-full bg-white px-4 py-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.35)] transition-all hover:scale-105 hover:shadow-[0_6px_20px_rgba(0,0,0,0.45)] active:scale-95"
           >
             <span className="text-sm font-bold text-neutral-800">
               Welcome, {displayName}
@@ -68,7 +77,7 @@ export default function DashboardOverlay({
 
       {/* ---------- Search + status filter pills ---------- */}
       <div className="pointer-events-auto absolute left-4 top-[76px] z-[1000] flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-md">
+        <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
           <SearchGlyph />
           <input
             value={search}
@@ -78,7 +87,7 @@ export default function DashboardOverlay({
           />
         </div>
 
-        <div className="flex overflow-hidden rounded-lg shadow-md">
+        <div className="flex overflow-hidden rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
           {STATUS_ORDER.map((status) => {
             const meta = STATUS_META[status];
             const active = activeStatus === status;
@@ -86,7 +95,7 @@ export default function DashboardOverlay({
               <button
                 key={status}
                 onClick={() => onSelectStatus(status)}
-                className="px-4 py-2 text-xs font-bold transition-colors"
+                className="px-4 py-2 text-xs font-bold transition-all hover:brightness-90 active:scale-95"
                 style={{
                   background: active ? meta.color : '#ffffff',
                   color: active ? '#ffffff' : '#4b5563',
@@ -100,8 +109,10 @@ export default function DashboardOverlay({
       </div>
 
       {/* ---------- Left toolbar ---------- */}
-      <div className="pointer-events-auto absolute left-4 top-[136px] z-[1000] flex flex-col gap-3">
-        <div className="flex flex-col overflow-hidden rounded-xl bg-white shadow-md">
+
+      {/* Zoom buttons under the search bar */}
+      <div className="pointer-events-auto absolute left-4 top-[136px] z-[1000]">
+        <div className="flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
           <ToolButton label="Zoom in" onClick={onZoomIn}>
             <PlusGlyph />
           </ToolButton>
@@ -110,7 +121,10 @@ export default function DashboardOverlay({
             <MinusGlyph />
           </ToolButton>
         </div>
+      </div>
 
+      {/* Vertical toolbar — layers, add hydrant, reports, dashboard */}
+      <div className="pointer-events-auto absolute left-4 top-[238px] z-[1000] flex flex-col gap-3">
         <ToolButton
           label={provider === 'mapbox' ? 'Switch to OSM map' : 'Switch to Mapbox'}
           onClick={onToggleProvider}
@@ -120,29 +134,47 @@ export default function DashboardOverlay({
           <LayersGlyph />
         </ToolButton>
 
+        {canPin && (
+          <div className="relative">
+            <button
+              title={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
+              onClick={onToggleAddHydrant}
+              className="relative flex h-11 w-11 items-center justify-center transition-all hover:opacity-90 active:scale-95"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/Hydrant%20Pin%20Red.png"
+                alt="Pin hydrant"
+                className="h-12 w-12 object-contain"
+              />
+            </button>
+            <span className={`pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#91191E] text-[9px]' : 'bg-[#2fbf4f] text-[11px]'}`}>
+              {addHydrantMode ? '✕' : '+'}
+            </span>
+          </div>
+        )}
+
         <div className="relative">
           <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports}>
             <ReportGlyph />
           </ToolButton>
-          {REPORTS.some((r) => r.status === 'pending') && (
+          {hasPendingReports && (
             <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#91191E] text-[9px] font-bold text-white">
               !
             </span>
           )}
         </div>
 
-        <ToolButton
-          label="Toggle live count"
-          onClick={() => setShowCounts((v) => !v)}
-          rounded
-        >
-          <StatsGlyph />
-        </ToolButton>
+        {canViewDashboard && (
+          <ToolButton label="Operations Dashboard" onClick={onOpenDashboard} rounded>
+            <StatsGlyph />
+          </ToolButton>
+        )}
       </div>
 
       {/* ---------- Live-count panel ---------- */}
       {showCounts && (
-        <div className="pointer-events-auto absolute bottom-6 right-6 z-[1000] w-60 rounded-xl bg-white/95 p-4 shadow-lg backdrop-blur">
+        <div className="pointer-events-auto absolute bottom-6 right-6 z-[1000] w-60 rounded-xl bg-white/95 p-4 shadow-[0_6px_24px_rgba(0,0,0,0.4)] backdrop-blur">
           <div className="mb-2 flex items-center justify-between border-b border-neutral-200 pb-2">
             <span className="text-sm font-bold text-neutral-800">Status</span>
             <span className="text-xs font-medium text-neutral-400">Live Count</span>
@@ -201,9 +233,9 @@ function ToolButton({
       title={label}
       aria-label={label}
       onClick={onClick}
-      className={`flex h-11 w-11 items-center justify-center transition-colors ${
-        rounded ? 'rounded-xl shadow-md' : ''
-      } ${active ? 'bg-[#f5c20a] text-neutral-900' : 'bg-white text-neutral-600 hover:bg-neutral-100'}`}
+      className={`flex h-11 w-11 items-center justify-center transition-all active:scale-90 ${
+        rounded ? 'rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.35)]' : ''
+      } ${active ? 'bg-[#f5c20a] text-neutral-900 hover:brightness-90' : 'bg-white text-neutral-600 hover:bg-neutral-100 hover:scale-105'}`}
     >
       {children}
     </button>
@@ -317,3 +349,4 @@ function UserGlyph() {
     </svg>
   );
 }
+
