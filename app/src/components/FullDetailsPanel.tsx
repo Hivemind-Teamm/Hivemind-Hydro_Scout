@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuth } from '@/lib/auth-context';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 
 type Tab = 'quick' | 'details' | 'register' | 'admin';
@@ -13,14 +14,20 @@ interface FullDetailsPanelProps {
   hydrant: Hydrant;
   onClose: () => void;
   onViewUser: (name: string, role: string) => void;
+  onFlyTo: (lat: number, lng: number) => void;
 }
 
-export default function FullDetailsPanel({ hydrant, onClose, onViewUser }: FullDetailsPanelProps) {
+export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo }: FullDetailsPanelProps) {
+  const { role } = useAuth();
   const [tab, setTab] = useState<Tab>('quick');
   const meta = STATUS_META[hydrant.status];
 
+  const isHeadOrAdmin = role === 'head' || role === 'admin';
+  const canAnnotate   = role === 'authorized' || role === 'head' || role === 'admin';
+  // Admin tab is always visible — non-head/admin see a restricted-access screen.
+
   return (
-    <div className="pointer-events-auto absolute bottom-0 right-0 top-[69px] z-[3000] flex w-[420px] flex-col bg-white shadow-2xl">
+    <div className="anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[69px] z-[3000] flex w-[420px] flex-col bg-white shadow-2xl">
 
       {/* ── Header ── */}
       <div className="flex items-start gap-3 border-b border-neutral-200 px-4 py-3">
@@ -31,7 +38,14 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser }: FullD
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-bold text-neutral-800">{hydrant.name}</p>
+            <button
+              onClick={() => onFlyTo(hydrant.lat, hydrant.lng)}
+              className="flex items-center gap-1 text-sm font-bold text-neutral-800 hover:underline"
+              title="Zoom to hydrant"
+            >
+              <LocateIcon />
+              <span className="truncate">{hydrant.name}</span>
+            </button>
             <span className="shrink-0 rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-bold uppercase text-neutral-600">
               {hydrant.type}
             </span>
@@ -66,7 +80,12 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser }: FullD
                 : 'text-neutral-400 hover:text-neutral-600'
             }`}
           >
-            {t}
+            {t === 'admin' ? (
+              <span className="flex items-center justify-center gap-1">
+                admin
+                <LockIcon locked={!isHeadOrAdmin} />
+              </span>
+            ) : t}
           </button>
         ))}
       </div>
@@ -74,9 +93,9 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser }: FullD
       {/* ── Tab content ── */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'quick'    && <QuickTab    hydrant={hydrant} meta={meta} />}
-        {tab === 'details'  && <DetailsTab  hydrant={hydrant} onViewUser={onViewUser} />}
+        {tab === 'details'  && <DetailsTab  hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} />}
         {tab === 'register' && <RegisterTab hydrant={hydrant} onViewUser={onViewUser} />}
-        {tab === 'admin'    && <AdminTab />}
+        {tab === 'admin'    && <AdminTab    hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} />}
       </div>
     </div>
   );
@@ -108,7 +127,7 @@ function QuickTab({ hydrant, meta }: { hydrant: Hydrant; meta: { color: string; 
 }
 
 /* ──────────────────────── DETAILS ──────────────────────── */
-function DetailsTab({ hydrant, onViewUser }: { hydrant: Hydrant; onViewUser: (name: string, role: string) => void }) {
+function DetailsTab({ hydrant, onViewUser, canAnnotate }: { hydrant: Hydrant; onViewUser: (name: string, role: string) => void; canAnnotate: boolean }) {
   return (
     <div className="px-4 py-4">
       <InfoTable rows={[
@@ -164,9 +183,11 @@ function DetailsTab({ hydrant, onViewUser }: { hydrant: Hydrant; onViewUser: (na
             </div>
           ))}
         </div>
-        <button className="mt-3 w-full text-right text-xs font-medium text-[#91191E] hover:underline">
-          Add notes
-        </button>
+        {canAnnotate && (
+          <button className="mt-3 w-full text-right text-xs font-medium text-[#91191E] hover:underline">
+            Add notes
+          </button>
+        )}
       </div>
     </div>
   );
@@ -214,12 +235,72 @@ function RegisterTab({ hydrant, onViewUser }: { hydrant: Hydrant; onViewUser: (n
 }
 
 /* ──────────────────────── ADMIN ──────────────────────── */
-function AdminTab() {
+function AdminTab({ hydrant, isHeadOrAdmin }: { hydrant: Hydrant; isHeadOrAdmin: boolean }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-12 text-center text-neutral-400">
-      <p className="text-sm font-semibold">Admin tools</p>
-      <p className="text-xs">Coming soon.</p>
+    <div className="px-4 py-4 flex flex-col gap-4">
+      {/* Restricted access banner — always shown */}
+      <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+        <span className="mt-0.5 shrink-0 text-amber-600">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        </span>
+        <p className="text-[11px] leading-relaxed text-amber-700">
+          <span className="font-bold">Restricted to Head &amp; Admin</span> — enforced by Firestore security rules, not just hidden in the interface.
+        </p>
+      </div>
+
+      {/* Everything below is head/admin only */}
+      {isHeadOrAdmin && (
+        <>
+          <table className="w-full text-xs">
+            <tbody>
+              {[
+                { label: 'Internal ID',     value: hydrant.id },
+                { label: 'Data Source',     value: 'Field survey' },
+                { label: 'GPS Complete',    value: '✓ Yes',      green: true },
+                { label: 'Required Fields', value: '✓ Complete', green: true },
+                { label: 'Validation',      value: 'No follow-up needed' },
+              ].map((r, i) => (
+                <tr key={i} className={i % 2 === 0 ? 'bg-neutral-50' : ''}>
+                  <td className="w-36 py-1.5 pl-2 font-semibold uppercase tracking-wide text-neutral-400">{r.label}</td>
+                  <td className={`py-1.5 pr-2 font-medium ${r.green ? 'text-[#2fbf4f]' : 'text-neutral-700'}`}>{r.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="flex flex-col gap-3 pt-2">
+            <p className="text-xs font-bold text-[#91191E]">Administrative Actions</p>
+            <button className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50">
+              Validate Hydrant Record
+            </button>
+            <button className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50">
+              Flag for Re-inspection
+            </button>
+            <button className="w-full rounded-lg border border-red-200 py-2.5 text-xs font-semibold text-[#91191E] hover:bg-red-50">
+              Decommission Hydrant
+            </button>
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+/* ──────────────────────── lock icon ──────────────────────── */
+function LockIcon({ locked }: { locked: boolean }) {
+  return (
+    <svg
+      width="9" height="9" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth={2.5}
+      strokeLinecap="round" strokeLinejoin="round"
+      className={locked ? 'text-amber-500' : 'text-[#2fbf4f]'}
+    >
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d={locked ? 'M7 11V7a5 5 0 0 1 10 0v4' : 'M7 11V7a5 5 0 0 1 9.9-1'} />
+    </svg>
   );
 }
 
@@ -245,6 +326,14 @@ function UploadIcon({ size = 18 }: { size?: number }) {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <polyline points="16 12 12 8 8 12" />
       <line x1="12" y1="8" x2="12" y2="16" />
+    </svg>
+  );
+}
+
+function LocateIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z" />
     </svg>
   );
 }

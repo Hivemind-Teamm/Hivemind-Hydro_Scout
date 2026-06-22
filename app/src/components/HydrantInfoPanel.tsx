@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/lib/auth-context';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 
 interface HydrantInfoPanelProps {
@@ -8,6 +9,7 @@ interface HydrantInfoPanelProps {
   onOpenFullDetails: () => void;
   onEdit: () => void;
   onReport: () => void;
+  onFlyTo: (lat: number, lng: number) => void;
 }
 
 const PRESSURE_COLOR: Record<string, string> = {
@@ -17,19 +19,29 @@ const PRESSURE_COLOR: Record<string, string> = {
   None:     '#9aa0a6',
 };
 
-export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport }: HydrantInfoPanelProps) {
+export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo }: HydrantInfoPanelProps) {
+  const { role } = useAuth();
   const meta = STATUS_META[hydrant.status];
+  const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
+  const canReport = role === 'authorized' || role === 'head' || role === 'admin';
 
   return (
     <div
-      className="pointer-events-auto absolute bottom-6 left-4 z-[2000] w-80 overflow-hidden rounded-xl bg-white shadow-2xl"
+      className="anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] w-80 overflow-hidden rounded-xl bg-white shadow-2xl"
       style={{ borderLeft: `4px solid ${meta.color}`, maxHeight: 'calc(100vh - 65px - 24px)' }}
     >
       {/* Header */}
       <div className="flex items-start justify-between bg-neutral-50 px-5 py-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{hydrant.id}</p>
-          <p className="text-base font-bold text-neutral-800">{hydrant.name}</p>
+          <button
+            onClick={() => onFlyTo(hydrant.lat, hydrant.lng)}
+            className="flex items-center gap-1 text-left text-base font-bold text-neutral-800 hover:underline"
+            title="Zoom to hydrant"
+          >
+            <LocateIcon />
+            {hydrant.name}
+          </button>
         </div>
         <button
           onClick={onClose}
@@ -65,20 +77,24 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
             <RouteIcon />
             Route
           </button>
-          <button
-            title="Edit"
-            onClick={onEdit}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:bg-neutral-100"
-          >
-            <EditIcon />
-          </button>
-          <button
-            title="Report issue"
-            onClick={onReport}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-[#f5a623] hover:bg-neutral-100"
-          >
-            <WarnIcon />
-          </button>
+          {canEdit && (
+            <button
+              title="Edit hydrant"
+              onClick={onEdit}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:bg-neutral-100"
+            >
+              <EditIcon />
+            </button>
+          )}
+          {canReport && (
+            <button
+              title="Report issue"
+              onClick={onReport}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-[#f5a623] hover:bg-neutral-100"
+            >
+              <WarnIcon />
+            </button>
+          )}
         </div>
 
         <button
@@ -118,6 +134,14 @@ function WarnIcon() {
       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
       <line x1="12" y1="9" x2="12" y2="13" />
       <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+function LocateIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" {...s}>
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z" />
     </svg>
   );
 }
