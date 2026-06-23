@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import MapView from './src/components/MapView';
 
 export default function Home() {
@@ -7,3 +8,10 @@ export default function Home() {
     </div>
   );
 }
+=======
+import HydroScoutDashboard from './src/components/HydroScoutDashboard';
+
+export default function Home() {
+  return <HydroScoutDashboard />;
+}
+>>>>>>> origin/initial-landing-page-pr

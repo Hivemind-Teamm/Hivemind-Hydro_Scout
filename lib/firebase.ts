@@ -26,14 +26,6 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 
-// Offline persistence (IndexedDB): caches reads locally and queues writes
-// made while offline, auto-syncing once connectivity returns.
-// persistentMultipleTabManager allows multiple open tabs to share the same
-// cache; without it, only one tab at a time gets persistence and others
-// silently fall back to memory-only cache.
-//
-// initializeFirestore must be called exactly once, before any other
-// Firestore call in the app — this module is that one place.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager(),

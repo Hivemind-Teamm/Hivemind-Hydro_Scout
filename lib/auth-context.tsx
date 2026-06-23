@@ -12,6 +12,8 @@ import {
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signOut as firebaseSignOut,
   User,
 } from "firebase/auth";
@@ -25,6 +27,7 @@ interface AuthContextValue {
   role: Role;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -72,13 +75,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await syncSessionCookie(idToken);
   }
 
+  async function signup(email: string, password: string, displayName: string) {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+    await updateProfile(cred.user, { displayName });
+
+    await setDoc(doc(db, "users", cred.user.uid), {
+      uid: cred.user.uid,
+      email,
+      displayName,
+      role: "general",
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+    });
+
+    const idToken = await cred.user.getIdToken();
+    await syncSessionCookie(idToken);
+  }
+
   async function logout() {
     await firebaseSignOut(auth);
     await syncSessionCookie(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, role, loading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );
