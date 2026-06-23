@@ -1,6 +1,8 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import Map, { Marker, GeolocateControl } from 'react-map-gl/mapbox';
+import type { GeolocateResultEvent } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './hydrantIcon';
@@ -20,6 +22,24 @@ interface DilimanMapProps {
 }
 
 export default function DilimanMap({ hydrants, selectedHydrantId, onLoad, onError, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, pendingPin }: DilimanMapProps) {
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
+
+  const handleGeolocate = useCallback((e: GeolocateResultEvent) => {
+    setUserLocation({ lat: e.coords.latitude, lng: e.coords.longitude });
+    setGeoError(null);
+  }, []);
+
+  const handleGeoError = useCallback((e: GeolocationPositionError) => {
+    if (e.code === e.PERMISSION_DENIED) {
+      setGeoError('Location access denied. Please enable location permissions in your browser.');
+    } else if (e.code === e.POSITION_UNAVAILABLE) {
+      setGeoError('Location unavailable. Please check your device settings.');
+    } else {
+      setGeoError('Could not get your location. Please try again.');
+    }
+  }, []);
+
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       <Map
@@ -49,12 +69,22 @@ export default function DilimanMap({ hydrants, selectedHydrantId, onLoad, onErro
           position="bottom-right"
           trackUserLocation={true}
           showUserHeading={true}
-          showAccuracyCircle={true}
+          showAccuracyCircle={false}
           positionOptions={{ enableHighAccuracy: true }}
-          onError={(e) => {
-            console.warn('Geolocation error:', e);
-          }}
+          onGeolocate={handleGeolocate}
+          onError={handleGeoError}
         />
+
+        {/* Custom pulsing blue dot for user's live location */}
+        {userLocation && (
+          <Marker
+            longitude={userLocation.lng}
+            latitude={userLocation.lat}
+            anchor="center"
+          >
+            <div className="user-location-dot" />
+          </Marker>
+        )}
 
         {pendingPin && (
           <Marker longitude={pendingPin.lng} latitude={pendingPin.lat} anchor="center">
@@ -89,6 +119,28 @@ export default function DilimanMap({ hydrants, selectedHydrantId, onLoad, onErro
           );
         })}
       </Map>
+
+      {/* Permission denied / geolocation error message */}
+      {geoError && (
+        <div style={{
+          position: 'absolute',
+          bottom: 80,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'white',
+          border: '1px solid #fca5a5',
+          borderRadius: 8,
+          padding: '8px 16px',
+          fontSize: 13,
+          color: '#c00',
+          zIndex: 1000,
+          maxWidth: 300,
+          textAlign: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        }}>
+          {geoError}
+        </div>
+      )}
     </div>
   );
 }
