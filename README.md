@@ -1,138 +1,36 @@
-# 💧 Hydro-Scout
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-> Web-based GIS for emergency hydrant mapping & water resource management
+## Getting Started
 
-![Agile Scrum](https://img.shields.io/badge/methodology-Agile%20Scrum-blue)
-![Status](https://img.shields.io/badge/status-In%20Development-yellow)
-![Branch](https://img.shields.io/badge/main-protected-red)
+First, run the development server:
 
----
-
-## About
-
-Hydro-Scout is a web-based Geographic Information System (GIS) designed to help emergency responders:
-
-- 📍 Locate operational fire hydrants in real time
-- 📡 Monitor hydrant status updates
-- 💧 Identify alternative emergency water sources
-- ⚡ Improve water-source response efficiency during fire incidents
-
----
-
-## Tech Stack
-
-| Technology | Role |
-|---|---|
-| **Next.js** | Frontend framework |
-| **React.js** | UI library |
-| **Firebase Firestore** | Database |
-| **Mapbox GL JS** | Interactive mapping |
-| **Tailwind CSS** | Styling |
-
----
-
-## Repository Structure
-
-```
-/app          → Main application source code
-/components   → Reusable UI components
-/lib          → Firebase, utilities, helper functions
-/public       → Static assets
-/docs         → Documentation and research files
-```
-
----
-
-## Branch Naming Convention
-
-Format: `type/short-description`
-
-| Prefix | Use case |
-|---|---|
-| `feature/` | New features |
-| `fix/` | Bug fixes |
-| `ui/` | UI/UX changes |
-| `docs/` | Documentation updates |
-
-**Examples:**
 ```bash
-feature/hydrant-map
-feature/auth-system
-feature/otw-mode
-feature/heatmap-overlay
-fix/login-bug
-fix/map-loading
-ui/dashboard-redesign
-ui/mobile-navbar
-docs/readme-update
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
----
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Contribution Workflow
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-### 1. Pull latest changes
-Always sync before starting work:
-```bash
-git checkout main
-git pull origin main
-```
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-### 2. Create a branch
-```bash
-git checkout -b feature/hydrant-map
-```
+## Learn More
 
-### 3. Commit with clear messages
-```bash
-git commit -m "Added hydrant marker clustering"
-git commit -m "Implemented OTW routing mode"
-git commit -m "Fixed Firebase auth redirect issue"
-```
+To learn more about Next.js, take a look at the following resources:
 
-### 4. Push your branch
-```bash
-git push origin feature/hydrant-map
-```
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-### 5. Open a Pull Request
-1. Open the repository on GitHub
-2. Create a Pull Request into `main`
-3. Wait for review and approval
-4. Merge only after approval
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
----
+## Deploy on Vercel
 
-## Development Guidelines
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-- Keep components modular and reusable
-- Avoid unnecessary dependencies
-- Prioritize mobile responsiveness
-- Write readable and maintainable code
-- Test features before pushing
-- Keep commits focused and concise
-
----
-
-## Repository Rules
-
-> ⚠️ **The `main` branch is protected. Never push directly to it.**
-
-- ❌ No force pushing to `main`
-- ❌ No direct commits to `main`
-- ✅ Pull Requests are required before merging
-- ✅ Keep branch names readable and organized
-
----
-
-## Team Hivemind
-
-| Name | Initials |
-|---|---|
-| Mark Luis Barican | MLB |
-| Jabez Zecariah Tan | JZT |
-| John Patrick Yusingco | JPY |
-| Karl Andrei Manangan | KAM |
-
-**CIIT College of Innovation and Integrated Technology**
-Bachelor of Science in Computer Science
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

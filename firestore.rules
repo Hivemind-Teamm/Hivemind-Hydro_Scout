@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return isSignedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isGeneral()    { return userRole() == 'general'; }
+    function isAuthorized() { return userRole() == 'authorized'; }
+    function isHead()       { return userRole() == 'head'; }
+    function isAdmin()      { return userRole() == 'admin'; }
+
+    function isAnyRole() {
+      return isGeneral() || isAuthorized() || isHead() || isAdmin();
+    }
+
+    function onlyChangedFields(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    // ---------- users ----------
+
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+
+      allow update: if isAdmin()
+        || (isSignedIn() && request.auth.uid == uid
+            && onlyChangedFields(['lastLoginAt']));
+
+      // New users can create their own document (signup flow).
+      // Only admins can create documents for other users or delete any.
+      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- hydrants ----------
+
+    match /hydrants/{hydrantId} {
+      // Public landing page: anyone can VIEW hydrants without signing in.
+      allow read: if true;
+
+      allow create: if isAuthorized() || isAdmin();
+
+      allow update: if isAdmin()
+        || (isAuthorized() && onlyChangedFields([
+              'status', 'operationalStatus', 'notes', 'fieldNotes', 'register',
+              'photoURL', 'photoUrl', 'hazardFlags', 'hazards',
+              'pressureStatus', 'waterCleanliness',
+              'updatedBy', 'updatedAt'
+            ]))
+        || (isHead() && onlyChangedFields([
+              'operationalStatus', 'pressureStatus', 'waterCleanliness',
+              'hazards', 'notes', 'fieldNotes', 'register',
+              'lastMaintenanceDate', 'nextMaintenanceDate',
+              'updatedBy', 'updatedAt'
+            ]));
+
+      allow delete: if isAdmin();
+
+      match /reports/{reportId} {
+        // Direct-path access (read a hydrant's own reports, file new ones).
+        allow read: if true;
+        allow create: if isAuthorized() || isHead() || isAdmin();
+        allow update, delete: if isHead() || isAdmin();
+      }
+    }
+
+    // ---------- reports collection group ----------
+    // The ReportsPanel uses a collectionGroup('reports') query to gather
+    // reports across ALL hydrants. Collection-group queries are NOT covered
+    // by the nested rule above — they need this recursive-wildcard match.
+    match /{path=**}/reports/{reportId} {
+      allow read: if true;
+    }
+
+    // ---------- default deny ----------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
