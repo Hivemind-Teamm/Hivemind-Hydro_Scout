@@ -1,9 +1,6 @@
 @import "tailwindcss";
-<<<<<<< HEAD
-=======
 @import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
 @import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
->>>>>>> origin/initial-landing-page-pr
 
 :root {
   --background: #ffffff;
@@ -29,8 +26,6 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
-<<<<<<< HEAD
-=======
 
 /* ── Panel / modal entrance animations ── */
 @keyframes slide-up {
@@ -98,4 +93,3 @@ body {
   animation: hydrant-pulse 1.4s ease-out infinite;
   pointer-events: none;
 }
->>>>>>> origin/initial-landing-page-pr
