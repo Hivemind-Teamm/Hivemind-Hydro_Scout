@@ -15,7 +15,7 @@ export default function LoginPage() {
 }
 
 function LoginContent() {
-  const { login, user, loading } = useAuth();
+  const { login, user, loading, refreshSession } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -28,9 +28,10 @@ function LoginContent() {
   useEffect(() => {
     if (!loading && user) {
       const next = searchParams.get("next") || "/";
-      router.replace(next);
+      // Refresh the session cookie in case it's missing/stale, then navigate.
+      refreshSession().finally(() => router.replace(next));
     }
-  }, [user, loading, router, searchParams]);
+  }, [user, loading, router, searchParams, refreshSession]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -49,7 +50,7 @@ function LoginContent() {
     }
   }
 
-  if (loading || user) return null;
+  if (loading || user) return null; // useEffect above handles redirect
 
   const eyeOpen = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

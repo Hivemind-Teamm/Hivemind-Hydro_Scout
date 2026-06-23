@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
+import { formatDistance } from '@/lib/haversine';
 
 type Tab = 'quick' | 'details' | 'register' | 'admin';
 
@@ -15,9 +16,11 @@ interface FullDetailsPanelProps {
   onClose: () => void;
   onViewUser: (name: string, role: string) => void;
   onFlyTo: (lat: number, lng: number) => void;
+  distanceM?: number | null;
+  isOtw?: boolean;
 }
 
-export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo }: FullDetailsPanelProps) {
+export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo, distanceM, isOtw }: FullDetailsPanelProps) {
   const { role } = useAuth();
   const [tab, setTab] = useState<Tab>('quick');
   const meta = STATUS_META[hydrant.status];
@@ -92,7 +95,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 
       {/* ── Tab content ── */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'quick'    && <QuickTab    hydrant={hydrant} meta={meta} />}
+        {tab === 'quick'    && <QuickTab    hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
         {tab === 'details'  && <DetailsTab  hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} />}
         {tab === 'register' && <RegisterTab hydrant={hydrant} onViewUser={onViewUser} />}
         {tab === 'admin'    && <AdminTab    hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} />}
@@ -102,13 +105,21 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 }
 
 /* ──────────────────────── QUICK ──────────────────────── */
-function QuickTab({ hydrant, meta }: { hydrant: Hydrant; meta: { color: string; legendLabel: string } }) {
+function QuickTab({ hydrant, meta, distanceM, isOtw }: { hydrant: Hydrant; meta: { color: string; legendLabel: string }; distanceM?: number | null; isOtw?: boolean }) {
+  const distanceValue = distanceM != null
+    ? (
+      <span className={`font-semibold ${isOtw ? 'text-red-600' : 'text-neutral-800'}`}>
+        {formatDistance(distanceM)}{isOtw && <span className="ml-1.5 font-normal text-red-400">· En Route</span>}
+      </span>
+    )
+    : `${hydrant.distanceM} m · ${hydrant.distanceMin} min`;
+
   return (
     <div className="px-4 py-4">
       <InfoTable rows={[
         { label: 'Status',   value: <span className="font-bold" style={{ color: meta.color }}>• {meta.legendLabel}</span> },
         { label: 'Pressure', value: <span className="font-bold" style={{ color: PRESSURE_COLOR[hydrant.pressure] }}>{hydrant.pressure}</span> },
-        { label: 'Distance', value: `${hydrant.distanceM} m · ${hydrant.distanceMin} min` },
+        { label: 'Distance', value: distanceValue },
         { label: 'Hazard',   value: hydrant.hazard },
         { label: 'Landmark', value: hydrant.landmark },
       ]} />

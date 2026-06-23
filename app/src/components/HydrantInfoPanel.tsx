@@ -10,6 +10,8 @@ interface HydrantInfoPanelProps {
   onEdit: () => void;
   onReport: () => void;
   onFlyTo: (lat: number, lng: number) => void;
+  onRoute: () => void;
+  isOtw: boolean;
 }
 
 const PRESSURE_COLOR: Record<string, string> = {
@@ -19,7 +21,7 @@ const PRESSURE_COLOR: Record<string, string> = {
   None:     '#9aa0a6',
 };
 
-export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo }: HydrantInfoPanelProps) {
+export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo, onRoute, isOtw }: HydrantInfoPanelProps) {
   const { role } = useAuth();
   const meta = STATUS_META[hydrant.status];
   const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
@@ -28,7 +30,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
   return (
     <div
       className="anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] w-80 overflow-hidden rounded-xl bg-white shadow-2xl"
-      style={{ borderLeft: `4px solid ${meta.color}`, maxHeight: 'calc(100vh - 65px - 24px)' }}
+      style={{ maxHeight: 'calc(100vh - 65px - 24px)' }}
     >
       {/* Header */}
       <div className="flex items-start justify-between bg-neutral-50 px-5 py-4">
@@ -73,9 +75,12 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
-          <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#91191E] py-2 text-xs font-bold text-white hover:bg-[#7a1419] active:bg-[#611014]">
+          <button
+            onClick={onRoute}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-colors ${isOtw ? 'bg-red-700 hover:bg-red-800 active:bg-red-900' : 'bg-[#91191E] hover:bg-[#7a1419] active:bg-[#611014]'}`}
+          >
             <RouteIcon />
-            Route
+            {isOtw ? 'Routing…' : 'Route'}
           </button>
           {canEdit && (
             <button
