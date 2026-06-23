@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
@@ -24,18 +24,21 @@ function createClusterIcon(cluster: { getChildCount: () => number }) {
   return L.divIcon({
     html: `<div style="
       width:42px;height:42px;
-      background:#FED42E;
-      border:3px solid #91191E;
+      background:linear-gradient(135deg,rgba(254,212,46,0.38) 0%,rgba(254,212,46,0.16) 100%);
+      border:1.5px solid rgba(254,212,46,0.55);
       border-radius:50%;
       display:flex;align-items:center;justify-content:center;
-      box-shadow:0 3px 10px rgba(0,0,0,0.45);
+      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      box-shadow:0 0 12px rgba(254,212,46,0.35),0 3px 8px rgba(0,0,0,0.4);
       color:#91191E;font-size:13px;font-weight:800;font-family:Arial,sans-serif;
+      text-shadow:0 1px 2px rgba(255,255,255,0.4);
     ">${count}</div>`,
     className: '',
     iconSize: [42, 42],
     iconAnchor: [21, 21],
   });
 }
+
 
 const pendingPinIcon = L.divIcon({
   html: `<div style="width:14px;height:14px;background:#FED42E;border:2.5px solid #91191E;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.45)"></div>`,
@@ -68,10 +71,27 @@ function ZoomBridge({ onMapReady }: { onMapReady?: (controller: MapController) =
       zoomIn: () => map.zoomIn(),
       zoomOut: () => map.zoomOut(),
       flyTo: (lat, lng, zoom = 17) => map.flyTo([lat, lng], zoom, { animate: true, duration: 0.8 }),
+      setPitch: () => { /* Leaflet does not support pitch */ },
+      fitRoute: (coords, padding = 60) => {
+        if (!coords.length) return;
+        const bounds = L.latLngBounds(coords.map(([lng, lat]) => L.latLng(lat, lng)));
+        map.fitBounds(bounds, { padding: [padding, padding] });
+      },
+      setZoomLimits: (min, max) => {
+        map.setMinZoom(min ?? 0);
+        map.setMaxZoom(max ?? 22);
+      },
     });
   }, [map, onMapReady]);
   return null;
 }
+
+const userLocationIcon = L.divIcon({
+  html: `<div style="position:relative;width:36px;height:36px;"><div class="user-location-pulse"></div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:24px;height:24px;background:#2fbf4f;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 12px rgba(0,0,0,0.4);"></div></div>`,
+  className: '',
+  iconSize: [36, 36],
+  iconAnchor: [18, 18],
+});
 
 interface LeafletMapProps {
   hydrants: Hydrant[];
@@ -82,9 +102,12 @@ interface LeafletMapProps {
   onMapClick: (lat: number, lng: number) => void;
   onMapBackgroundClick: () => void;
   pendingPin: PendingPin | null;
+  userLocation?: { lat: number; lng: number } | null;
+  otwHydrant?: Hydrant | null;
+  otwRoute?: [number, number][] | null;
 }
 
-export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin }: LeafletMapProps) {
+export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute }: LeafletMapProps) {
   return (
     <MapContainer
       center={[DILIMAN_CENTER.lat, DILIMAN_CENTER.lng]}
@@ -96,6 +119,22 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution="&copy; OpenStreetMap contributors"
       />
+
+
+      {otwHydrant && userLocation && (() => {
+        // Use real road route if available (coords are [lng,lat]), else straight line
+        const positions: [number, number][] = otwRoute
+          ? otwRoute.map(([lng, lat]) => [lat, lng])
+          : [[userLocation.lat, userLocation.lng], [otwHydrant.lat, otwHydrant.lng]];
+        return (
+          <>
+            <Polyline positions={positions} pathOptions={{ color: '#DC2626', weight: 16, opacity: 0.18, className: 'otw-route-glow' }} />
+            <Polyline positions={positions} pathOptions={{ color: '#F87171', weight: 6, opacity: 0.55 }} />
+            <Polyline positions={positions} pathOptions={{ color: '#EF4444', weight: 3, opacity: 1, dashArray: '8 8', className: 'otw-route-line' }} />
+          </>
+        );
+      })()}
+
       <MarkerClusterGroup
         chunkedLoading
         iconCreateFunction={createClusterIcon}
@@ -115,6 +154,9 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
       </MarkerClusterGroup>
       {pendingPin && (
         <Marker position={[pendingPin.lat, pendingPin.lng]} icon={pendingPinIcon} />
+      )}
+      {userLocation && (
+        <Marker position={[userLocation.lat, userLocation.lng]} icon={userLocationIcon} />
       )}
       <MapClickHandler addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} />
       <ZoomBridge onMapReady={onMapReady} />

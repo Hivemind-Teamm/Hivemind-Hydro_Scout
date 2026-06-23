@@ -28,6 +28,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   signup: (email: string, password: string, displayName: string) => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -101,8 +102,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await syncSessionCookie(null);
   }
 
+  async function refreshSession() {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    const idToken = await currentUser.getIdToken(true);
+    await syncSessionCookie(idToken);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, role, loading, login, logout, signup }}>
+    <AuthContext.Provider value={{ user, role, loading, login, logout, signup, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );
