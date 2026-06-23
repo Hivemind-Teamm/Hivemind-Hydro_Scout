@@ -92,7 +92,7 @@ export default function HydroScoutDashboard() {
     setShowFullDetails(false);
     setShowEdit(false);
     setShowReport(false);
-    controllerRef.current?.flyTo(hydrant.lat, hydrant.lng, 17);
+    controllerRef.current?.flyTo(hydrant.lat, hydrant.lng, 16);
   }, []);
 
   const handleCloseAll = useCallback(() => {
@@ -157,6 +157,7 @@ export default function HydroScoutDashboard() {
         onSelectHydrant={handleSelectHydrant}
         addHydrantMode={addHydrantMode}
         onMapClick={handleMapClick}
+        onMapBackgroundClick={handleCloseAll}
         pendingPin={pendingLocation}
       />
       <DashboardOverlay

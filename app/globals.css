@@ -24,7 +24,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-abeezee), Arial, sans-serif;
 }
 
 /* ── Panel / modal entrance animations ── */
@@ -93,3 +93,41 @@ body {
   animation: hydrant-pulse 1.4s ease-out infinite;
   pointer-events: none;
 }
+
+/* ── Admin panel form primitives ── */
+.admin-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  background: #fafafa;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  color: #374151;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.admin-input::placeholder { color: #9ca3af; }
+.admin-input:focus { border-color: #91191E; background: #ffffff; }
+
+.admin-btn-primary {
+  border-radius: 0.5rem;
+  background: #91191E;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #ffffff;
+  transition: background 0.15s;
+}
+.admin-btn-primary:hover { background: #7a1419; }
+.admin-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.admin-btn-ghost {
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4b5563;
+  transition: background 0.15s;
+}
+.admin-btn-ghost:hover { background: #f3f4f6; }

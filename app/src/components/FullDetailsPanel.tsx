@@ -82,10 +82,10 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
           >
             {t === 'admin' ? (
               <span className="flex items-center justify-center gap-1">
-                admin
+                Admin
                 <LockIcon locked={!isHeadOrAdmin} />
               </span>
-            ) : t}
+            ) : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>

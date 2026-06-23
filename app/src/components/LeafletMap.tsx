@@ -44,11 +44,15 @@ const pendingPinIcon = L.divIcon({
   iconAnchor: [7, 7],
 });
 
-function MapClickHandler({ addHydrantMode, onMapClick }: { addHydrantMode: boolean; onMapClick: (lat: number, lng: number) => void }) {
+function MapClickHandler({ addHydrantMode, onMapClick, onMapBackgroundClick }: { addHydrantMode: boolean; onMapClick: (lat: number, lng: number) => void; onMapBackgroundClick: () => void }) {
   const map = useMap();
   useMapEvents({
     click(e) {
-      if (addHydrantMode) onMapClick(e.latlng.lat, e.latlng.lng);
+      if (addHydrantMode) {
+        onMapClick(e.latlng.lat, e.latlng.lng);
+      } else {
+        onMapBackgroundClick();
+      }
     },
   });
   useEffect(() => {
@@ -76,10 +80,11 @@ interface LeafletMapProps {
   onSelectHydrant: (hydrant: Hydrant) => void;
   addHydrantMode: boolean;
   onMapClick: (lat: number, lng: number) => void;
+  onMapBackgroundClick: () => void;
   pendingPin: PendingPin | null;
 }
 
-export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, pendingPin }: LeafletMapProps) {
+export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin }: LeafletMapProps) {
   return (
     <MapContainer
       center={[DILIMAN_CENTER.lat, DILIMAN_CENTER.lng]}
@@ -111,7 +116,7 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
       {pendingPin && (
         <Marker position={[pendingPin.lat, pendingPin.lng]} icon={pendingPinIcon} />
       )}
-      <MapClickHandler addHydrantMode={addHydrantMode} onMapClick={onMapClick} />
+      <MapClickHandler addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} />
       <ZoomBridge onMapReady={onMapReady} />
     </MapContainer>
   );

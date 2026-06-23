@@ -1,20 +1,36 @@
-// app/login/page.tsx
-
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  // useSearchParams() needs a Suspense boundary to prerender (Next.js 16).
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
+  const { login, user, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user) {
+      const next = searchParams.get("next") || "/";
+      router.replace(next);
+    }
+  }, [user, loading, router, searchParams]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -33,61 +49,191 @@ export default function LoginPage() {
     }
   }
 
+  if (loading || user) return null;
+
+  const eyeOpen = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+
+  const eyeOff = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+
   return (
-    <div style={{ maxWidth: 360, margin: "80px auto", padding: 24 }}>
-      <h1 style={{ fontSize: 24, marginBottom: 24 }}>Sign in</h1>
-
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+    <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
+      {/* Left Panel */}
+      <div
+        style={{
+          flex: "0 0 42%",
+          background: "#FED42E",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ position: "relative", width: "55%", aspectRatio: "3 / 4" }}>
+          <Image
+            src="/Login Hydrant Logo.png"
+            alt="Hydro-Scout Hydrant"
+            fill
+            style={{ objectFit: "contain" }}
+            priority
           />
-        </label>
+        </div>
+      </div>
 
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-          />
-        </label>
+      {/* Right Panel */}
+      <div
+        style={{
+          flex: 1,
+          background: "#ffffff",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "40px 48px",
+        }}
+      >
+        <div style={{ width: "100%", maxWidth: 420 }}>
+          <h1 style={{ fontSize: 56, fontWeight: 700, margin: 0, lineHeight: 1.1, color: "#000" }}>
+            Hello Po!
+          </h1>
+          <p style={{ fontSize: 26, color: "#000", margin: "8px 0 36px" }}>
+            Login Please
+          </p>
 
-        {error && <p style={{ color: "#c00", fontSize: 14 }}>{error}</p>}
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {/* Email */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                style={{
+                  padding: "13px 20px",
+                  borderRadius: 24,
+                  border: "1.5px solid #ccc",
+                  fontSize: 18,
+                  outline: "none",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  color: "#000",
+                  fontFamily: "inherit",
+                }}
+              />
+            </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{
-            padding: "10px 16px",
-            borderRadius: 6,
-            border: "none",
-            background: "#1a73e8",
-            color: "white",
-            fontWeight: 600,
-            cursor: submitting ? "default" : "pointer",
-            opacity: submitting ? 0.7 : 1,
-          }}
-        >
-          {submitting ? "Signing in..." : "Sign in"}
-        </button>
+            {/* Password */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>Password</label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  style={{
+                    padding: "13px 48px 13px 20px",
+                    borderRadius: 24,
+                    border: "1.5px solid #ccc",
+                    fontSize: 18,
+                    outline: "none",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    color: "#000",
+                    fontFamily: "inherit",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  style={{
+                    position: "absolute",
+                    right: 14,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    color: "#888",
+                  }}
+                >
+                  {showPassword ? eyeOff : eyeOpen}
+                </button>
+              </div>
+            </div>
 
-        <p style={{ textAlign: "center", fontSize: 13, color: "#555", marginTop: 4 }}>
-          Don&apos;t have an account?{" "}
-          <a href="/signup" style={{ color: "#1a73e8", fontWeight: 600 }}>
-            Create Account
-          </a>
-        </p>
-      </form>
+            {error && (
+              <p style={{ color: "#c00", fontSize: 16, margin: 0 }}>{error}</p>
+            )}
+
+            {/* Login button */}
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                marginTop: 8,
+                padding: "16px 20px",
+                borderRadius: 24,
+                border: "2px solid #000",
+                background: submitting ? "#e8b800" : "#FED42E",
+                color: "#000",
+                fontWeight: 700,
+                fontSize: 20,
+                cursor: submitting ? "default" : "pointer",
+                width: "100%",
+                fontFamily: "inherit",
+              }}
+            >
+              {submitting ? "Logging in..." : "Login"}
+            </button>
+
+            {/* Sign Up button */}
+            <button
+              type="button"
+              onClick={() => router.push("/signup")}
+              style={{
+                padding: "15px 20px",
+                borderRadius: 24,
+                border: "1.5px solid #000",
+                background: "transparent",
+                color: "#000",
+                fontWeight: 600,
+                fontSize: 20,
+                cursor: "pointer",
+                width: "100%",
+                fontFamily: "inherit",
+              }}
+            >
+              Sign Up
+            </button>
+
+            {/* Forgot password */}
+            <p style={{ textAlign: "center", margin: "8px 0 0" }}>
+              <a
+                href="/forgot-password"
+                style={{ color: "#FFA500", fontSize: 16, fontWeight: 500, textDecoration: "none" }}
+              >
+                Forgot Password?
+              </a>
+            </p>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

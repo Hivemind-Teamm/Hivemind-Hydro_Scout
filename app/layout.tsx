@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, ABeeZee } from "next/font/google";
 import "./globals.css";
 import 'leaflet/dist/leaflet.css';
 import { AuthProvider } from "@/lib/auth-context";
@@ -11,6 +11,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const abeezee = ABeeZee({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-abeezee",
 });
 
 export const metadata: Metadata = {
@@ -26,7 +32,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${abeezee.variable} antialiased`}
     >
      <body className="h-screen w-screen flex flex-col" style={{ margin: 0 }}>
   <AuthProvider>{children}</AuthProvider>
