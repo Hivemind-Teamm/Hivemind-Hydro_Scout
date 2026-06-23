@@ -46,6 +46,7 @@ export default function HydroScoutDashboard() {
   const hasPendingReports = reports.some((r) => r.status === 'pending');
 
   useEffect(() => {
+    console.log('[mapbox token]', process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
     if (!process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
       setAutoFallback(true);
       setProvider('leaflet');

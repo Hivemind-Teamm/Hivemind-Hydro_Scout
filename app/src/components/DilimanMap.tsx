@@ -40,7 +40,7 @@ export default function DilimanMap({ hydrants, selectedHydrantId, onLoad, onErro
           });
           onLoad?.();
         }}
-        onError={(e: unknown) => onError?.(e)}
+        onError={(e: unknown) => { console.error('[Mapbox error]', e); onError?.(e); }}
         onClick={(e: { lngLat: { lat: number; lng: number } }) => {
           if (addHydrantMode) onMapClick(e.lngLat.lat, e.lngLat.lng);
         }}
