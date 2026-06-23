@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { countByStatus, type Hydrant } from '../data/hydrants';
 import { type Report } from '../data/reports';
 import { type Role } from '@/lib/auth-context';
@@ -215,9 +216,12 @@ function StatBox({ value, label, sub }: { value: number; label: string; sub?: st
 }
 
 /* ── Admin action button ──────────────────────────────────────────────────── */
-function AdminAction({ icon, label }: { icon: React.ReactNode; label: string }) {
+function AdminAction({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) {
   return (
-    <button className="flex w-full items-center gap-3 rounded-lg border border-neutral-200 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-neutral-700 transition-colors hover:border-[#91191E] hover:bg-red-50 hover:text-[#91191E]">
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-lg border border-neutral-200 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-neutral-700 transition-colors hover:border-[#91191E] hover:bg-red-50 hover:text-[#91191E] active:scale-[0.98]"
+    >
       <span className="shrink-0 text-neutral-400 group-hover:text-[#91191E]">{icon}</span>
       {label}
     </button>
@@ -226,6 +230,7 @@ function AdminAction({ icon, label }: { icon: React.ReactNode; label: string }) 
 
 /* ── Main component ───────────────────────────────────────────────────────── */
 export default function OperationsDashboard({ hydrants, reports, role, onClose }: Props) {
+  const router = useRouter();
   const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
   const total = hydrants.length;
   const operationalPct = total > 0 ? Math.round((counts.operational / total) * 100) : 0;
@@ -321,6 +326,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
             <div className="flex flex-col gap-2">
               <AdminAction
                 label="Manage Users & Roles"
+                onClick={() => router.push('/admin')}
                 icon={
                   <svg width="14" height="14" viewBox="0 0 24 24" {...s}>
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -332,6 +338,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
               />
               <AdminAction
                 label="Bulk-Import Hydrants · CSV"
+                onClick={() => router.push('/admin')}
                 icon={
                   <svg width="14" height="14" viewBox="0 0 24 24" {...s}>
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -342,6 +349,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
               />
               <AdminAction
                 label="Data Quality & Validation"
+                onClick={() => router.push('/admin')}
                 icon={
                   <svg width="14" height="14" viewBox="0 0 24 24" {...s}>
                     <polyline points="9 11 12 14 22 4" />

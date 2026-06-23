@@ -57,7 +57,7 @@ export default function DashboardOverlay({
     <div className="pointer-events-none absolute inset-0 select-none">
       {/* ---------- Header ---------- */}
       <header className="pointer-events-auto absolute inset-x-0 top-0 z-[1000]">
-        <div className="flex h-16 items-center justify-between overflow-visible bg-black/20 pl-2 pr-5 backdrop-blur-sm">
+        <div className="flex h-16 items-center justify-between overflow-visible bg-black/50 pl-2 pr-5">
           <Logo />
           <button
             onClick={onOpenAccount}
@@ -123,7 +123,7 @@ export default function DashboardOverlay({
         </div>
       </div>
 
-      {/* Vertical toolbar — layers, add hydrant, reports, dashboard */}
+      {/* Vertical toolbar — layers, reports, dashboard, then add hydrant at bottom */}
       <div className="pointer-events-auto absolute left-4 top-[238px] z-[1000] flex flex-col gap-3">
         <ToolButton
           label={provider === 'mapbox' ? 'Switch to OSM map' : 'Switch to Mapbox'}
@@ -133,26 +133,6 @@ export default function DashboardOverlay({
         >
           <LayersGlyph />
         </ToolButton>
-
-        {canPin && (
-          <div className="relative">
-            <button
-              title={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
-              onClick={onToggleAddHydrant}
-              className="relative flex h-11 w-11 items-center justify-center transition-all hover:opacity-90 active:scale-95"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/Hydrant%20Pin%20Red.png"
-                alt="Pin hydrant"
-                className="h-12 w-12 object-contain"
-              />
-            </button>
-            <span className={`pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#91191E] text-[9px]' : 'bg-[#2fbf4f] text-[11px]'}`}>
-              {addHydrantMode ? '✕' : '+'}
-            </span>
-          </div>
-        )}
 
         <div className="relative">
           <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports}>
@@ -169,6 +149,26 @@ export default function DashboardOverlay({
           <ToolButton label="Operations Dashboard" onClick={onOpenDashboard} rounded>
             <StatsGlyph />
           </ToolButton>
+        )}
+
+        {canPin && (
+          <div className="relative mt-1">
+            <button
+              title={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
+              onClick={onToggleAddHydrant}
+              className="relative flex h-11 w-11 items-center justify-center transition-all hover:opacity-90 active:scale-95"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/Hydrant%20Pin%20Red.png"
+                alt="Pin hydrant"
+                className="h-12 w-12 object-contain"
+              />
+            </button>
+            <span className={`pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#91191E] text-[9px]' : 'bg-[#2fbf4f] text-[11px]'}`}>
+              {addHydrantMode ? '✕' : '+'}
+            </span>
+          </div>
         )}
       </div>
 

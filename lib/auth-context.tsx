@@ -78,13 +78,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
 
     // Create the user document — new accounts always start as 'general'.
-    await setDoc(doc(db, "users", cred.user.uid), {
-      email,
-      displayName,
-      role: "general",
-      createdAt: serverTimestamp(),
-      lastLoginAt: serverTimestamp(),
-    });
+    // merge:true is defensive: if a document somehow already exists for this
+    // uid, we never clobber an existing role (e.g. an admin) back to 'general'.
+    await setDoc(
+      doc(db, "users", cred.user.uid),
+      {
+        email,
+        displayName,
+        role: "general",
+        createdAt: serverTimestamp(),
+        lastLoginAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
 
     const idToken = await cred.user.getIdToken();
     await syncSessionCookie(idToken);
