@@ -54,6 +54,16 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         </button>
       </div>
 
+      {/* Lead photo — the hydrant's main field photo (photos[0]) */}
+      {hydrant.photos.length > 0 && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={hydrant.photos[0]}
+          alt={`${hydrant.name} field photo`}
+          className="aspect-square w-full object-cover"
+        />
+      )}
+
       <div className="px-5 py-4">
         {/* Status / Pressure / Key row */}
         <div className="mb-3 grid grid-cols-3 divide-x divide-neutral-100 rounded-lg bg-neutral-50 py-2 text-center">

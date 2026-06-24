@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { type Hydrant, type HydrantStatus } from '../data/hydrants';
 import { updateHydrantStatus } from '../data/store';
@@ -28,8 +28,10 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   const [hazard, setHazard] = useState('');
   const [note, setNote] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
   const roleLabel = role ? (ROLE_LABELS[role] ?? role) : 'Authorized';
@@ -37,8 +39,33 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   const dateStr = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
 
-  function handlePhotoAdd() {
-    setPhotos((p) => [...p, '']);
+  // Upload each picked image to Cloudinary (under this hydrant's folder) and
+  // keep the returned URLs in state; they're persisted to Firestore on Submit.
+  async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('hydrantId', hydrant.id);
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Upload failed.');
+        setPhotos((p) => [...p, data.url as string]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function handlePhotoRemove(index: number) {
+    setPhotos((p) => p.filter((_, i) => i !== index));
   }
 
   async function handleSubmit() {
@@ -53,6 +80,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
         note,
         by: displayName,
         role: roleLabel,
+        photos,
       });
       onClose();
     } catch (e) {
@@ -145,23 +173,43 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
         {/* Attach Photo */}
         <section>
           <p className="mb-2 text-xs font-bold text-[#91191E]">Attach Photo</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFilesSelected}
+            className="hidden"
+          />
           <div className="flex flex-wrap gap-2">
-            {photos.map((_, i) => (
-              <div
-                key={i}
-                className="relative flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50"
-              >
-                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#91191E]" />
-                <span className="text-[10px] text-neutral-400">Photo</span>
+            {photos.map((url, i) => (
+              <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => handlePhotoRemove(i)}
+                  title="Remove photo"
+                  className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  ✕
+                </button>
               </div>
             ))}
             <button
-              onClick={handlePhotoAdd}
-              className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 disabled:opacity-50"
             >
-              +
+              {uploading ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-[#91191E]" />
+              ) : (
+                '+'
+              )}
             </button>
           </div>
+          {uploading && <p className="mt-1.5 text-[10px] text-neutral-400">Uploading…</p>}
         </section>
 
         {/* Will be signed */}
@@ -200,7 +248,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
           </button>
           <button
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || uploading}
             className="flex-1 rounded-lg bg-[#91191E] py-2 text-sm font-bold text-white hover:bg-[#7a1419] disabled:opacity-60"
           >
             {saving ? 'Saving…' : 'Submit'}

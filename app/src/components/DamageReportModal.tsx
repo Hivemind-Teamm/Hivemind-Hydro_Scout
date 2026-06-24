@@ -69,8 +69,8 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
 
   return (
     // Backdrop
-    <div className="anim-fade pointer-events-auto absolute inset-0 z-[4000] flex items-center justify-center bg-black/40">
-      <div className="anim-fade-scale relative flex h-[90vh] max-h-[600px] w-[90vw] max-w-[720px] overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="anim-fade pointer-events-auto absolute inset-0 z-[4000] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="anim-fade-scale relative flex h-[90vh] max-h-[600px] w-[90vw] max-w-[720px] overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header ── */}
         <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-[#91191E] px-5 py-3">

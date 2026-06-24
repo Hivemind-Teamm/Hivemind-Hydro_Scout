@@ -73,6 +73,7 @@ export interface EditHydrantInput {
   note?: string;
   by: string;
   role: string;
+  photos?: string[]; // Cloudinary URLs to append to the hydrant's photo set
 }
 
 // Writes an authorized status edit to Firestore: updates the operational/
@@ -98,6 +99,7 @@ export async function updateHydrantStatus(hydrantId: string, input: EditHydrantI
 
   if (input.waterCleanliness?.trim()) payload.waterCleanliness = input.waterCleanliness.trim();
   if (input.hazard?.trim()) payload.hazards = input.hazard.split(',').map((h) => h.trim()).filter(Boolean);
+  if (input.photos?.length) payload.photos = arrayUnion(...input.photos);
   if (input.note?.trim()) {
     payload.fieldNotes = arrayUnion({
       user: input.by,

@@ -66,6 +66,8 @@ interface DilimanMapProps {
   userLocation?: { lat: number; lng: number } | null;
   otwHydrant?: Hydrant | null;
   otwRoute?: [number, number][] | null;
+  initialCenter?: { lat: number; lng: number };
+  initialZoom?: number;
 }
 
 const OTW_SOURCE = 'otw-route';
@@ -81,7 +83,7 @@ const DASH_SEQUENCE = [
 
 export default function DilimanMap({
   hydrants, selectedHydrantId, onLoad, onError, onMapReady,
-  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute,
+  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom,
 }: DilimanMapProps) {
   const mapRef = useRef<MapRef>(null);
   const otwAnimRef = useRef<number | null>(null);
@@ -273,6 +275,8 @@ export default function DilimanMap({
         map.setMinZoom(min ?? 0);
         map.setMaxZoom(max ?? 22);
       },
+      getCenter: () => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; },
+      getZoom: () => map.getZoom(),
     });
     setMapInstance(map);
     onLoad?.();
@@ -299,9 +303,9 @@ export default function DilimanMap({
         ref={mapRef}
         mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
         initialViewState={{
-          longitude: DILIMAN_CENTER.lng,
-          latitude: DILIMAN_CENTER.lat,
-          zoom: DEFAULT_ZOOM,
+          longitude: initialCenter?.lng ?? DILIMAN_CENTER.lng,
+          latitude: initialCenter?.lat ?? DILIMAN_CENTER.lat,
+          zoom: initialZoom ?? DEFAULT_ZOOM,
         }}
         style={{ position: 'absolute', inset: 0 }}
         mapStyle="mapbox://styles/mapbox/streets-v12"

@@ -35,7 +35,7 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
   ];
 
   return (
-    <div className="anim-slide-left pointer-events-auto absolute bottom-6 left-[76px] top-[124px] z-[1500] flex w-[360px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="anim-slide-left pointer-events-auto absolute bottom-6 left-[76px] top-[124px] z-[1500] flex w-[360px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
       {/* Header */}
       <div className="border-b border-neutral-200 px-4 py-3">
         <p className="text-sm font-extrabold uppercase tracking-wide text-neutral-800">Reports Register</p>

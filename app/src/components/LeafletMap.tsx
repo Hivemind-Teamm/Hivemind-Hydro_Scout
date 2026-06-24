@@ -81,6 +81,8 @@ function ZoomBridge({ onMapReady }: { onMapReady?: (controller: MapController) =
         map.setMinZoom(min ?? 0);
         map.setMaxZoom(max ?? 22);
       },
+      getCenter: () => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; },
+      getZoom: () => map.getZoom(),
     });
   }, [map, onMapReady]);
   return null;
@@ -105,13 +107,15 @@ interface LeafletMapProps {
   userLocation?: { lat: number; lng: number } | null;
   otwHydrant?: Hydrant | null;
   otwRoute?: [number, number][] | null;
+  initialCenter?: { lat: number; lng: number };
+  initialZoom?: number;
 }
 
-export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute }: LeafletMapProps) {
+export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom }: LeafletMapProps) {
   return (
     <MapContainer
-      center={[DILIMAN_CENTER.lat, DILIMAN_CENTER.lng]}
-      zoom={DEFAULT_ZOOM}
+      center={[initialCenter?.lat ?? DILIMAN_CENTER.lat, initialCenter?.lng ?? DILIMAN_CENTER.lng]}
+      zoom={initialZoom ?? DEFAULT_ZOOM}
       zoomControl={false}
       style={{ height: '100%', width: '100%' }}
     >
