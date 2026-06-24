@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth-context';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { formatDistance } from '@/lib/haversine';
+import { deleteHydrantPhoto, setDisplayPhoto } from '../data/store';
 
 type Tab = 'quick' | 'details' | 'register' | 'admin';
 
@@ -20,13 +22,48 @@ interface FullDetailsPanelProps {
   isOtw?: boolean;
 }
 
+type PhotoMenu = { url: string; x: number; y: number; confirming: boolean } | null;
+
 export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo, distanceM, isOtw }: FullDetailsPanelProps) {
   const { role } = useAuth();
   const [tab, setTab] = useState<Tab>('quick');
+  const [photoMenu, setPhotoMenu] = useState<PhotoMenu>(null);
+  const [menuBusy, setMenuBusy] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const meta = STATUS_META[hydrant.status];
 
   const isHeadOrAdmin = role === 'head' || role === 'admin';
   const canAnnotate   = role === 'authorized' || role === 'head' || role === 'admin';
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!photoMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setPhotoMenu(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [photoMenu]);
+
+  const handlePhotoContextMenu = (e: React.MouseEvent, url: string) => {
+    e.preventDefault();
+    setPhotoMenu({ url, x: e.clientX, y: e.clientY, confirming: false });
+  };
+
+  const handleMakeDisplay = async () => {
+    if (!photoMenu) return;
+    setMenuBusy(true);
+    try { await setDisplayPhoto(hydrant.id, photoMenu.url, hydrant.photos); }
+    finally { setMenuBusy(false); setPhotoMenu(null); }
+  };
+
+  const handleDelete = async () => {
+    if (!photoMenu) return;
+    setMenuBusy(true);
+    try { await deleteHydrantPhoto(hydrant.id, photoMenu.url); }
+    finally { setMenuBusy(false); setPhotoMenu(null); }
+  };
+
   // Admin tab is always visible — non-head/admin see a restricted-access screen.
 
   return (
@@ -105,10 +142,60 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
       {/* ── Tab content ── */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'quick'    && <QuickTab    hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
-        {tab === 'details'  && <DetailsTab  hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} />}
+        {tab === 'details'  && <DetailsTab  hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} onPhotoContextMenu={handlePhotoContextMenu} />}
         {tab === 'register' && <RegisterTab hydrant={hydrant} onViewUser={onViewUser} />}
         {tab === 'admin'    && <AdminTab    hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} />}
       </div>
+
+      {/* Photo context menu — rendered via portal to escape the CSS transform stacking context */}
+      {photoMenu && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: photoMenu.y, left: photoMenu.x, zIndex: 99999 }}
+          className="min-w-[190px] overflow-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-2xl"
+        >
+          {!photoMenu.confirming ? (
+            <>
+              <button
+                onClick={() => { window.open(photoMenu.url, '_blank'); setPhotoMenu(null); }}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                View Full Image
+              </button>
+              <button
+                onClick={handleMakeDisplay}
+                disabled={menuBusy || hydrant.photos[0] === photoMenu.url}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+                {hydrant.photos[0] === photoMenu.url ? 'Already Display Photo' : menuBusy ? 'Updating…' : 'Make Display Photo'}
+              </button>
+              <div className="mx-3 h-px bg-neutral-100" />
+              <button
+                onClick={() => setPhotoMenu({ ...photoMenu, confirming: true })}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-[#91191E] hover:bg-red-50"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                Delete Image
+              </button>
+            </>
+          ) : (
+            <div className="px-4 py-3">
+              <p className="mb-2.5 text-[11px] font-semibold text-neutral-700">Delete this photo permanently?</p>
+              <div className="flex gap-2">
+                <button onClick={handleDelete} disabled={menuBusy} className="flex-1 rounded-lg bg-[#91191E] py-1.5 text-[11px] font-bold text-white hover:bg-[#7a1419] disabled:opacity-60">
+                  {menuBusy ? 'Deleting…' : 'Delete'}
+                </button>
+                <button onClick={() => setPhotoMenu(null)} className="flex-1 rounded-lg border border-neutral-200 py-1.5 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -147,7 +234,13 @@ function QuickTab({ hydrant, meta, distanceM, isOtw }: { hydrant: Hydrant; meta:
 }
 
 /* ──────────────────────── DETAILS ──────────────────────── */
-function DetailsTab({ hydrant, onViewUser, canAnnotate }: { hydrant: Hydrant; onViewUser: (name: string, role: string) => void; canAnnotate: boolean }) {
+function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoContextMenu }: {
+  hydrant: Hydrant;
+  onViewUser: (name: string, role: string) => void;
+  canAnnotate: boolean;
+  isHeadOrAdmin: boolean;
+  onPhotoContextMenu: (e: React.MouseEvent, url: string) => void;
+}) {
   return (
     <div className="px-4 py-4">
       <InfoTable rows={[
@@ -159,7 +252,7 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate }: { hydrant: Hydrant; on
         { label: 'Concessionaire', value: hydrant.concessionaire },
       ]} />
 
-      {/* Photo plate — field photos (newest first); add photos from the edit panel */}
+      {/* Photo plate */}
       <div className="mt-5">
         <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-neutral-400">Photo Plate</p>
         {hydrant.photos.length === 0 ? (
@@ -167,21 +260,24 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate }: { hydrant: Hydrant; on
         ) : (
           <div className="grid grid-cols-5 gap-1.5">
             {[...hydrant.photos].reverse().map((url, i) => (
-              <a
+              <div
                 key={url}
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open full size"
-                className="block aspect-square overflow-hidden rounded-lg border border-neutral-200 hover:opacity-90"
+                className="relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-neutral-200 hover:opacity-90"
+                onClick={() => window.open(url, '_blank')}
+                onContextMenu={isHeadOrAdmin ? (e) => onPhotoContextMenu(e, url) : undefined}
+                title={isHeadOrAdmin ? 'Click to view · Right-click for options' : 'Click to view'}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt={`${hydrant.name} photo ${i + 1}`} className="h-full w-full object-cover" />
-              </a>
+                {hydrant.photos[0] === url && (
+                  <span className="absolute bottom-0 left-0 right-0 bg-black/50 py-0.5 text-center text-[8px] font-bold uppercase tracking-wide text-white">Display</span>
+                )}
+              </div>
             ))}
           </div>
         )}
       </div>
+
 
       {/* Field notes */}
       <div className="mt-5">

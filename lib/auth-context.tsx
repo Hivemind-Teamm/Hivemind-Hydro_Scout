@@ -74,10 +74,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+        const [snap, idToken] = await Promise.all([
+          getDoc(doc(db, "users", firebaseUser.uid)),
+          firebaseUser.getIdToken(),
+        ]);
         setRole((snap.exists() ? snap.data().role : null) as Role);
+        // Re-issue the session cookie on every auth state change (including
+        // page reload) so server routes like /api/upload can always verify the user.
+        await syncSessionCookie(idToken);
       } else {
         setRole(null);
+        await syncSessionCookie(null);
       }
       setLoading(false);
     });

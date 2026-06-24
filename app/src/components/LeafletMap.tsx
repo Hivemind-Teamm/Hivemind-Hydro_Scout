@@ -122,6 +122,8 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution="&copy; OpenStreetMap contributors"
+        maxNativeZoom={19}
+        maxZoom={22}
       />
 
 

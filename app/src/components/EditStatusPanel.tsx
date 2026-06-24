@@ -176,7 +176,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,.heic,.heif"
             multiple
             onChange={handleFilesSelected}
             className="hidden"

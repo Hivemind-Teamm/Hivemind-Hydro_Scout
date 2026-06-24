@@ -64,7 +64,9 @@ export async function POST(req: NextRequest) {
   if (typeof rawId !== "string" || !sanitizeId(rawId)) {
     return NextResponse.json({ error: "Missing or invalid hydrantId." }, { status: 400 });
   }
-  if (!file.type.startsWith("image/")) {
+  const IMAGE_EXTENSIONS = /\.(jpe?g|png|gif|webp|avif|svg|bmp|tiff?|heic|heif)$/i;
+  const isImage = file.type.startsWith("image/") || IMAGE_EXTENSIONS.test(file.name);
+  if (!isImage) {
     return NextResponse.json({ error: "File must be an image." }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
@@ -88,7 +90,10 @@ export async function POST(req: NextRequest) {
         .end(bytes);
     });
 
-    return NextResponse.json({ url: result.secure_url, publicId: result.public_id });
+    // Insert f_auto,q_auto so Cloudinary serves WebP/JPEG to browsers that
+    // can't render the original format (e.g. HEIC on Windows/Chrome).
+    const url = result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+    return NextResponse.json({ url, publicId: result.public_id });
   } catch (err) {
     console.error("Cloudinary upload failed:", err);
     return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
