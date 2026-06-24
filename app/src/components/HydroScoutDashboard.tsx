@@ -58,6 +58,8 @@ export default function HydroScoutDashboard() {
   const otwRouteRef     = useRef<[number, number][] | null>(null);
 
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [deletedHydrant, setDeletedHydrant] = useState<{ id: string; name: string } | null>(null);
+  const deletedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { role } = useAuth();
   const { hydrants, loading, error } = useHydrants();
@@ -305,11 +307,24 @@ export default function HydroScoutDashboard() {
   }, [activeStatus, hydrants, otwRoute, otwHydrant]);
 
   // Keep the selected hydrant in sync with live updates (e.g. after an edit).
+  // When it's gone from Firestore entirely (deleted by admin), close all panels
+  // and flash the "removed" notice.
   useEffect(() => {
-    if (!selectedHydrant) return;
+    if (!selectedHydrant || loading) return;
     const fresh = hydrants.find((h) => h.id === selectedHydrant.id);
-    if (fresh && fresh !== selectedHydrant) setSelectedHydrant(fresh);
-  }, [hydrants, selectedHydrant]);
+    if (!fresh) {
+      const removed = { id: selectedHydrant.id, name: selectedHydrant.name };
+      setSelectedHydrant(null);
+      setShowFullDetails(false);
+      setShowEdit(false);
+      setShowReport(false);
+      setDeletedHydrant(removed);
+      if (deletedTimerRef.current) clearTimeout(deletedTimerRef.current);
+      deletedTimerRef.current = setTimeout(() => setDeletedHydrant(null), 6000);
+    } else if (fresh !== selectedHydrant) {
+      setSelectedHydrant(fresh);
+    }
+  }, [hydrants, selectedHydrant, loading]);
 
   const handleSelectStatus = useCallback((status: HydrantStatus) => {
     setActiveStatus((prev) => (prev === status ? null : status));
@@ -609,6 +624,7 @@ export default function HydroScoutDashboard() {
           onClose={() => { setShowPinHydrant(false); setPendingLocation(null); setAddHydrantMode(false); }}
           initialLat={pendingLocation?.lat}
           initialLng={pendingLocation?.lng}
+          initialAddress={pendingLocation?.address}
         />
       )}
 
@@ -628,6 +644,38 @@ export default function HydroScoutDashboard() {
           user={viewingUser}
           onClose={() => setViewingUser(null)}
         />
+      )}
+
+      {/* Hydrant deleted notice */}
+      {deletedHydrant && (
+        <>
+          <div className="pointer-events-auto absolute inset-0 z-[5000] bg-black/35" onClick={() => setDeletedHydrant(null)} />
+          <div className="pointer-events-none absolute inset-0 z-[5001] flex items-center justify-center">
+            <div className="pointer-events-auto anim-fade-scale flex w-[320px] flex-col items-center gap-4 rounded-2xl bg-white px-8 py-8 shadow-2xl text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#91191E]/10">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#91191E" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6"/><path d="M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-neutral-800">Hydrant No Longer Exists</p>
+                <p className="mt-1 text-[11px] text-neutral-500 leading-relaxed">
+                  <span className="font-semibold text-neutral-700">{deletedHydrant.id}</span> — {deletedHydrant.name}<br />
+                  has been removed by an administrator.
+                </p>
+              </div>
+              <button
+                onClick={() => { setDeletedHydrant(null); if (deletedTimerRef.current) clearTimeout(deletedTimerRef.current); }}
+                className="w-full rounded-lg bg-[#91191E] py-2 text-xs font-bold text-white hover:bg-[#7a1419] active:bg-[#611014]"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

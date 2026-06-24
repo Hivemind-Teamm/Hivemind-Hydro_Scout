@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { type HydrantStatus } from '../data/hydrants';
 import { createHydrant } from '../data/store';
@@ -20,16 +22,19 @@ const STATUS_OPTIONS: { value: HydrantStatus; label: string; bg: string }[] = [
   { value: 'out',         label: 'Out of Service',   bg: '#9aa0a6' },
 ];
 
-const TYPE_OPTIONS    = ['Pillar', 'Wall-Mounted', 'Underground', 'Post', 'Other'];
-const MOUNTING_OPTIONS = ['Above Ground', 'Below Ground', 'Wall', 'Other'];
+const TYPE_OPTIONS          = ['Pillar', 'Wall-Mounted', 'Underground', 'Post', 'Other'];
+const MOUNTING_OPTIONS      = ['Above Ground', 'Below Ground', 'Wall', 'Other'];
+const CLEANLINESS_OPTIONS   = ['Clear', 'Murky', 'Rusty'];
+const KEY_WRENCH_OPTIONS    = ['None', 'Hydrant Key', 'Spanner Wrench', 'Pentagonal Key', 'Other'];
 
 interface PinHydrantModalProps {
   onClose: () => void;
   initialLat?: number;
   initialLng?: number;
+  initialAddress?: string;
 }
 
-export default function PinHydrantModal({ onClose, initialLat, initialLng }: PinHydrantModalProps) {
+export default function PinHydrantModal({ onClose, initialLat, initialLng, initialAddress }: PinHydrantModalProps) {
   const { user, role } = useAuth();
 
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
@@ -40,32 +45,75 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng }: Pin
   const [lngStr, setLngStr] = useState(initialLng != null ? initialLng.toFixed(6) : '');
 
   // Identity
-  const [address,      setAddress]      = useState('');
+  const [address,      setAddress]      = useState(initialAddress ?? '');
   const [landmark,     setLandmark]     = useState('');
   const [concessionaire, setConcessionaire] = useState('MWSS');
 
   // Status
   const [status,           setStatus]           = useState<HydrantStatus>('operational');
-  const [waterCleanliness, setWaterCleanliness] = useState('');
+  const [waterCleanliness, setWaterCleanliness] = useState(CLEANLINESS_OPTIONS[0]);
   const [hazard,           setHazard]           = useState('');
 
   // Physical
   const [type,     setType]     = useState(TYPE_OPTIONS[0]);
   const [mounting, setMounting] = useState(MOUNTING_OPTIONS[0]);
-  const [keyWrench, setKeyWrench] = useState('');
+  const [keyWrench, setKeyWrench] = useState(KEY_WRENCH_OPTIONS[0]);
   const [outlets,  setOutlets]  = useState<number>(2);
   const [color,    setColor]    = useState('Red');
 
   // Note
   const [note, setNote] = useState('');
 
+  // Photos
+  const [photos,    setPhotos]    = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Submit state
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
 
+  // Preview the next available HYD-XXX ID on mount
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      for (let i = 1; i <= 500; i++) {
+        const id = `HYD-${String(i).padStart(3, '0')}`;
+        const snap = await getDoc(doc(db, 'hydrants', id));
+        if (!snap.exists()) { if (!cancelled) setPreviewId(id); return; }
+      }
+    })().catch(() => { /* preview is best-effort */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const lat = parseFloat(latStr);
   const lng = parseFloat(lngStr);
   const hasValidCoords = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+
+  async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        // Use previewId as the folder; falls back to 'pending' if still resolving
+        fd.append('hydrantId', previewId ?? 'pending');
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Upload failed.');
+        setPhotos((p) => [...p, data.url as string]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
 
   async function handleSubmit() {
     if (!user) { setError('You must be signed in to pin a hydrant.'); return; }
@@ -79,7 +127,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng }: Pin
         lat, lng, address, landmark, concessionaire,
         status, waterCleanliness, hazard,
         type, mounting, keyWrench, outlets, color,
-        note,
+        note, photos,
         by: displayName,
         role: roleLabel,
       });
@@ -126,6 +174,13 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng }: Pin
                 className="h-20 w-20 object-contain drop-shadow-md"
               />
               <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">New Hydrant</p>
+              {previewId ? (
+                <span className="rounded-full bg-[#91191E]/10 px-3 py-0.5 text-sm font-extrabold tracking-wide text-[#91191E]">
+                  {previewId}
+                </span>
+              ) : (
+                <span className="text-[10px] text-neutral-300">Resolving ID…</span>
+              )}
             </div>
 
             {/* Mini map preview */}
@@ -199,9 +254,11 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng }: Pin
                   <Field label="Address / Location Name *">
                     <input
                       value={address}
-                      onChange={e => setAddress(e.target.value)}
+                      onChange={e => { if (!initialAddress) setAddress(e.target.value); }}
+                      readOnly={!!initialAddress}
                       placeholder="e.g. Katipunan Ave, Loyola Heights"
-                      className={inputCls}
+                      className={`${inputCls} ${initialAddress ? 'cursor-not-allowed bg-neutral-100 text-neutral-400 select-none' : ''}`}
+                      title={initialAddress ? 'Address is pre-filled from the selected location' : undefined}
                     />
                   </Field>
                   <Field label="Landmark">
@@ -239,12 +296,9 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng }: Pin
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Water Cleanliness">
-                    <input
-                      value={waterCleanliness}
-                      onChange={e => setWaterCleanliness(e.target.value)}
-                      placeholder="e.g. Clear"
-                      className={inputCls}
-                    />
+                    <select value={waterCleanliness} onChange={e => setWaterCleanliness(e.target.value)} className={inputCls}>
+                      {CLEANLINESS_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                    </select>
                   </Field>
                   <Field label="Hazard Flags">
                     <input
@@ -271,12 +325,9 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng }: Pin
                     </select>
                   </Field>
                   <Field label="Key / Wrench">
-                    <input
-                      value={keyWrench}
-                      onChange={e => setKeyWrench(e.target.value)}
-                      placeholder="e.g. Hydrant key"
-                      className={inputCls}
-                    />
+                    <select value={keyWrench} onChange={e => setKeyWrench(e.target.value)} className={inputCls}>
+                      {KEY_WRENCH_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                    </select>
                   </Field>
                   <Field label="Outlets">
                     <input
@@ -308,6 +359,45 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng }: Pin
                   placeholder="Describe the hydrant condition, access, or any relevant observations..."
                   className={`${inputCls} resize-none`}
                 />
+              </Section>
+
+              {/* Photos */}
+              <Section title="Photos">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,.heic,.heif"
+                  multiple
+                  onChange={handleFilesSelected}
+                  className="hidden"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {photos.map((url, i) => (
+                    <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setPhotos(p => p.filter((_, idx) => idx !== i))}
+                        title="Remove photo"
+                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 disabled:opacity-50"
+                  >
+                    {uploading ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-[#91191E]" />
+                    ) : '+'}
+                  </button>
+                </div>
+                {uploading && <p className="mt-1.5 text-[10px] text-neutral-400">Uploading…</p>}
               </Section>
 
               {/* Will be signed */}
@@ -344,7 +434,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng }: Pin
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={saving}
+                  disabled={saving || uploading}
                   className="flex-1 rounded-xl bg-[#91191E] py-3 text-sm font-bold text-white hover:bg-[#7a1419] disabled:opacity-60"
                 >
                   {saving ? 'Pinning…' : 'Pin Hydrant'}
