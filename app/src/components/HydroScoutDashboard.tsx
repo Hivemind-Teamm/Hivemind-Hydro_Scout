@@ -32,6 +32,7 @@ export default function HydroScoutDashboard() {
   const [provider, setProvider] = useState<MapProvider>('mapbox');
   const [autoFallback, setAutoFallback] = useState(false);
   const [userOverride, setUserOverride] = useState(false);
+  const [mapViewport, setMapViewport] = useState<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const [is3D, setIs3D] = useState(false);
   const [activeStatus, setActiveStatus] = useState<HydrantStatus | null>(null);
   const [selectedHydrant, setSelectedHydrant] = useState<Hydrant | null>(null);
@@ -48,6 +49,8 @@ export default function HydroScoutDashboard() {
   const [otwHydrant,       setOtwHydrant]       = useState<Hydrant | null>(null);
   const [otwRoute,         setOtwRoute]         = useState<[number, number][] | null>(null);
   const [viewingUser, setViewingUser] = useState<ViewingUser | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const geoErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const controllerRef = useRef<MapController | null>(null);
   const otwFetchedForRef = useRef<string | null>(null);
@@ -166,14 +169,19 @@ export default function HydroScoutDashboard() {
 
   const handleToggleProvider = useCallback(() => {
     setUserOverride(true);
-    setProvider((prev) => {
-      if (prev === 'mapbox') {
-        setIs3D(false);
-        controllerRef.current?.setPitch(0);
-      }
-      return prev === 'mapbox' ? 'leaflet' : 'mapbox';
-    });
-  }, []);
+    const ctrl = controllerRef.current;
+    if (ctrl) {
+      const rawZoom = ctrl.getZoom();
+      // Mapbox uses 512px tiles; Leaflet uses 256px — offset by 1 zoom level to match visual scale
+      const correctedZoom = provider === 'mapbox' ? rawZoom + 1 : rawZoom - 1;
+      setMapViewport({ center: ctrl.getCenter(), zoom: correctedZoom });
+    }
+    if (provider === 'mapbox') {
+      setIs3D(false);
+      controllerRef.current?.setPitch(0);
+    }
+    setProvider(provider === 'mapbox' ? 'leaflet' : 'mapbox');
+  }, [provider]);
 
   const handleMapReady = useCallback((controller: MapController) => {
     controllerRef.current = controller;
@@ -195,30 +203,95 @@ export default function HydroScoutDashboard() {
   }, []);
 
   // Auto-start watching position on mount. The orb updates as the user moves.
-  // watchId ref lets us clean up on unmount.
+  // watchId ref lets us clean up on unmount; geoErrorRef remembers the last
+  // failure so the GPS button can explain why there's no fix.
   const watchIdRef = useRef<number | null>(null);
+  const geoErrorRef = useRef<GeolocationPositionError | null>(null);
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        geoErrorRef.current = null;
         setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
-      () => { /* denied or unavailable — orb simply won't appear */ },
-      { enableHighAccuracy: true },
+      (err) => {
+        // Keep the last error so handleLocate can surface it; without this the
+        // orb just silently never appears (denied / timeout / insecure origin).
+        geoErrorRef.current = err;
+        console.warn('[geolocation] watchPosition error', err.code, err.message);
+      },
+      // Passive tracking uses network-level accuracy: it resolves on laptops /
+      // desktops that have no GPS (where a high-accuracy request just comes back
+      // as POSITION_UNAVAILABLE / TIMEOUT), is low-power, and is plenty for "where
+      // am I on the map". The GPS button below asks for a precise fix on demand.
+      // Bounded timeout + maximumAge let a recent cached fix show the orb promptly.
+      { enableHighAccuracy: false, timeout: 30000, maximumAge: 30000 },
     );
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     };
   }, []);
 
-  // GPS button now just flies the camera to the current known location.
+  const showGeoError = useCallback((msg: string) => {
+    setGeoError(msg);
+    if (geoErrorTimerRef.current) clearTimeout(geoErrorTimerRef.current);
+    geoErrorTimerRef.current = setTimeout(() => setGeoError(null), 8000);
+  }, []);
+
+  // GPS button: fly to a known fix, or actively request one (and report why it
+  // failed) when we don't have a location yet.
   const handleLocate = useCallback(() => {
     if (userLocation) {
       controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 17);
-    } else if (!('geolocation' in navigator)) {
-      alert('Geolocation is not supported by this browser.');
+      return;
     }
-  }, [userLocation]);
+    if (!('geolocation' in navigator)) {
+      showGeoError('Geolocation is not supported by this browser.');
+      return;
+    }
+    if (!window.isSecureContext) {
+      showGeoError('Location needs a secure connection. Open the app over HTTPS or http://localhost.');
+      return;
+    }
+    const onSuccess = (pos: GeolocationPosition) => {
+      geoErrorRef.current = null;
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setUserLocation(loc);
+      controllerRef.current?.flyTo(loc.lat, loc.lng, 17);
+    };
+    const onFinalError = (err: GeolocationPositionError) => {
+      geoErrorRef.current = err;
+      showGeoError(
+        err.code === err.PERMISSION_DENIED
+          ? 'Location permission is blocked. Enable it in your browser settings.'
+          : err.code === err.POSITION_UNAVAILABLE
+          ? 'Could not get a location fix. Try a normal Chrome/Edge window or a device with GPS.'
+          : err.code === err.TIMEOUT
+          ? 'Timed out getting your location. Try again in a moment.'
+          : 'Could not determine your location. Please try again.',
+      );
+    };
+    // High-accuracy GPS often can't get a fix on a desktop / indoors / weak signal
+    // and comes back as TIMEOUT or POSITION_UNAVAILABLE. In both cases retry once
+    // with low accuracy, which uses fast network/Wi-Fi positioning, before giving
+    // up. A generous maximumAge also lets a recent cached fix return immediately
+    // instead of waiting on the GPS.
+    navigator.geolocation.getCurrentPosition(
+      onSuccess,
+      (err) => {
+        if (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE) {
+          navigator.geolocation.getCurrentPosition(onSuccess, onFinalError, {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 60000,
+          });
+          return;
+        }
+        onFinalError(err);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+    );
+  }, [userLocation, showGeoError]);
 
   const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
   const visibleHydrants = useMemo(() => {
@@ -251,11 +324,12 @@ export default function HydroScoutDashboard() {
   }, []);
 
   const handleCloseAll = useCallback(() => {
+    if (selectedHydrant) controllerRef.current?.zoomOut();
     setSelectedHydrant(null);
     setShowFullDetails(false);
     setShowEdit(false);
     setShowReport(false);
-  }, []);
+  }, [selectedHydrant]);
 
   // Each panel closes only itself — mini panel and siblings stay visible.
   const handleCloseFullDetails = useCallback(() => setShowFullDetails(false), []);
@@ -267,8 +341,40 @@ export default function HydroScoutDashboard() {
   }, []);
 
   const handleRoute = useCallback(() => {
-    if (selectedHydrant) setOtwHydrant(selectedHydrant);
-  }, [selectedHydrant]);
+    if (!selectedHydrant) return;
+    // Start OTW mode immediately so the banner appears right away.
+    setOtwHydrant(selectedHydrant);
+    // If we already have a location the route fetch effect will run on its own.
+    if (userLocation) return;
+    // No location yet — request a one-shot fix so the route can be drawn.
+    if (!('geolocation' in navigator)) return;
+    const onSuccess = (pos: GeolocationPosition) => {
+      geoErrorRef.current = null;
+      setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    };
+    const onFinalError = (err: GeolocationPositionError) => {
+      geoErrorRef.current = err;
+      // OTW banner is already visible; just note that the route line needs GPS.
+      if (err.code === err.PERMISSION_DENIED) {
+        showGeoError('Location permission is blocked — route line unavailable.');
+      }
+    };
+    navigator.geolocation.getCurrentPosition(
+      onSuccess,
+      (err) => {
+        if (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE) {
+          navigator.geolocation.getCurrentPosition(onSuccess, onFinalError, {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 60000,
+          });
+          return;
+        }
+        onFinalError(err);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+    );
+  }, [selectedHydrant, userLocation, showGeoError]);
 
   const handleCancelOtw = useCallback(() => { setOtwHydrant(null); setOtwRoute(null); otwFetchedForRef.current = null; }, []);
 
@@ -324,6 +430,8 @@ export default function HydroScoutDashboard() {
         userLocation={userLocation}
         otwHydrant={otwHydrant}
         otwRoute={otwRoute}
+        initialCenter={mapViewport?.center}
+        initialZoom={mapViewport?.zoom}
       />
       <DashboardOverlay
         activeStatus={activeStatus}
@@ -398,6 +506,25 @@ export default function HydroScoutDashboard() {
         </div>
       )}
 
+      {/* Geo-error toast */}
+      {geoError && (
+        <div className="pointer-events-auto absolute left-1/2 top-[68px] z-[2100] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(420px,90vw)]">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span className="text-xs text-neutral-200 leading-snug">{geoError}</span>
+          <button
+            onClick={() => { setGeoError(null); if (geoErrorTimerRef.current) clearTimeout(geoErrorTimerRef.current); }}
+            className="ml-1 shrink-0 rounded-full p-1 text-neutral-400 hover:bg-white/10 hover:text-white"
+            aria-label="Dismiss"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Live-data status pill */}
       {(loading || error) && (
         <div className="pointer-events-none absolute left-1/2 top-[84px] z-[1200] -translate-x-1/2">
@@ -406,13 +533,16 @@ export default function HydroScoutDashboard() {
               error ? 'bg-[#91191E] text-white' : 'bg-white/95 text-neutral-600'
             }`}
           >
-            {error ? `Couldn’t load hydrants: ${error}` : 'Loading hydrants…'}
+            {error ? `Couldn't load hydrants: ${error}` : 'Loading hydrants…'}
           </span>
         </div>
       )}
 
       {showReports && (
-        <ReportsPanel reports={reports} loading={reportsLoading} onViewUser={handleViewUser} />
+        <>
+          <div className="pointer-events-auto absolute inset-0 z-[1400]" onClick={() => setShowReports(false)} />
+          <ReportsPanel reports={reports} loading={reportsLoading} onViewUser={handleViewUser} />
+        </>
       )}
 
 {/* Mini info panel — always visible when a hydrant is selected */}

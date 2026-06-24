@@ -48,6 +48,8 @@ export interface Hydrant {
   distanceMin: number;
   notes: HydrantNote[];
   register: HydrantRegisterEntry[];
+  // Cloudinary secure URLs of field photos, oldest → newest.
+  photos: string[];
 }
 
 export interface StatusMeta {
@@ -186,6 +188,10 @@ export function hydrantFromDoc(id: string, d: DocumentData): Hydrant {
 
   const hazards: string[] = Array.isArray(d.hazards) ? d.hazards : [];
 
+  const photos: string[] = Array.isArray(d.photos)
+    ? d.photos.filter((p): p is string => typeof p === 'string')
+    : [];
+
   // Notes: prefer a structured fieldNotes array; otherwise synthesize one
   // from the single seeded `notes` string + inspector.
   let notes: HydrantNote[] = [];
@@ -241,5 +247,6 @@ export function hydrantFromDoc(id: string, d: DocumentData): Hydrant {
     distanceMin: 0,
     notes,
     register,
+    photos,
   };
 }

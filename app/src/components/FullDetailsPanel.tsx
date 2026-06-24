@@ -34,10 +34,19 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 
       {/* ── Header ── */}
       <div className="flex items-start gap-3 border-b border-neutral-200 px-4 py-3">
-        {/* lead photo placeholder */}
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-neutral-400">
-          <UploadIcon />
-        </div>
+        {/* lead photo — the additional/detail shot (photos[1]), else the main one */}
+        {hydrant.photos.length > 0 ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={hydrant.photos[1] ?? hydrant.photos[0]}
+            alt={`${hydrant.name} field photo`}
+            className="h-14 w-14 shrink-0 rounded-lg object-cover"
+          />
+        ) : (
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-neutral-400">
+            <UploadIcon />
+          </div>
+        )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -150,19 +159,28 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate }: { hydrant: Hydrant; on
         { label: 'Concessionaire', value: hydrant.concessionaire },
       ]} />
 
-      {/* Photo plate */}
+      {/* Photo plate — field photos (newest first); add photos from the edit panel */}
       <div className="mt-5">
         <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-neutral-400">Photo Plate</p>
-        <div className="grid grid-cols-5 gap-1.5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <button
-              key={i}
-              className="flex aspect-square items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100"
-            >
-              <UploadIcon size={14} />
-            </button>
-          ))}
-        </div>
+        {hydrant.photos.length === 0 ? (
+          <p className="text-[11px] text-neutral-400">No photos yet. Add them via Edit Hydrant Status.</p>
+        ) : (
+          <div className="grid grid-cols-5 gap-1.5">
+            {[...hydrant.photos].reverse().map((url, i) => (
+              <a
+                key={url}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open full size"
+                className="block aspect-square overflow-hidden rounded-lg border border-neutral-200 hover:opacity-90"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`${hydrant.name} photo ${i + 1}`} className="h-full w-full object-cover" />
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Field notes */}

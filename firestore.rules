@@ -54,13 +54,13 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (isAuthorized() && onlyChangedFields([
               'status', 'operationalStatus', 'notes', 'fieldNotes', 'register',
-              'photoURL', 'photoUrl', 'hazardFlags', 'hazards',
+              'photoURL', 'photoUrl', 'photos', 'hazardFlags', 'hazards',
               'pressureStatus', 'waterCleanliness',
               'updatedBy', 'updatedAt'
             ]))
         || (isHead() && onlyChangedFields([
               'operationalStatus', 'pressureStatus', 'waterCleanliness',
-              'hazards', 'notes', 'fieldNotes', 'register',
+              'hazards', 'photos', 'notes', 'fieldNotes', 'register',
               'lastMaintenanceDate', 'nextMaintenanceDate',
               'updatedBy', 'updatedAt'
             ]));

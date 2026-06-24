@@ -17,7 +17,30 @@ import {
   User,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { FirebaseError } from "firebase/app";
 import { auth, db } from "./firebase";
+
+function friendlyAuthError(err: unknown): never {
+  if (err instanceof FirebaseError) {
+    switch (err.code) {
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+      case "auth/user-not-found":
+        throw new Error("Incorrect email or password.");
+      case "auth/invalid-email":
+        throw new Error("That email address is not valid.");
+      case "auth/user-disabled":
+        throw new Error("This account has been disabled.");
+      case "auth/too-many-requests":
+        throw new Error("Too many attempts. Please try again later.");
+      case "auth/email-already-in-use":
+        throw new Error("An account with this email already exists.");
+      case "auth/weak-password":
+        throw new Error("Password should be at least 6 characters.");
+    }
+  }
+  throw err;
+}
 
 export type Role = "general" | "authorized" | "head" | "admin" | null;
 
@@ -63,7 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string, password: string) {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
+    let cred;
+    try {
+      cred = await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      friendlyAuthError(err);
+    }
 
     await setDoc(
       doc(db, "users", cred.user.uid),
@@ -76,7 +104,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signup(email: string, password: string, displayName: string) {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    let cred;
+    try {
+      cred = await createUserWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      friendlyAuthError(err);
+    }
 
     // Create the user document — new accounts always start as 'general'.
     // merge:true is defensive: if a document somehow already exists for this

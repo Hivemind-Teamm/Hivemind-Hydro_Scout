@@ -4,22 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { adminApp } from "@/lib/firebase-admin";
 
 const SESSION_COOKIE = "session";
-
-function adminApp() {
-  if (getApps().length) return getApps()[0];
-
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) {
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_KEY env var is not set. See .env.local setup instructions."
-    );
-  }
-  const serviceAccount = JSON.parse(raw);
-  return initializeApp({ credential: cert(serviceAccount) });
-}
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 export async function POST(req: NextRequest) {
   const { idToken } = await req.json();
@@ -32,23 +20,31 @@ export async function POST(req: NextRequest) {
 
   try {
     const app = adminApp();
-    const decoded = await getAuth(app).verifyIdToken(idToken);
+    const auth = getAuth(app);
+    const decoded = await auth.verifyIdToken(idToken);
 
+    // Issue a cryptographically signed Firebase session cookie. The role is
+    // NOT baked into the cookie — server routes re-read it from Firestore so a
+    // forged or stale cookie can't grant a role the user doesn't actually have.
+    const sessionCookie = await auth.createSessionCookie(idToken, {
+      expiresIn: SESSION_MAX_AGE * 1000, // milliseconds
+    });
+
+    cookieStore.set(SESSION_COOKIE, sessionCookie, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_MAX_AGE,
+    });
+
+    // Return the role purely so the client can render the right UI; it carries
+    // no authority on its own.
     const userDoc = await getFirestore(app)
       .collection("users")
       .doc(decoded.uid)
       .get();
     const role = userDoc.exists ? userDoc.data()?.role ?? null : null;
-
-    const sessionPayload = JSON.stringify({ uid: decoded.uid, role });
-
-    cookieStore.set(SESSION_COOKIE, sessionPayload, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
 
     return NextResponse.json({ ok: true, role });
   } catch (err) {
