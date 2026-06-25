@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { useTheme } from '@/lib/theme-context';
 import LogoutButton from './LogoutButton';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -27,7 +26,6 @@ interface AccountCenterModalProps {
 
 export default function AccountCenterModal({ onClose }: AccountCenterModalProps) {
   const { user, role } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
   const router = useRouter();
 
   // A visitor who is not signed in is treated as a general-user guest.
@@ -106,36 +104,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
                 <ReadonlyField label="Last Login"      value={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleDateString() : '—'} />
                 <ReadonlyField label="Home Station Area" value="QC Diliman" />
                 <ReadonlyField label="Account Status" value="Active" />
-              </div>
-            </section>
-
-            {/* Appearance — light / dark theme toggle */}
-            <section>
-              <p className="mb-4 text-sm font-bold text-[#91191E] dark:text-[#e0353b]">Appearance</p>
-              <div className="flex items-center justify-between rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-700">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                    {isDark ? <MoonGlyph /> : <SunGlyph />}
-                  </span>
-                  <div>
-                    <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">Theme</p>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{isDark ? 'Dark mode' : 'Light mode'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className={`text-xs font-semibold ${isDark ? 'text-neutral-400 dark:text-neutral-500' : 'text-[#91191E]'}`}>Light</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isDark}
-                    aria-label="Toggle dark mode"
-                    onClick={toggleTheme}
-                    className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${isDark ? 'bg-[#91191E]' : 'bg-neutral-300'}`}
-                  >
-                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isDark ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                  <span className={`text-xs font-semibold ${isDark ? 'text-[#e0353b]' : 'text-neutral-400'}`}>Dark</span>
-                </div>
               </div>
             </section>
 
@@ -230,26 +198,6 @@ function AccessRow({ label, value, highlight }: { label: string; value: string; 
         <span className={`text-sm font-bold ${highlight === 'green' ? 'text-[#2fbf4f]' : 'text-neutral-400 dark:text-neutral-500'}`}>{value}</span>
       )}
     </div>
-  );
-}
-
-function MoonGlyph() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  );
-}
-
-function SunGlyph() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="4" />
-      <line x1="12" y1="2" x2="12" y2="4" /><line x1="12" y1="20" x2="12" y2="22" />
-      <line x1="4.93" y1="4.93" x2="6.34" y2="6.34" /><line x1="17.66" y1="17.66" x2="19.07" y2="19.07" />
-      <line x1="2" y1="12" x2="4" y2="12" /><line x1="20" y1="12" x2="22" y2="12" />
-      <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" /><line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
-    </svg>
   );
 }
 
