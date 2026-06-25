@@ -42,6 +42,39 @@ function computeZones(hydrants: Hydrant[]): ZoneData[] {
     .slice(0, 4);
 }
 
+/* ── Trend computation ────────────────────────────────────────────────────── */
+function computeTrendData(hydrants: Hydrant[]): { points: number[]; labels: string[] } {
+  const now = new Date();
+  const weeks = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - (4 - i) * 7);
+    return d;
+  });
+
+  const points = weeks.map(weekEnd => {
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+    let operational = 0;
+    let counted = 0;
+    for (const h of hydrants) {
+      counted++;
+      const before = h.register.filter(r => r.date && r.date <= weekEndStr);
+      if (before.length === 0) {
+        if (h.status === 'operational') operational++;
+      } else {
+        const latest = before.reduce((a, b) => (a.date > b.date ? a : b));
+        if (latest.statusColor === '#2fbf4f') operational++;
+      }
+    }
+    return counted > 0 ? Math.round((operational / counted) * 100) : 0;
+  });
+
+  const labels = weeks.map(d =>
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  );
+
+  return { points, labels };
+}
+
 /* ── Donut chart ──────────────────────────────────────────────────────────── */
 function DonutChart({
   operational, reduced, out, total,
@@ -111,58 +144,44 @@ function DonutChart({
 }
 
 /* ── Trend chart ──────────────────────────────────────────────────────────── */
-function TrendChart({ currentPct }: { currentPct: number }) {
+function TrendChart({ points, labels }: { points: number[]; labels: string[] }) {
   const { isDark } = useTheme();
-  const start = Math.max(currentPct - 14, 35);
-  const pts = [
-    start,
-    start + (currentPct - start) * 0.18,
-    start + (currentPct - start) * 0.44,
-    start + (currentPct - start) * 0.72,
-    currentPct,
-  ];
 
   const W = 460;
   const H = 120;
   const PAD = { top: 16, right: 12, bottom: 28, left: 36 };
   const cW = W - PAD.left - PAD.right;
   const cH = H - PAD.top - PAD.bottom;
-  const minY = Math.floor(Math.min(...pts) / 10) * 10 - 5;
-  const maxY = Math.ceil(Math.max(...pts) / 10) * 10 + 5;
+  const minY = Math.max(0, Math.floor(Math.min(...points) / 10) * 10 - 5);
+  const maxY = Math.min(100, Math.ceil(Math.max(...points) / 10) * 10 + 5);
+  const range = maxY - minY || 1;
 
-  const toX = (i: number) => PAD.left + (i / (pts.length - 1)) * cW;
-  const toY = (v: number) => PAD.top + cH - ((v - minY) / (maxY - minY)) * cH;
+  const toX = (i: number) => PAD.left + (i / (points.length - 1)) * cW;
+  const toY = (v: number) => PAD.top + cH - ((v - minY) / range) * cH;
 
-  const pathD = pts.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(v)}`).join(' ');
-  const areaD = `${pathD} L ${toX(pts.length - 1)} ${H - PAD.bottom} L ${toX(0)} ${H - PAD.bottom} Z`;
-  const weeks = ['WK1', 'WK2', 'WK3', 'WK4', 'WK5'];
+  const pathD = points.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(v)}`).join(' ');
+  const areaD = `${pathD} L ${toX(points.length - 1)} ${H - PAD.bottom} L ${toX(0)} ${H - PAD.bottom} Z`;
 
   return (
-    <div>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
-        {[25, 50, 75].filter(v => v >= minY && v <= maxY).map(v => (
-          <g key={v}>
-            <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)}
-              stroke={isDark ? '#374151' : '#e5e7eb'} strokeWidth="1" strokeDasharray="4 3" />
-            <text x={PAD.left - 5} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{v}%</text>
-          </g>
-        ))}
-        <path d={areaD} fill="#91191E" opacity={isDark ? 0.18 : 0.06} />
-        <path d={pathD} fill="none" stroke={isDark ? '#e0353b' : '#91191E'} strokeWidth="2" strokeLinejoin="round" />
-        {pts.map((v, i) => (
-          <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill={isDark ? '#e0353b' : '#91191E'} stroke={isDark ? '#0b0f14' : 'white'} strokeWidth="1.5" />
-        ))}
-        {weeks.map((w, i) => (
-          <text key={w} x={toX(i)} y={H - PAD.bottom + 13} textAnchor="middle" fontSize="9" fill="#9ca3af" fontWeight="600">
-            {w}
-          </text>
-        ))}
-      </svg>
-      <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-        <span className="mt-0.5 shrink-0">⚠</span>
-        <span>Sample data — trend logging begins at deployment. Shown here to demonstrate the chart layout.</span>
-      </div>
-    </div>
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+      {[25, 50, 75].filter(v => v >= minY && v <= maxY).map(v => (
+        <g key={v}>
+          <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)}
+            stroke={isDark ? '#374151' : '#e5e7eb'} strokeWidth="1" strokeDasharray="4 3" />
+          <text x={PAD.left - 5} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{v}%</text>
+        </g>
+      ))}
+      <path d={areaD} fill="#91191E" opacity={isDark ? 0.18 : 0.06} />
+      <path d={pathD} fill="none" stroke={isDark ? '#e0353b' : '#91191E'} strokeWidth="2" strokeLinejoin="round" />
+      {points.map((v, i) => (
+        <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill={isDark ? '#e0353b' : '#91191E'} stroke={isDark ? '#0b0f14' : 'white'} strokeWidth="1.5" />
+      ))}
+      {labels.map((w, i) => (
+        <text key={w} x={toX(i)} y={H - PAD.bottom + 13} textAnchor="middle" fontSize="9" fill="#9ca3af" fontWeight="600">
+          {w}
+        </text>
+      ))}
+    </svg>
   );
 }
 
@@ -236,12 +255,12 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
   const router = useRouter();
   const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
   const total = hydrants.length;
-  const operationalPct = total > 0 ? Math.round((counts.operational / total) * 100) : 0;
   const openReports  = reports.filter(r => r.status === 'pending').length;
   const obstructed   = hydrants.filter(h => h.hazard && !['None', '—', '', 'none'].includes(h.hazard)).length;
   const verified     = hydrants.filter(h => h.register.length > 0).length;
 
   const zones   = useMemo(() => computeZones(hydrants), [hydrants]);
+  const trend   = useMemo(() => computeTrendData(hydrants), [hydrants]);
   const isAdmin = role === 'admin';
   const roleLabel = role === 'admin' ? 'Admin' : 'Head';
 
@@ -319,7 +338,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
         {/* Condition Trend */}
         <div className="col-span-2">
           <Card title="Condition Trend" subtitle="OPERATIONAL % OVER TIME">
-            <TrendChart currentPct={operationalPct} />
+            <TrendChart points={trend.points} labels={trend.labels} />
           </Card>
         </div>
 
