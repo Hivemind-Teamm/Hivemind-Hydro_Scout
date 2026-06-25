@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import {
@@ -62,6 +63,7 @@ export default function DashboardOverlay({
 }: DashboardOverlayProps) {
   const { user, role } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const router = useRouter();
   const canViewDashboard = role === 'head' || role === 'admin';
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   const [showCounts, setShowCounts] = useState(true);
@@ -109,8 +111,27 @@ export default function DashboardOverlay({
             </div>
           </div>
 
+          {/* Admin Dashboard button — admin only */}
+          {role === 'admin' && (
+            <div className="ml-auto flex items-center border-l border-white/15 px-5">
+              <button
+                onClick={() => router.push('/admin')}
+                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition-all hover:brightness-90 active:scale-95"
+                style={{ background: '#91191E' }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                Admin Dashboard
+              </button>
+            </div>
+          )}
+
           {/* Authorized / user */}
-          <div className="ml-auto flex flex-col justify-center border-l border-white/15 pl-5">
+          <div className={`${role !== 'admin' ? 'ml-auto' : ''} flex flex-col justify-center border-l border-white/15 px-5`}>
             <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">{displayRole}</span>
             <button
               onClick={onOpenAccount}
