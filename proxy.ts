@@ -29,7 +29,7 @@ const ROUTE_RULES: { prefix: string; allowed: Role[] }[] = [
 ];
 
 function getSession(req: NextRequest): { uid: string; role: Role } | null {
-  const raw = req.cookies.get("session")?.value;
+  const raw = req.cookies.get("session_meta")?.value;
   if (!raw) return null;
   try {
     return JSON.parse(raw);
