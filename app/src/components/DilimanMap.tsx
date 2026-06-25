@@ -68,7 +68,11 @@ interface DilimanMapProps {
   otwRoute?: [number, number][] | null;
   initialCenter?: { lat: number; lng: number };
   initialZoom?: number;
+  isDark?: boolean;
 }
+
+const MAP_STYLE_LIGHT = 'mapbox://styles/mapbox/streets-v12';
+const MAP_STYLE_DARK = 'mapbox://styles/mapbox/dark-v11';
 
 const OTW_SOURCE = 'otw-route';
 const OTW_GLOW_LAYER = 'otw-route-glow';
@@ -83,10 +87,14 @@ const DASH_SEQUENCE = [
 
 export default function DilimanMap({
   hydrants, selectedHydrantId, onLoad, onError, onMapReady,
-  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom,
+  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom, isDark = false,
 }: DilimanMapProps) {
   const mapRef = useRef<MapRef>(null);
   const otwAnimRef = useRef<number | null>(null);
+  // Bumped on every Mapbox `style.load`. Switching basemap style (light↔dark)
+  // tears down imperatively-added sources/layers, so the OTW setup effects key
+  // off this to re-add the route source + layers after a style swap.
+  const [styleEpoch, setStyleEpoch] = useState(0);
   // The live mapbox instance, held in state (not just the ref) so render can
   // call `project()` for pixel offsets without reading a ref during render.
   const [mapInstance, setMapInstance] = useState<ReturnType<MapRef['getMap']> | null>(null);
@@ -150,6 +158,15 @@ export default function DilimanMap({
     mapInstance.getCanvas().style.cursor = addHydrantMode ? 'crosshair' : '';
   }, [addHydrantMode, mapInstance]);
 
+  // A new basemap style (theme toggle) wipes custom sources/layers; bump the
+  // epoch so the OTW setup effects below re-add them once the style is ready.
+  useEffect(() => {
+    if (!mapInstance) return;
+    const onStyleLoad = () => setStyleEpoch((e) => e + 1);
+    mapInstance.on('style.load', onStyleLoad);
+    return () => { if (mapInstance.loaded()) mapInstance.off('style.load', onStyleLoad); };
+  }, [mapInstance]);
+
   // Shift+drag to rotate. We disable box-zoom (the default shift+drag action)
   // and replace it with bearing control. A ref keeps the cursor restoration
   // correct without recreating the listeners every time addHydrantMode changes.
@@ -209,7 +226,7 @@ export default function DilimanMap({
     mapInstance.addLayer({ id: OTW_BG_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#F87171', 'line-width': 7, 'line-opacity': 0.5 } });
     // Animated dashes on top — light red so they look like light moving through
     mapInstance.addLayer({ id: OTW_LINE_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#EF4444', 'line-width': 3, 'line-dasharray': [0, 4, 3] } });
-  }, [mapInstance]);
+  }, [mapInstance, styleEpoch]);
 
   // OTW effect 2: update line geometry when coords or route changes
   useEffect(() => {
@@ -223,7 +240,7 @@ export default function DilimanMap({
     } else {
       src.setData({ type: 'FeatureCollection', features: [] });
     }
-  }, [mapInstance, otwHydrant, userLocation, otwRoute]);
+  }, [mapInstance, otwHydrant, userLocation, otwRoute, styleEpoch]);
 
   // OTW effect 3: show/hide layers and drive the dash animation
   useEffect(() => {
@@ -250,7 +267,7 @@ export default function DilimanMap({
     };
     otwAnimRef.current = requestAnimationFrame(tick);
     return () => { if (otwAnimRef.current) { cancelAnimationFrame(otwAnimRef.current); otwAnimRef.current = null; } };
-  }, [mapInstance, otwHydrant]);
+  }, [mapInstance, otwHydrant, styleEpoch]);
 
   const handleLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
@@ -308,7 +325,7 @@ export default function DilimanMap({
           zoom: initialZoom ?? DEFAULT_ZOOM,
         }}
         style={{ position: 'absolute', inset: 0 }}
-        mapStyle="mapbox://styles/mapbox/streets-v12"
+        mapStyle={isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT}
         fadeDuration={400}
         onLoad={handleLoad}
         onError={(e: unknown) => onError?.(e)}
@@ -329,7 +346,7 @@ export default function DilimanMap({
             type="fill-extrusion"
             minzoom={15}
             paint={{
-              'fill-extrusion-color': '#d4cfc9',
+              'fill-extrusion-color': isDark ? '#2a313a' : '#d4cfc9',
               'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
               'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'min_height']],
               'fill-extrusion-opacity': 0.7,

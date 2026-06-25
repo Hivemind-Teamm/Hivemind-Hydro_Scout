@@ -4,6 +4,7 @@ import { useState, FormEvent, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme-context";
 
 export default function LoginPage() {
   // useSearchParams() needs a Suspense boundary to prerender (Next.js 16).
@@ -16,8 +17,30 @@ export default function LoginPage() {
 
 function LoginContent() {
   const { login, user, loading, refreshSession } = useAuth();
+  const { isDark } = useTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Theme-derived colours (the page uses inline styles, so `dark:` utilities
+  // don't apply — we branch on isDark instead). The yellow brand panel stays.
+  const panelBg = isDark ? "#0b0f14" : "#ffffff";
+  const textColor = isDark ? "#e5e7eb" : "#000";
+  const inputBg = isDark ? "#1f2937" : "#ffffff";
+  const inputBorder = isDark ? "#374151" : "#ccc";
+  const errorColor = isDark ? "#f87171" : "#c00";
+  const baseInputStyle: React.CSSProperties = {
+    padding: "13px 20px",
+    borderRadius: 24,
+    border: `1.5px solid ${inputBorder}`,
+    fontSize: 18,
+    outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
+    color: textColor,
+    background: inputBg,
+    fontFamily: "inherit",
+  };
+  const passwordInputStyle: React.CSSProperties = { ...baseInputStyle, padding: "13px 48px 13px 20px" };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -93,7 +116,7 @@ function LoginContent() {
       <div
         style={{
           flex: 1,
-          background: "#ffffff",
+          background: panelBg,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -102,40 +125,30 @@ function LoginContent() {
         }}
       >
         <div style={{ width: "100%", maxWidth: 420 }}>
-          <h1 style={{ fontSize: 56, fontWeight: 700, margin: 0, lineHeight: 1.1, color: "#000" }}>
+          <h1 style={{ fontSize: 56, fontWeight: 700, margin: 0, lineHeight: 1.1, color: textColor }}>
             Hello Po!
           </h1>
-          <p style={{ fontSize: 26, color: "#000", margin: "8px 0 36px" }}>
+          <p style={{ fontSize: 26, color: textColor, margin: "8px 0 36px" }}>
             Login Please
           </p>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             {/* Email */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>Email</label>
+              <label style={{ fontSize: 18, fontWeight: 500, color: textColor }}>Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
-                style={{
-                  padding: "13px 20px",
-                  borderRadius: 24,
-                  border: "1.5px solid #ccc",
-                  fontSize: 18,
-                  outline: "none",
-                  width: "100%",
-                  boxSizing: "border-box",
-                  color: "#000",
-                  fontFamily: "inherit",
-                }}
+                style={baseInputStyle}
               />
             </div>
 
             {/* Password */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>Password</label>
+              <label style={{ fontSize: 18, fontWeight: 500, color: textColor }}>Password</label>
               <div style={{ position: "relative" }}>
                 <input
                   type={showPassword ? "text" : "password"}
@@ -143,17 +156,7 @@ function LoginContent() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  style={{
-                    padding: "13px 48px 13px 20px",
-                    borderRadius: 24,
-                    border: "1.5px solid #ccc",
-                    fontSize: 18,
-                    outline: "none",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    color: "#000",
-                    fontFamily: "inherit",
-                  }}
+                  style={passwordInputStyle}
                 />
                 <button
                   type="button"
@@ -179,7 +182,7 @@ function LoginContent() {
             </div>
 
             {error && (
-              <p style={{ color: "#c00", fontSize: 16, margin: 0 }}>{error}</p>
+              <p style={{ color: errorColor, fontSize: 16, margin: 0 }}>{error}</p>
             )}
 
             {/* Login button */}
@@ -210,9 +213,9 @@ function LoginContent() {
               style={{
                 padding: "15px 20px",
                 borderRadius: 24,
-                border: "1.5px solid #000",
+                border: `1.5px solid ${textColor}`,
                 background: "transparent",
-                color: "#000",
+                color: textColor,
                 fontWeight: 600,
                 fontSize: 20,
                 cursor: "pointer",

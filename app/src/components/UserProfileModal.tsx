@@ -23,7 +23,7 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-[5100] flex items-center justify-center bg-black/40">
-      <div className="relative w-[90vw] max-w-[340px] overflow-hidden rounded-xl bg-white shadow-2xl">
+      <div className="relative w-[90vw] max-w-[340px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
 
         {/* Header */}
         <div className="flex flex-col items-center gap-2 bg-[#91191E] px-6 py-6">
@@ -52,13 +52,13 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
             <InfoRow label="Account Status" value="Active" />
           </div>
 
-          <div className="rounded-lg bg-neutral-50 border border-neutral-200 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-500">
+          <div className="rounded-lg bg-neutral-50 border border-neutral-200 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400">
             Full contact information is visible to Station Heads and Administrators only.
           </div>
 
           <button
             onClick={onClose}
-            className="mt-4 w-full rounded-xl border border-neutral-200 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+            className="mt-4 w-full rounded-xl border border-neutral-200 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
           >
             Close
           </button>
@@ -71,8 +71,8 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-[11px] font-semibold text-neutral-400">{label}</span>
-      <span className="text-[11px] font-bold text-neutral-700">{value}</span>
+      <span className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500">{label}</span>
+      <span className="text-[11px] font-bold text-neutral-700 dark:text-neutral-200">{value}</span>
     </div>
   );
 }

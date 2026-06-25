@@ -3,6 +3,7 @@
 import { MapContainer, TileLayer, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './hydrantIcon';
+import { useTheme } from '@/lib/theme-context';
 
 const greenIcon = L.divIcon({
   html: `<img src="/Hydrant%20Pin%20Gren.png" width="${HYDRANT_ICON_WIDTH}" height="${HYDRANT_ICON_HEIGHT}" style="display:block;width:${HYDRANT_ICON_WIDTH}px;height:${HYDRANT_ICON_HEIGHT}px;object-fit:contain;filter:${HYDRANT_PIN_FILTER};" />`,
@@ -12,6 +13,7 @@ const greenIcon = L.divIcon({
 });
 
 export default function MiniMap({ lat, lng }: { lat: number; lng: number }) {
+  const { isDark } = useTheme();
   return (
     <MapContainer
       center={[lat, lng]}
@@ -23,7 +25,11 @@ export default function MiniMap({ lat, lng }: { lat: number; lng: number }) {
       attributionControl={false}
       style={{ height: '100%', width: '100%' }}
     >
-      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      {isDark ? (
+        <TileLayer key="dark" url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" subdomains="abcd" />
+      ) : (
+        <TileLayer key="light" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      )}
       <Marker position={[lat, lng]} icon={greenIcon} />
     </MapContainer>
   );

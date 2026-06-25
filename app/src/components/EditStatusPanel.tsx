@@ -91,7 +91,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   }
 
   return (
-    <div className="anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[69px] z-[3000] flex w-[420px] flex-col bg-white shadow-2xl">
+    <div className="anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[69px] z-[3000] flex w-[420px] flex-col bg-white dark:bg-neutral-900 shadow-2xl">
 
       {/* Header */}
       <div className="flex items-start justify-between bg-[#91191E] px-5 py-3">
@@ -138,20 +138,20 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
           <p className="mb-2 text-xs font-bold text-[#91191E]">Condition / Obstruction</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Water Cleanliness</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Water Cleanliness</span>
               <input
                 value={cleanliness}
                 onChange={(e) => setCleanliness(e.target.value)}
-                className="rounded-lg border border-neutral-200 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none"
+                className="rounded-lg border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none"
                 placeholder="e.g. Clear"
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Hazard Flags</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Hazard Flags</span>
               <input
                 value={hazard}
                 onChange={(e) => setHazard(e.target.value)}
-                className="rounded-lg border border-neutral-200 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none"
+                className="rounded-lg border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none"
                 placeholder="e.g. Blocked"
               />
             </label>
@@ -165,7 +165,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
-            className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none resize-none"
+            className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none resize-none"
             placeholder="Describe the current condition..."
           />
         </section>
@@ -183,7 +183,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
           />
           <div className="flex flex-wrap gap-2">
             {photos.map((url, i) => (
-              <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200">
+              <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
                 <button
@@ -200,7 +200,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 disabled:opacity-50"
+              className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700 disabled:opacity-50"
             >
               {uploading ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-[#91191E]" />
@@ -209,25 +209,25 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
               )}
             </button>
           </div>
-          {uploading && <p className="mt-1.5 text-[10px] text-neutral-400">Uploading…</p>}
+          {uploading && <p className="mt-1.5 text-[10px] text-neutral-400 dark:text-neutral-500">Uploading…</p>}
         </section>
 
         {/* Will be signed */}
-        <div className="rounded-lg bg-neutral-50 px-4 py-3 text-[11px] text-neutral-500">
+        <div className="rounded-lg bg-neutral-50 dark:bg-neutral-800 px-4 py-3 text-[11px] text-neutral-500 dark:text-neutral-400">
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <p className="font-semibold text-neutral-400 uppercase tracking-wide text-[10px]">Will be Signed</p>
-              <button onClick={onOpenAccount} className="font-bold text-[#91191E] hover:underline text-left">
+              <p className="font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wide text-[10px]">Will be Signed</p>
+              <button onClick={onOpenAccount} className="font-bold text-[#91191E] dark:text-[#e0353b] hover:underline text-left">
                 {displayName}
               </button>
-              <p className="text-neutral-500">(Authorized)</p>
+              <p className="text-neutral-500 dark:text-neutral-400">(Authorized)</p>
             </div>
             <div>
-              <p className="font-semibold text-neutral-400 uppercase tracking-wide text-[10px]">&nbsp;</p>
-              <p className="font-bold text-neutral-700">{dateStr}</p>
-              <p className="text-neutral-500">{timeStr}</p>
+              <p className="font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wide text-[10px]">&nbsp;</p>
+              <p className="font-bold text-neutral-700 dark:text-neutral-200">{dateStr}</p>
+              <p className="text-neutral-500 dark:text-neutral-400">{timeStr}</p>
             </div>
-            <div className="flex items-center gap-1 text-[10px] text-neutral-400">
+            <div className="flex items-center gap-1 text-[10px] text-neutral-400 dark:text-neutral-500">
               <span>🔒</span>
               <span>Immutable once signed</span>
             </div>
@@ -236,13 +236,13 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
       </div>
 
       {/* Footer */}
-      <div className="border-t border-neutral-200 px-5 py-3">
-        {error && <p className="mb-2 text-[11px] font-medium text-[#91191E]">{error}</p>}
+      <div className="border-t border-neutral-200 dark:border-neutral-700 px-5 py-3">
+        {error && <p className="mb-2 text-[11px] font-medium text-[#91191E] dark:text-[#e0353b]">{error}</p>}
         <div className="flex gap-3">
           <button
             onClick={onClose}
             disabled={saving}
-            className="flex-1 rounded-lg border border-neutral-200 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+            className="flex-1 rounded-lg border border-neutral-200 dark:border-neutral-700 py-2 text-sm font-semibold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50"
           >
             Cancel
           </button>

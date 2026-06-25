@@ -39,12 +39,12 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   }, [users]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-neutral-100">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-neutral-100 dark:bg-neutral-950">
       {/* ── Top header ── */}
-      <header className="flex shrink-0 items-center justify-between bg-white px-6 py-3 shadow-sm">
+      <header className="flex shrink-0 items-center justify-between bg-white px-6 py-3 shadow-sm dark:bg-neutral-900">
         <Logo />
         <div className="flex items-center gap-3">
-          <span className="text-base font-extrabold text-neutral-800">Welcome, {adminName}</span>
+          <span className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Welcome, {adminName}</span>
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#91191E] text-white ring-2 ring-[#FED42E]">
             <UserGlyph />
           </span>
@@ -58,27 +58,27 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
       />
 
       {/* ── Sub-header ── */}
-      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
             title="Back to map"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-[#91191E]"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-[#91191E] dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
           >
             <BackGlyph /> Map
           </button>
-          <span className="h-5 w-px bg-neutral-200" />
-          <h1 className="text-lg font-extrabold tracking-tight text-neutral-800">System Administration</h1>
+          <span className="h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <h1 className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">System Administration</h1>
           <span className="flex items-center gap-1.5 rounded-full bg-[#91191E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
             <LockGlyph /> Admin Only
           </span>
         </div>
-        <p className="text-xs font-medium text-neutral-400">
-          <span className="font-bold text-neutral-600">{stationCount}</span> Stations
+        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+          <span className="font-bold text-neutral-600 dark:text-neutral-300">{stationCount}</span> Stations
           <span className="mx-1.5">·</span>
-          <span className="font-bold text-neutral-600">{hydrants.length}</span> Hydrants
+          <span className="font-bold text-neutral-600 dark:text-neutral-300">{hydrants.length}</span> Hydrants
           <span className="mx-1.5">·</span>
-          <span className="font-bold text-neutral-600">{users.length}</span> Accounts
+          <span className="font-bold text-neutral-600 dark:text-neutral-300">{users.length}</span> Accounts
         </p>
       </div>
 
@@ -127,12 +127,12 @@ function ManageUsersCard({
   ];
 
   return (
-    <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
       {/* Card header */}
       <div className="flex items-center justify-between gap-4 px-6 pt-5">
         <div className="flex items-baseline gap-3">
-          <h2 className="text-base font-extrabold text-neutral-800">Manage Users &amp; Roles</h2>
-          <p className="hidden text-xs text-neutral-400 sm:block">Create, promote, demote, or remove accounts</p>
+          <h2 className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Manage Users &amp; Roles</h2>
+          <p className="hidden text-xs text-neutral-400 sm:block dark:text-neutral-500">Create, promote, demote, or remove accounts</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -144,13 +144,13 @@ function ManageUsersCard({
 
       {/* Toolbar: search + role filter pills */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-        <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 focus-within:border-[#91191E] focus-within:bg-white">
+        <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 focus-within:border-[#91191E] focus-within:bg-white dark:border-neutral-700 dark:bg-neutral-800 dark:focus-within:bg-neutral-800">
           <SearchGlyph />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by Name"
-            className="w-full bg-transparent text-sm text-neutral-700 placeholder:text-neutral-400 focus:outline-none"
+            className="w-full bg-transparent text-sm text-neutral-700 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
           />
         </div>
         <div className="flex items-center gap-1.5">
@@ -163,7 +163,7 @@ function ManageUsersCard({
                 className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
                   active
                     ? 'bg-[#91191E] text-white shadow-sm'
-                    : 'border border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600'
+                    : 'border border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600 dark:border-neutral-700 dark:text-neutral-500 dark:hover:border-neutral-600 dark:hover:text-neutral-300'
                 }`}
               >
                 {f.label}
@@ -177,7 +177,7 @@ function ManageUsersCard({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] border-collapse">
           <thead>
-            <tr className="border-y border-neutral-100 bg-neutral-50/60 text-left text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+            <tr className="border-y border-neutral-100 bg-neutral-50/60 text-left text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:border-neutral-800 dark:bg-neutral-800/40 dark:text-neutral-500">
               <th className="px-6 py-2.5 font-bold">User</th>
               <th className="px-3 py-2.5 font-bold">Role</th>
               <th className="px-3 py-2.5 font-bold">Station</th>
@@ -190,13 +190,13 @@ function ManageUsersCard({
               <SkeletonRows />
             ) : error ? (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-sm text-[#91191E]">
+                <td colSpan={5} className="px-6 py-10 text-center text-sm text-[#91191E] dark:text-[#e0353b]">
                   Couldn’t load accounts: {error}
                 </td>
               </tr>
             ) : visible.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-sm text-neutral-400">
+                <td colSpan={5} className="px-6 py-10 text-center text-sm text-neutral-400 dark:text-neutral-500">
                   No accounts match your filters.
                 </td>
               </tr>
@@ -216,9 +216,9 @@ function ManageUsersCard({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-neutral-100 px-6 py-3 text-[11px] text-neutral-400">
-        Showing <span className="font-bold text-neutral-600">{visible.length}</span> of{' '}
-        <span className="font-bold text-neutral-600">{users.length}</span> Accounts
+      <div className="border-t border-neutral-100 px-6 py-3 text-[11px] text-neutral-400 dark:border-neutral-800 dark:text-neutral-500">
+        Showing <span className="font-bold text-neutral-600 dark:text-neutral-300">{visible.length}</span> of{' '}
+        <span className="font-bold text-neutral-600 dark:text-neutral-300">{users.length}</span> Accounts
       </div>
 
       {showCreate && <CreateAccountModal onClose={() => setShowCreate(false)} />}
@@ -238,7 +238,7 @@ function UserRow({
 }) {
   const meta = ROLE_META[user.role];
   return (
-    <tr className="border-b border-neutral-100 last:border-0 transition-colors hover:bg-neutral-50/60">
+    <tr className="border-b border-neutral-100 last:border-0 transition-colors hover:bg-neutral-50/60 dark:border-neutral-800 dark:hover:bg-neutral-800/40">
       {/* User */}
       <td className="px-6 py-3">
         <div className="flex items-center gap-3">
@@ -246,11 +246,11 @@ function UserRow({
             {user.initials}
           </span>
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-sm font-bold text-neutral-800">
+            <p className="flex items-center gap-1.5 text-sm font-bold text-neutral-800 dark:text-neutral-100">
               <span className="truncate">{user.displayName}</span>
-              {isSelf && <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-neutral-400">You</span>}
+              {isSelf && <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500">You</span>}
             </p>
-            <p className="truncate text-xs text-neutral-400">{user.email}</p>
+            <p className="truncate text-xs text-neutral-400 dark:text-neutral-500">{user.email}</p>
           </div>
         </div>
       </td>
@@ -264,10 +264,10 @@ function UserRow({
         </span>
       </td>
       {/* Station */}
-      <td className="px-3 py-3 text-sm text-neutral-600">{user.station}</td>
+      <td className="px-3 py-3 text-sm text-neutral-600 dark:text-neutral-300">{user.station}</td>
       {/* Status */}
       <td className="px-3 py-3">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
           <span
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ background: user.active ? '#2fbf4f' : '#cbd5e1' }}
@@ -280,7 +280,7 @@ function UserRow({
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={onEdit}
-            className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-bold text-neutral-600 transition-colors hover:border-neutral-300 hover:bg-neutral-50 active:scale-95"
+            className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-bold text-neutral-600 transition-colors hover:border-neutral-300 hover:bg-neutral-50 active:scale-95 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
           >
             Edit
           </button>
@@ -288,7 +288,7 @@ function UserRow({
             onClick={onRemove}
             disabled={isSelf}
             title={isSelf ? "You can't remove your own account" : 'Remove account'}
-            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-[#91191E] transition-colors hover:bg-red-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-[#91191E] transition-colors hover:bg-red-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-500/30 dark:text-[#e0353b] dark:hover:bg-red-950/40"
           >
             Remove
           </button>
@@ -302,20 +302,20 @@ function SkeletonRows() {
   return (
     <>
       {Array.from({ length: 4 }).map((_, i) => (
-        <tr key={i} className="border-b border-neutral-100">
+        <tr key={i} className="border-b border-neutral-100 dark:border-neutral-800">
           <td className="px-6 py-3">
             <div className="flex items-center gap-3">
-              <span className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-neutral-200" />
+              <span className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-neutral-200 dark:bg-neutral-700" />
               <div className="flex flex-col gap-1.5">
-                <span className="h-3 w-32 animate-pulse rounded bg-neutral-200" />
-                <span className="h-2.5 w-44 animate-pulse rounded bg-neutral-100" />
+                <span className="h-3 w-32 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+                <span className="h-2.5 w-44 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
               </div>
             </div>
           </td>
-          <td className="px-3 py-3"><span className="block h-5 w-16 animate-pulse rounded-full bg-neutral-100" /></td>
-          <td className="px-3 py-3"><span className="block h-3 w-28 animate-pulse rounded bg-neutral-100" /></td>
-          <td className="px-3 py-3"><span className="block h-3 w-20 animate-pulse rounded bg-neutral-100" /></td>
-          <td className="px-6 py-3"><span className="ml-auto block h-7 w-32 animate-pulse rounded bg-neutral-100" /></td>
+          <td className="px-3 py-3"><span className="block h-5 w-16 animate-pulse rounded-full bg-neutral-100 dark:bg-neutral-800" /></td>
+          <td className="px-3 py-3"><span className="block h-3 w-28 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" /></td>
+          <td className="px-3 py-3"><span className="block h-3 w-20 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" /></td>
+          <td className="px-6 py-3"><span className="ml-auto block h-7 w-32 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" /></td>
         </tr>
       ))}
     </>
@@ -404,7 +404,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={() => setRole(r)}
                   className={`flex-1 rounded-lg border px-2 py-2 text-xs font-bold transition-all ${
-                    active ? 'text-white' : 'border-neutral-200 text-neutral-500 hover:border-neutral-300'
+                    active ? 'text-white' : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600'
                   }`}
                   style={active ? { background: meta.badgeText, borderColor: meta.badgeText } : undefined}
                 >
@@ -415,7 +415,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
           </div>
         </Field>
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E]">{error}</p>}
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
       </div>
 
       <ModalFooter>
@@ -452,13 +452,13 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
   return (
     <ModalShell title="Edit Account" subtitle={user.email} onClose={onClose}>
       <div className="flex flex-col gap-4 px-6 py-5">
-        <div className="flex items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
+        <div className="flex items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-800/50">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#91191E] text-sm font-extrabold text-white">
             {user.initials}
           </span>
           <div>
-            <p className="text-sm font-bold text-neutral-800">{user.displayName}</p>
-            <p className="text-xs text-neutral-400">{user.station}</p>
+            <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">{user.displayName}</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500">{user.station}</p>
           </div>
         </div>
 
@@ -473,7 +473,7 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
                   type="button"
                   onClick={() => setRole(r)}
                   className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-xs font-bold transition-all ${
-                    active ? 'border-transparent ring-2' : 'border-neutral-200 text-neutral-500 hover:border-neutral-300'
+                    active ? 'border-transparent ring-2' : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600'
                   }`}
                   style={active ? { background: meta.badgeBg, color: meta.badgeText, boxShadow: `inset 0 0 0 2px ${meta.badgeText}` } : undefined}
                 >
@@ -486,11 +486,11 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
         </Field>
 
         {role !== user.role && (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
             Role will change from <b>{ROLE_META[user.role].label}</b> to <b>{ROLE_META[role].label}</b>.
           </p>
         )}
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E]">{error}</p>}
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
       </div>
 
       <ModalFooter>
@@ -524,14 +524,14 @@ function RemoveUserModal({ user, onClose }: { user: AppUser; onClose: () => void
   return (
     <ModalShell title="Remove Account" subtitle="This action cannot be undone" onClose={onClose} tone="danger">
       <div className="flex flex-col gap-4 px-6 py-5">
-        <p className="text-sm text-neutral-600">
-          Remove <b className="text-neutral-800">{user.displayName}</b> ({user.email}) from the directory?
+        <p className="text-sm text-neutral-600 dark:text-neutral-300">
+          Remove <b className="text-neutral-800 dark:text-neutral-100">{user.displayName}</b> ({user.email}) from the directory?
           They will immediately lose their role and access.
         </p>
-        <p className="rounded-lg bg-neutral-50 px-3 py-2 text-[11px] text-neutral-400">
+        <p className="rounded-lg bg-neutral-50 px-3 py-2 text-[11px] text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500">
           Note: this deletes the user’s directory record. Fully revoking the sign-in credential requires the Firebase Admin SDK on a server.
         </p>
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E]">{error}</p>}
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
       </div>
 
       <ModalFooter>
@@ -637,11 +637,11 @@ function BulkImportCard({ adminName }: { adminName: string }) {
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
       <div className="px-6 pt-5">
         <div className="flex items-baseline gap-3">
-          <h2 className="text-base font-extrabold text-neutral-800">Bulk Hydrant Data Import</h2>
-          <p className="hidden text-xs text-neutral-400 sm:block">Update hydrant records from a spreadsheet</p>
+          <h2 className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Bulk Hydrant Data Import</h2>
+          <p className="hidden text-xs text-neutral-400 sm:block dark:text-neutral-500">Update hydrant records from a spreadsheet</p>
         </div>
       </div>
 
@@ -654,13 +654,13 @@ function BulkImportCard({ adminName }: { adminName: string }) {
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-              dragOver ? 'border-[#91191E] bg-red-50' : 'border-neutral-300 bg-neutral-50/60 hover:border-neutral-400 hover:bg-neutral-50'
+              dragOver ? 'border-[#91191E] bg-red-50 dark:bg-red-950/30' : 'border-neutral-300 bg-neutral-50/60 hover:border-neutral-400 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800/40 dark:hover:border-neutral-600 dark:hover:bg-neutral-800'
             }`}
           >
-            <span className="text-[#91191E]"><ImportGlyph /></span>
-            <p className="text-sm font-bold text-neutral-700">Drop Spreadsheet Here</p>
-            <p className="text-xs text-neutral-400">
-              or <span className="font-bold text-[#91191E] underline">browse files</span> to upload
+            <span className="text-[#91191E] dark:text-[#e0353b]"><ImportGlyph /></span>
+            <p className="text-sm font-bold text-neutral-700 dark:text-neutral-200">Drop Spreadsheet Here</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500">
+              or <span className="font-bold text-[#91191E] underline dark:text-[#e0353b]">browse files</span> to upload
             </p>
             <input
               ref={fileInputRef}
@@ -672,7 +672,7 @@ function BulkImportCard({ adminName }: { adminName: string }) {
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {['CSV or XLSX', '5MB max size', 'Max 2,000 rows', 'Validated before commit'].map((t) => (
-              <span key={t} className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[10px] font-semibold text-neutral-400">
+              <span key={t} className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[10px] font-semibold text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500">
                 {t}
               </span>
             ))}
@@ -680,25 +680,25 @@ function BulkImportCard({ adminName }: { adminName: string }) {
 
           {/* Parse result */}
           {result && (
-            <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
+            <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 dark:border-neutral-700 dark:bg-neutral-800/40">
               <div className="flex items-center justify-between">
-                <p className="truncate text-xs font-bold text-neutral-700">{result.fileName}</p>
-                <button onClick={() => setResult(null)} className="text-xs text-neutral-400 hover:text-neutral-600">Clear</button>
+                <p className="truncate text-xs font-bold text-neutral-700 dark:text-neutral-200">{result.fileName}</p>
+                <button onClick={() => setResult(null)} className="text-xs text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300">Clear</button>
               </div>
               <div className="mt-2 flex items-center gap-4 text-sm font-bold">
                 <span className="text-[#2fbf4f]">{result.rows.length} valid</span>
-                <span className={result.errors.length ? 'text-[#91191E]' : 'text-neutral-300'}>
+                <span className={result.errors.length ? 'text-[#91191E] dark:text-[#e0353b]' : 'text-neutral-300 dark:text-neutral-600'}>
                   {result.errors.length} error{result.errors.length === 1 ? '' : 's'}
                 </span>
               </div>
               {result.errors.length > 0 && (
-                <ul className="mt-2 max-h-28 overflow-y-auto text-[11px] text-neutral-500">
+                <ul className="mt-2 max-h-28 overflow-y-auto text-[11px] text-neutral-500 dark:text-neutral-400">
                   {result.errors.slice(0, 8).map((er, i) => (
                     <li key={i} className="py-0.5">
-                      {er.line > 0 ? <span className="font-bold text-neutral-400">Row {er.line}: </span> : null}{er.reason}
+                      {er.line > 0 ? <span className="font-bold text-neutral-400 dark:text-neutral-500">Row {er.line}: </span> : null}{er.reason}
                     </li>
                   ))}
-                  {result.errors.length > 8 && <li className="py-0.5 text-neutral-400">…and {result.errors.length - 8} more.</li>}
+                  {result.errors.length > 8 && <li className="py-0.5 text-neutral-400 dark:text-neutral-500">…and {result.errors.length - 8} more.</li>}
                 </ul>
               )}
               {result.rows.length > 0 && (
@@ -713,14 +713,14 @@ function BulkImportCard({ adminName }: { adminName: string }) {
             </div>
           )}
           {commitMsg && (
-            <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-xs font-semibold text-[#1e8a39]">{commitMsg}</p>
+            <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-xs font-semibold text-[#1e8a39] dark:bg-green-950/30 dark:text-[#4ade80]">{commitMsg}</p>
           )}
         </div>
 
         {/* Last import + template */}
         <div className="flex flex-col">
-          <div className="flex-1 rounded-xl border border-neutral-200 p-4">
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Last Import</p>
+          <div className="flex-1 rounded-xl border border-neutral-200 p-4 dark:border-neutral-700">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Last Import</p>
             <dl className="flex flex-col gap-2.5">
               <ImportStat label="File" value={lastImport.file} mono />
               <ImportStat label="Records Parsed" value={`${lastImport.valid} valid · ${lastImport.errors} errors`} valueClass="text-[#2fbf4f]" />
@@ -730,7 +730,7 @@ function BulkImportCard({ adminName }: { adminName: string }) {
           </div>
           <button
             onClick={downloadTemplate}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#91191E] py-2.5 text-xs font-bold text-[#91191E] transition-colors hover:bg-red-50 active:scale-95"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#91191E] py-2.5 text-xs font-bold text-[#91191E] transition-colors hover:bg-red-50 active:scale-95 dark:border-[#e0353b] dark:text-[#e0353b] dark:hover:bg-red-950/40"
           >
             <DownloadGlyph /> Download Import Template
           </button>
@@ -742,9 +742,9 @@ function BulkImportCard({ adminName }: { adminName: string }) {
 
 function ImportStat({ label, value, valueClass, mono }: { label: string; value: string; valueClass?: string; mono?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-2 last:border-0 last:pb-0">
-      <dt className="shrink-0 text-[11px] font-semibold text-neutral-400">{label}</dt>
-      <dd className={`truncate text-right text-xs font-bold text-neutral-700 ${mono ? 'font-mono' : ''} ${valueClass ?? ''}`}>{value}</dd>
+    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-2 last:border-0 last:pb-0 dark:border-neutral-800">
+      <dt className="shrink-0 text-[11px] font-semibold text-neutral-400 dark:text-neutral-500">{label}</dt>
+      <dd className={`truncate text-right text-xs font-bold text-neutral-700 dark:text-neutral-200 ${mono ? 'font-mono' : ''} ${valueClass ?? ''}`}>{value}</dd>
     </div>
   );
 }
@@ -848,7 +848,7 @@ function ModalShell({
   return (
     <div className="anim-fade fixed inset-0 z-[6000] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="anim-fade-scale w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="anim-fade-scale w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900"
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`flex items-center justify-between px-6 py-4 ${tone === 'danger' ? 'bg-[#91191E]' : 'bg-[#91191E]'}`}>
@@ -865,13 +865,13 @@ function ModalShell({
 }
 
 function ModalFooter({ children }: { children: React.ReactNode }) {
-  return <div className="flex justify-end gap-2 border-t border-neutral-100 bg-neutral-50 px-6 py-4">{children}</div>;
+  return <div className="flex justify-end gap-2 border-t border-neutral-100 bg-neutral-50 px-6 py-4 dark:border-neutral-800 dark:bg-neutral-800/40">{children}</div>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-bold text-neutral-500">{label}</span>
+      <span className="text-xs font-bold text-neutral-500 dark:text-neutral-400">{label}</span>
       {children}
     </label>
   );
@@ -892,7 +892,7 @@ function Logo() {
     <div className="flex items-center gap-1">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/Hydro-Scout%20Logo.png" alt="Hydro-Scout" width={44} height={44} className="h-11 w-11 object-contain" />
-      <span className="text-xl font-extrabold tracking-tight text-neutral-800">
+      <span className="text-xl font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">
         Hydro-<span className="text-[#e0353b]">Scout</span>
       </span>
     </div>

@@ -141,7 +141,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
 
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-[5000] flex items-center justify-center bg-black/50">
-      <div className="anim-fade-scale relative flex h-[95vh] w-[95vw] max-w-[1100px] overflow-hidden rounded-xl bg-white shadow-2xl">
+      <div className="anim-fade-scale relative flex h-[95vh] w-[95vw] max-w-[1100px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
 
         {/* ── Header ── */}
         <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-[#91191E] px-6 py-3">
@@ -163,7 +163,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
         <div className="mt-[54px] flex flex-1 overflow-hidden">
 
           {/* Left sidebar */}
-          <div className="flex w-[260px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-neutral-200 bg-neutral-50 p-5">
+          <div className="flex w-[260px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-neutral-200 bg-neutral-50 p-5 dark:border-neutral-700 dark:bg-neutral-800">
 
             {/* Hydrant pin icon */}
             <div className="flex flex-col items-center gap-2 pt-2">
@@ -173,46 +173,46 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                 alt="Hydrant pin"
                 className="h-20 w-20 object-contain drop-shadow-md"
               />
-              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">New Hydrant</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">New Hydrant</p>
               {previewId ? (
-                <span className="rounded-full bg-[#91191E]/10 px-3 py-0.5 text-sm font-extrabold tracking-wide text-[#91191E]">
+                <span className="rounded-full bg-[#91191E]/10 dark:bg-[#e0353b]/15 px-3 py-0.5 text-sm font-extrabold tracking-wide text-[#91191E] dark:text-[#e0353b]">
                   {previewId}
                 </span>
               ) : (
-                <span className="text-[10px] text-neutral-300">Resolving ID…</span>
+                <span className="text-[10px] text-neutral-300 dark:text-neutral-600">Resolving ID…</span>
               )}
             </div>
 
             {/* Mini map preview */}
             {hasValidCoords ? (
-              <div className="h-[160px] overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+              <div className="h-[160px] overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
                 <MiniMap lat={lat} lng={lng} />
               </div>
             ) : (
-              <div className="flex h-[160px] items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-100">
-                <p className="text-center text-[11px] text-neutral-400 px-3">
+              <div className="flex h-[160px] items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800">
+                <p className="text-center text-[11px] text-neutral-400 dark:text-neutral-500 px-3">
                   Enter coordinates below to preview location
                 </p>
               </div>
             )}
 
             {/* Coordinate summary */}
-            <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-[11px]">
-              <p className="mb-2 font-bold uppercase tracking-wide text-neutral-400">Coordinates</p>
-              <div className="flex flex-col gap-1 text-neutral-600">
+            <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-[11px] dark:border-neutral-700 dark:bg-neutral-900">
+              <p className="mb-2 font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Coordinates</p>
+              <div className="flex flex-col gap-1 text-neutral-600 dark:text-neutral-300">
                 <div className="flex justify-between">
                   <span>Latitude</span>
-                  <span className="font-bold text-neutral-800">{hasValidCoords ? lat.toFixed(6) : '—'}</span>
+                  <span className="font-bold text-neutral-800 dark:text-neutral-100">{hasValidCoords ? lat.toFixed(6) : '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Longitude</span>
-                  <span className="font-bold text-neutral-800">{hasValidCoords ? lng.toFixed(6) : '—'}</span>
+                  <span className="font-bold text-neutral-800 dark:text-neutral-100">{hasValidCoords ? lng.toFixed(6) : '—'}</span>
                 </div>
               </div>
             </div>
 
             {/* Guidelines */}
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] text-amber-700 leading-relaxed">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] text-amber-700 leading-relaxed dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
               <p className="mb-1 font-bold">Pinning Guidelines</p>
               <p>Verify GPS coordinates on-site before submission. All pinned hydrants require Head or Admin validation before being used in routing.</p>
             </div>
@@ -257,7 +257,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                       onChange={e => { if (!initialAddress) setAddress(e.target.value); }}
                       readOnly={!!initialAddress}
                       placeholder="e.g. Katipunan Ave, Loyola Heights"
-                      className={`${inputCls} ${initialAddress ? 'cursor-not-allowed bg-neutral-100 text-neutral-400 select-none' : ''}`}
+                      className={`${inputCls} ${initialAddress ? 'cursor-not-allowed bg-neutral-100 text-neutral-400 select-none dark:bg-neutral-800 dark:text-neutral-500' : ''}`}
                       title={initialAddress ? 'Address is pre-filled from the selected location' : undefined}
                     />
                   </Field>
@@ -373,7 +373,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                 />
                 <div className="flex flex-wrap gap-2">
                   {photos.map((url, i) => (
-                    <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200">
+                    <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
                       <button
@@ -390,29 +390,29 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 disabled:opacity-50"
+                    className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700 disabled:opacity-50"
                   >
                     {uploading ? (
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-[#91191E]" />
                     ) : '+'}
                   </button>
                 </div>
-                {uploading && <p className="mt-1.5 text-[10px] text-neutral-400">Uploading…</p>}
+                {uploading && <p className="mt-1.5 text-[10px] text-neutral-400 dark:text-neutral-500">Uploading…</p>}
               </Section>
 
               {/* Will be signed */}
-              <div className="rounded-xl bg-neutral-50 border border-neutral-200 px-5 py-3 text-[11px] text-neutral-500">
+              <div className="rounded-xl bg-neutral-50 border border-neutral-200 px-5 py-3 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400">
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400">Pinned By</p>
-                    <p className="font-bold text-[#91191E]">{displayName}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Pinned By</p>
+                    <p className="font-bold text-[#91191E] dark:text-[#e0353b]">{displayName}</p>
                     <p>{roleLabel}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400">Date</p>
-                    <p className="font-bold text-neutral-700">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Date</p>
+                    <p className="font-bold text-neutral-700 dark:text-neutral-200">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+                  <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 dark:text-neutral-500">
                     <span>🔒</span>
                     <span>Entry is immutable once submitted</span>
                   </div>
@@ -422,13 +422,13 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
             </div>
 
             {/* Footer */}
-            <div className="shrink-0 border-t border-neutral-200 px-7 py-4">
-              {error && <p className="mb-2 text-[11px] font-medium text-[#91191E]">{error}</p>}
+            <div className="shrink-0 border-t border-neutral-200 px-7 py-4 dark:border-neutral-700">
+              {error && <p className="mb-2 text-[11px] font-medium text-[#91191E] dark:text-[#e0353b]">{error}</p>}
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
                   disabled={saving}
-                  className="flex-1 rounded-xl border border-neutral-200 py-3 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-neutral-200 py-3 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -449,12 +449,12 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
 }
 
 /* ── Shared helpers ── */
-const inputCls = 'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-700 focus:border-[#91191E] focus:outline-none';
+const inputCls = 'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-700 focus:border-[#91191E] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-3 text-xs font-bold text-[#91191E]">{title}</p>
+      <p className="mb-3 text-xs font-bold text-[#91191E] dark:text-[#e0353b]">{title}</p>
       {children}
     </div>
   );
@@ -463,7 +463,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{label}</span>
       {children}
     </label>
   );

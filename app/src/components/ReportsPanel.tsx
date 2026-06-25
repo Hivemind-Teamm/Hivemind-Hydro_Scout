@@ -35,23 +35,23 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
   ];
 
   return (
-    <div className="anim-slide-left pointer-events-auto absolute bottom-6 left-[76px] top-[124px] z-[1500] flex w-[360px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="anim-slide-left pointer-events-auto absolute bottom-6 left-[76px] top-[124px] z-[1500] flex w-[360px] flex-col overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
       {/* Header */}
-      <div className="border-b border-neutral-200 px-4 py-3">
-        <p className="text-sm font-extrabold uppercase tracking-wide text-neutral-800">Reports Register</p>
-        <p className="text-[10px] text-neutral-400">Service and status reports · QC Diliman, Quezon City</p>
+      <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-700">
+        <p className="text-sm font-extrabold uppercase tracking-wide text-neutral-800 dark:text-neutral-100">Reports Register</p>
+        <p className="text-[10px] text-neutral-400 dark:text-neutral-500">Service and status reports · QC Diliman, Quezon City</p>
       </div>
 
       {/* Filter tabs */}
-      <div className="flex border-b border-neutral-200">
+      <div className="flex border-b border-neutral-200 dark:border-neutral-700">
         {TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setFilter(tab.key)}
             className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wide transition-colors ${
               filter === tab.key
-                ? 'border-b-2 border-[#FED42E] text-[#91191E]'
-                : 'text-neutral-400 hover:text-neutral-600'
+                ? 'border-b-2 border-[#FED42E] text-[#91191E] dark:text-[#e0353b]'
+                : 'text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
             }`}
           >
             {tab.label}
@@ -60,15 +60,15 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
       </div>
 
       {/* Report list */}
-      <div className="flex-1 overflow-y-auto divide-y divide-neutral-100">
+      <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
         {visible.map((report) => (
           <ReportCard key={report.id} report={report} onViewUser={onViewUser} canResolve={canResolve} />
         ))}
         {loading && (
-          <p className="px-4 py-8 text-center text-xs text-neutral-400">Loading reports…</p>
+          <p className="px-4 py-8 text-center text-xs text-neutral-400 dark:text-neutral-500">Loading reports…</p>
         )}
         {!loading && visible.length === 0 && (
-          <p className="px-4 py-8 text-center text-xs text-neutral-400">No reports found.</p>
+          <p className="px-4 py-8 text-center text-xs text-neutral-400 dark:text-neutral-500">No reports found.</p>
         )}
       </div>
     </div>
@@ -106,12 +106,12 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
           {sc.label}
         </span>
       </div>
-      <p className="mb-1 text-xs font-semibold text-neutral-800 leading-snug">{report.title}</p>
-      <p className="text-[11px] text-neutral-500">{report.location}</p>
-      <p className="mt-1 text-[10px] text-neutral-400">
+      <p className="mb-1 text-xs font-semibold text-neutral-800 leading-snug dark:text-neutral-100">{report.title}</p>
+      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">{report.location}</p>
+      <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
         <button
           onClick={() => onViewUser(report.reporter, report.role)}
-          className="font-semibold text-[#91191E] hover:underline"
+          className="font-semibold text-[#91191E] hover:underline dark:text-[#e0353b]"
         >
           {report.reporter}
         </button>
@@ -136,7 +136,7 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
           </button>
         </div>
       )}
-      {err && <p className="mt-1 text-[10px] text-[#91191E]">{err}</p>}
+      {err && <p className="mt-1 text-[10px] text-[#91191E] dark:text-[#e0353b]">{err}</p>}
     </div>
   );
 }
