@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 import {
   STATUS_META,
   STATUS_ORDER,
@@ -60,6 +61,7 @@ export default function DashboardOverlay({
   isOtw = false,
 }: DashboardOverlayProps) {
   const { user, role } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const canViewDashboard = role === 'head' || role === 'admin';
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   const [showCounts, setShowCounts] = useState(true);
@@ -139,8 +141,8 @@ export default function DashboardOverlay({
                 onClick={() => onSelectStatus(status)}
                 className="px-4 py-2 text-xs font-bold transition-all hover:brightness-90 active:scale-95"
                 style={{
-                  background: active ? meta.color : '#ffffff',
-                  color: active ? '#ffffff' : '#4b5563',
+                  background: active ? meta.color : (isDark ? '#262b33' : '#ffffff'),
+                  color: active ? '#ffffff' : (isDark ? '#cbd5e1' : '#4b5563'),
                 }}
               >
                 {meta.pillLabel}
@@ -154,11 +156,11 @@ export default function DashboardOverlay({
 
       {/* Zoom buttons under the search bar */}
       <div className="pointer-events-auto absolute left-4 top-[136px] z-[1000]">
-        <div className="flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
+        <div className="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-neutral-800 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
           <ToolButton label="Zoom in" onClick={onZoomIn}>
             <PlusGlyph />
           </ToolButton>
-          <div className="h-px w-full bg-neutral-200" />
+          <div className="h-px w-full bg-neutral-200 dark:bg-neutral-700" />
           <ToolButton label="Zoom out" onClick={onZoomOut}>
             <MinusGlyph />
           </ToolButton>
@@ -216,7 +218,7 @@ export default function DashboardOverlay({
 
       {/* ---------- Bottom-right stack: action buttons + status panel ---------- */}
       <div className="absolute bottom-6 right-6 z-[1000] flex w-60 flex-col items-end gap-3">
-        {/* GPS + 3D buttons row — always visible */}
+        {/* GPS + 3D + theme buttons row — always visible */}
         <div className="pointer-events-auto flex gap-2">
           <ToolButton label="Go to my location" onClick={onLocate} rounded>
             <GpsGlyph />
@@ -226,13 +228,16 @@ export default function DashboardOverlay({
               <ThreeDGlyph />
             </ToolButton>
           )}
+          <ToolButton label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme} rounded>
+            {isDark ? <SunGlyph /> : <MoonGlyph />}
+          </ToolButton>
         </div>
 
         {showCounts && (
-          <div className="pointer-events-auto w-full rounded-xl bg-white/95 p-4 shadow-[0_6px_24px_rgba(0,0,0,0.4)] backdrop-blur">
-            <div className="mb-2 flex items-center justify-between border-b border-neutral-200 pb-2">
-              <span className="text-sm font-bold text-neutral-800">Status</span>
-              <span className="text-xs font-medium text-neutral-400">Live Count</span>
+          <div className="pointer-events-auto w-full rounded-xl bg-white/95 dark:bg-neutral-900/95 p-4 shadow-[0_6px_24px_rgba(0,0,0,0.4)] backdrop-blur">
+            <div className="mb-2 flex items-center justify-between border-b border-neutral-200 dark:border-neutral-700 pb-2">
+              <span className="text-sm font-bold text-neutral-800 dark:text-neutral-100">Status</span>
+              <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">Live Count</span>
             </div>
             <ul className="flex flex-col gap-2.5">
               {STATUS_ORDER.map((status) => {
@@ -255,7 +260,7 @@ export default function DashboardOverlay({
                         {meta.legendLabel}
                       </span>
                     </span>
-                    <span className="text-sm font-bold tabular-nums text-neutral-700">
+                    <span className="text-sm font-bold tabular-nums text-neutral-700 dark:text-neutral-200">
                       {counts[status]}
                     </span>
                   </li>
@@ -263,7 +268,7 @@ export default function DashboardOverlay({
               })}
             </ul>
             {autoFallback && (
-              <p className="mt-3 border-t border-neutral-200 pt-2 text-[11px] text-[#b11116]">
+              <p className="mt-3 border-t border-neutral-200 dark:border-neutral-700 pt-2 text-[11px] text-[#b11116] dark:text-[#e0353b]">
                 Mapbox unavailable — showing OpenStreetMap.
               </p>
             )}
@@ -334,7 +339,7 @@ function LocationSearch({ onFlyTo }: { onFlyTo: (lat: number, lng: number, zoom?
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
+      <div className="flex items-center gap-2 rounded-full bg-white dark:bg-neutral-800 px-4 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
         {loading ? <SpinnerGlyph /> : <SearchGlyph />}
         <input
           value={query}
@@ -342,17 +347,17 @@ function LocationSearch({ onFlyTo }: { onFlyTo: (lat: number, lng: number, zoom?
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); setQuery(''); } }}
           placeholder="Search Location"
-          className="w-44 bg-transparent text-sm text-neutral-700 placeholder:text-neutral-400 focus:outline-none"
+          className="w-44 bg-transparent text-sm text-neutral-700 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none"
         />
         {query && (
-          <button onClick={() => { setQuery(''); setResults([]); setOpen(false); }} className="text-neutral-400 hover:text-neutral-600">
+          <button onClick={() => { setQuery(''); setResults([]); setOpen(false); }} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         )}
       </div>
 
       {open && results.length > 0 && (
-        <ul className="absolute left-0 top-[calc(100%+6px)] z-[2000] w-80 overflow-hidden rounded-xl bg-white shadow-[0_8px_32px_rgba(0,0,0,0.22)]">
+        <ul className="absolute left-0 top-[calc(100%+6px)] z-[2000] w-80 overflow-hidden rounded-xl bg-white dark:bg-neutral-800 shadow-[0_8px_32px_rgba(0,0,0,0.22)]">
           {results.map((r, i) => {
             const parts = r.display_name.split(', ');
             const title = parts[0];
@@ -361,14 +366,14 @@ function LocationSearch({ onFlyTo }: { onFlyTo: (lat: number, lng: number, zoom?
               <li key={i}>
                 <button
                   onClick={() => select(r)}
-                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
+                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-700 border-b border-neutral-100 dark:border-neutral-700 last:border-0"
                 >
                   <svg className="mt-0.5 shrink-0 text-neutral-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
                   </svg>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-neutral-800">{title}</p>
-                    {subtitle && <p className="truncate text-xs text-neutral-400">{subtitle}</p>}
+                    <p className="truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100">{title}</p>
+                    {subtitle && <p className="truncate text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
                   </div>
                 </button>
               </li>
@@ -404,7 +409,7 @@ function ToolButton({
       onClick={onClick}
       className={`flex h-11 w-11 items-center justify-center transition-all active:scale-90 ${
         rounded ? 'rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.35)]' : ''
-      } ${active ? 'bg-[#f5c20a] text-neutral-900 hover:brightness-90' : 'bg-white text-neutral-600 hover:bg-neutral-100 hover:scale-105'}`}
+      } ${active ? 'bg-[#f5c20a] text-neutral-900 hover:brightness-90' : 'bg-white text-neutral-600 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 hover:scale-105'}`}
     >
       {children}
     </button>
@@ -530,6 +535,30 @@ function UserGlyph() {
     <svg width="15" height="15" viewBox="0 0 24 24" {...stroke}>
       <circle cx="12" cy="8" r="4" />
       <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+    </svg>
+  );
+}
+
+function MoonGlyph() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" {...stroke}>
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+function SunGlyph() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" {...stroke}>
+      <circle cx="12" cy="12" r="4" />
+      <line x1="12" y1="2" x2="12" y2="4" />
+      <line x1="12" y1="20" x2="12" y2="22" />
+      <line x1="4.93" y1="4.93" x2="6.34" y2="6.34" />
+      <line x1="17.66" y1="17.66" x2="19.07" y2="19.07" />
+      <line x1="2" y1="12" x2="4" y2="12" />
+      <line x1="20" y1="12" x2="22" y2="12" />
+      <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
+      <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
     </svg>
   );
 }

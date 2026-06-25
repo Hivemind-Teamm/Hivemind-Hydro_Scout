@@ -4,9 +4,11 @@ import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme-context";
 
 export default function SignUpPage() {
   const { signup, user, loading } = useAuth();
+  const { isDark } = useTheme();
   const router = useRouter();
 
   const [displayName, setDisplayName] = useState("");
@@ -72,15 +74,24 @@ export default function SignUpPage() {
     </svg>
   );
 
+  // Theme-derived colours (inline styles don't get `dark:` utilities). Yellow
+  // brand panel stays; the form panel and controls follow the theme.
+  const panelBg = isDark ? "#0b0f14" : "#ffffff";
+  const textColor = isDark ? "#e5e7eb" : "#000";
+  const inputBg = isDark ? "#1f2937" : "#ffffff";
+  const inputBorder = isDark ? "#374151" : "#ccc";
+  const errorColor = isDark ? "#f87171" : "#c00";
+
   const inputStyle: React.CSSProperties = {
     padding: "13px 20px",
     borderRadius: 24,
-    border: "1.5px solid #ccc",
+    border: `1.5px solid ${inputBorder}`,
     fontSize: 18,
     outline: "none",
     width: "100%",
     boxSizing: "border-box",
-    color: "#000",
+    color: textColor,
+    background: inputBg,
     fontFamily: "inherit",
   };
 
@@ -116,7 +127,7 @@ export default function SignUpPage() {
       <div
         style={{
           flex: 1,
-          background: "#ffffff",
+          background: panelBg,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -126,17 +137,17 @@ export default function SignUpPage() {
         }}
       >
         <div style={{ width: "100%", maxWidth: 420 }}>
-          <h1 style={{ fontSize: 56, fontWeight: 700, margin: 0, lineHeight: 1.1, color: "#000" }}>
+          <h1 style={{ fontSize: 56, fontWeight: 700, margin: 0, lineHeight: 1.1, color: textColor }}>
             Join Us!
           </h1>
-          <p style={{ fontSize: 26, color: "#000", margin: "8px 0 28px" }}>
+          <p style={{ fontSize: 26, color: textColor, margin: "8px 0 28px" }}>
             Create an Account
           </p>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Display Name */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>Display Name</label>
+              <label style={{ fontSize: 18, fontWeight: 500, color: textColor }}>Display Name</label>
               <input
                 type="text"
                 value={displayName}
@@ -149,7 +160,7 @@ export default function SignUpPage() {
 
             {/* Email */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>Email</label>
+              <label style={{ fontSize: 18, fontWeight: 500, color: textColor }}>Email</label>
               <input
                 type="email"
                 value={email}
@@ -162,7 +173,7 @@ export default function SignUpPage() {
 
             {/* Password */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>Password</label>
+              <label style={{ fontSize: 18, fontWeight: 500, color: textColor }}>Password</label>
               <div style={{ position: "relative" }}>
                 <input
                   type={showPassword ? "text" : "password"}
@@ -191,7 +202,7 @@ export default function SignUpPage() {
 
             {/* Confirm Password */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>Confirm Password</label>
+              <label style={{ fontSize: 18, fontWeight: 500, color: textColor }}>Confirm Password</label>
               <div style={{ position: "relative" }}>
                 <input
                   type={showConfirm ? "text" : "password"}
@@ -218,7 +229,7 @@ export default function SignUpPage() {
             </div>
 
             {error && (
-              <p style={{ color: "#c00", fontSize: 16, margin: 0 }}>{error}</p>
+              <p style={{ color: errorColor, fontSize: 16, margin: 0 }}>{error}</p>
             )}
 
             {/* Create Account button */}
@@ -249,9 +260,9 @@ export default function SignUpPage() {
               style={{
                 padding: "15px 20px",
                 borderRadius: 24,
-                border: "1.5px solid #000",
+                border: `1.5px solid ${textColor}`,
                 background: "transparent",
-                color: "#000",
+                color: textColor,
                 fontWeight: 600,
                 fontSize: 20,
                 cursor: "pointer",
@@ -262,7 +273,7 @@ export default function SignUpPage() {
               Back to Login
             </button>
 
-            <p style={{ textAlign: "center", fontSize: 15, color: "#000", margin: "4px 0 0" }}>
+            <p style={{ textAlign: "center", fontSize: 15, color: textColor, margin: "4px 0 0" }}>
               New accounts start as <strong>General User</strong>.
             </p>
           </form>

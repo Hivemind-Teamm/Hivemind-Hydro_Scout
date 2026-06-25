@@ -15,7 +15,7 @@ export default function LogoutButton({ fullWidth = false }: { fullWidth?: boolea
   return (
     <button
       onClick={handleLogout}
-      className={`rounded-xl border border-neutral-200 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 ${fullWidth ? 'w-full' : 'px-3'}`}
+      className={`rounded-xl border border-neutral-200 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800 ${fullWidth ? 'w-full' : 'px-3'}`}
     >
       Log Out
     </button>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { countByStatus, type Hydrant } from '../data/hydrants';
 import { type Report } from '../data/reports';
 import { type Role } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 
 interface Props {
   hydrants: Hydrant[];
@@ -45,6 +46,7 @@ function computeZones(hydrants: Hydrant[]): ZoneData[] {
 function DonutChart({
   operational, reduced, out, total,
 }: { operational: number; reduced: number; out: number; total: number }) {
+  const { isDark } = useTheme();
   const r = 40;
   const cx = 56;
   const cy = 56;
@@ -69,7 +71,7 @@ function DonutChart({
   return (
     <div className="flex items-center gap-5">
       <svg width="112" height="112" viewBox="0 0 112 112" className="shrink-0">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f3f4f6" strokeWidth="15" />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={isDark ? '#374151' : '#f3f4f6'} strokeWidth="15" />
         {arcs.map((arc, i) =>
           arc.dashLen > 0 ? (
             <circle
@@ -83,7 +85,7 @@ function DonutChart({
             />
           ) : null
         )}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="800" fill="#111827">
+        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="800" fill={isDark ? '#f3f4f6' : '#111827'}>
           {operationalPct}%
         </text>
         <text x={cx} y={cy + 11} textAnchor="middle" fontSize="6.5" fontWeight="700" fill="#9ca3af" letterSpacing="0.8">
@@ -99,8 +101,8 @@ function DonutChart({
         ].map(item => (
           <div key={item.label} className="flex items-center gap-2">
             <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: item.color }} />
-            <span className="text-neutral-500">{item.label}</span>
-            <span className="ml-2 font-bold tabular-nums text-neutral-800">{item.value}</span>
+            <span className="text-neutral-500 dark:text-neutral-400">{item.label}</span>
+            <span className="ml-2 font-bold tabular-nums text-neutral-800 dark:text-neutral-100">{item.value}</span>
           </div>
         ))}
       </div>
@@ -110,6 +112,7 @@ function DonutChart({
 
 /* ── Trend chart ──────────────────────────────────────────────────────────── */
 function TrendChart({ currentPct }: { currentPct: number }) {
+  const { isDark } = useTheme();
   const start = Math.max(currentPct - 14, 35);
   const pts = [
     start,
@@ -140,14 +143,14 @@ function TrendChart({ currentPct }: { currentPct: number }) {
         {[25, 50, 75].filter(v => v >= minY && v <= maxY).map(v => (
           <g key={v}>
             <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)}
-              stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 3" />
+              stroke={isDark ? '#374151' : '#e5e7eb'} strokeWidth="1" strokeDasharray="4 3" />
             <text x={PAD.left - 5} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{v}%</text>
           </g>
         ))}
-        <path d={areaD} fill="#91191E" opacity="0.06" />
-        <path d={pathD} fill="none" stroke="#91191E" strokeWidth="2" strokeLinejoin="round" />
+        <path d={areaD} fill="#91191E" opacity={isDark ? 0.18 : 0.06} />
+        <path d={pathD} fill="none" stroke={isDark ? '#e0353b' : '#91191E'} strokeWidth="2" strokeLinejoin="round" />
         {pts.map((v, i) => (
-          <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill="#91191E" stroke="white" strokeWidth="1.5" />
+          <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill={isDark ? '#e0353b' : '#91191E'} stroke={isDark ? '#0b0f14' : 'white'} strokeWidth="1.5" />
         ))}
         {weeks.map((w, i) => (
           <text key={w} x={toX(i)} y={H - PAD.bottom + 13} textAnchor="middle" fontSize="9" fill="#9ca3af" fontWeight="600">
@@ -155,7 +158,7 @@ function TrendChart({ currentPct }: { currentPct: number }) {
           </text>
         ))}
       </svg>
-      <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+      <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
         <span className="mt-0.5 shrink-0">⚠</span>
         <span>Sample data — trend logging begins at deployment. Shown here to demonstrate the chart layout.</span>
       </div>
@@ -173,12 +176,12 @@ const RATING_META = {
 function ZoneRow({ name, total, operational, rating }: ZoneData) {
   const meta = RATING_META[rating];
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 py-2.5 last:border-0">
+    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 py-2.5 last:border-0 dark:border-neutral-800">
       <div className="flex items-center gap-2.5">
         <span className="h-5 w-1 shrink-0 rounded-full" style={{ background: meta.color }} />
         <div>
-          <p className="text-xs font-bold text-neutral-800">{name}</p>
-          <p className="text-[11px] text-neutral-400">{total} hyd · {operational} op</p>
+          <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100">{name}</p>
+          <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{total} hyd · {operational} op</p>
         </div>
       </div>
       <span
@@ -194,10 +197,10 @@ function ZoneRow({ name, total, operational, rating }: ZoneData) {
 /* ── Card wrapper ─────────────────────────────────────────────────────────── */
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col rounded-xl border border-neutral-200 bg-white shadow-sm">
-      <div className="border-b border-neutral-100 px-5 py-3">
-        <p className="text-sm font-bold text-neutral-800">{title}</p>
-        {subtitle && <p className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-400">{subtitle}</p>}
+    <div className="flex flex-col rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="border-b border-neutral-100 px-5 py-3 dark:border-neutral-800">
+        <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">{title}</p>
+        {subtitle && <p className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
       </div>
       <div className="flex-1 px-5 py-4">{children}</div>
     </div>
@@ -207,10 +210,10 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 /* ── Stat box ─────────────────────────────────────────────────────────────── */
 function StatBox({ value, label, sub }: { value: number; label: string; sub?: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 p-3">
-      <span className="text-3xl font-extrabold tabular-nums text-[#91191E]">{value}</span>
-      <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">{label}</span>
-      {sub && <span className="text-[10px] text-neutral-400">{sub}</span>}
+    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+      <span className="text-3xl font-extrabold tabular-nums text-[#91191E] dark:text-[#e0353b]">{value}</span>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">{label}</span>
+      {sub && <span className="text-[10px] text-neutral-400 dark:text-neutral-500">{sub}</span>}
     </div>
   );
 }
@@ -220,9 +223,9 @@ function AdminAction({ icon, label, onClick }: { icon: React.ReactNode; label: s
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-lg border border-neutral-200 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-neutral-700 transition-colors hover:border-[#91191E] hover:bg-red-50 hover:text-[#91191E] active:scale-[0.98]"
+      className="flex w-full items-center gap-3 rounded-lg border border-neutral-200 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-neutral-700 transition-colors hover:border-[#91191E] hover:bg-red-50 hover:text-[#91191E] active:scale-[0.98] dark:border-neutral-700 dark:text-neutral-200 dark:hover:border-[#e0353b] dark:hover:bg-red-950/30 dark:hover:text-[#e0353b]"
     >
-      <span className="shrink-0 text-neutral-400 group-hover:text-[#91191E]">{icon}</span>
+      <span className="shrink-0 text-neutral-400 group-hover:text-[#91191E] dark:text-neutral-500">{icon}</span>
       {label}
     </button>
   );
@@ -276,7 +279,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
       />
 
       {/* Grid body */}
-      <div className="grid flex-1 grid-cols-3 gap-4 overflow-y-auto bg-neutral-100 p-6">
+      <div className="grid flex-1 grid-cols-3 gap-4 overflow-y-auto bg-neutral-100 p-6 dark:bg-neutral-950">
 
         {/* Status Breakdown */}
         <Card title="Status Breakdown" subtitle={`LIVE · ${total} HYDRANTS IN AOR`}>
@@ -309,7 +312,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
               {zones.map(z => <ZoneRow key={z.name} {...z} />)}
             </div>
           ) : (
-            <p className="text-xs text-neutral-400">No zone data available.</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500">No zone data available.</p>
           )}
         </Card>
 
@@ -360,12 +363,12 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" {...s} className="text-neutral-300">
+              <svg width="28" height="28" viewBox="0 0 24 24" {...s} className="text-neutral-300 dark:text-neutral-600">
                 <rect x="3" y="11" width="18" height="11" rx="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              <p className="text-xs font-bold text-neutral-500">Admin access required</p>
-              <p className="text-[11px] text-neutral-400">
+              <p className="text-xs font-bold text-neutral-500 dark:text-neutral-300">Admin access required</p>
+              <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
                 These tools are restricted to system administrators.
               </p>
             </div>

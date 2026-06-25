@@ -109,9 +109,10 @@ interface LeafletMapProps {
   otwRoute?: [number, number][] | null;
   initialCenter?: { lat: number; lng: number };
   initialZoom?: number;
+  isDark?: boolean;
 }
 
-export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom }: LeafletMapProps) {
+export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom, isDark }: LeafletMapProps) {
   return (
     <MapContainer
       center={[initialCenter?.lat ?? DILIMAN_CENTER.lat, initialCenter?.lng ?? DILIMAN_CENTER.lng]}
@@ -119,12 +120,26 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
       zoomControl={false}
       style={{ height: '100%', width: '100%' }}
     >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution="&copy; OpenStreetMap contributors"
-        maxNativeZoom={19}
-        maxZoom={22}
-      />
+      {/* Dark mode uses CARTO's "dark_all" basemap; light mode uses standard OSM.
+          The `key` forces a clean tile-layer remount when the theme flips. */}
+      {isDark ? (
+        <TileLayer
+          key="dark"
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+          subdomains="abcd"
+          maxNativeZoom={20}
+          maxZoom={22}
+        />
+      ) : (
+        <TileLayer
+          key="light"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap contributors"
+          maxNativeZoom={19}
+          maxZoom={22}
+        />
+      )}
 
 
       {otwHydrant && userLocation && (() => {

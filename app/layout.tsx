@@ -3,6 +3,11 @@ import { Geist, Geist_Mono, ABeeZee } from "next/font/google";
 import "./globals.css";
 import 'leaflet/dist/leaflet.css';
 import { AuthProvider } from "@/lib/auth-context";
+import { ThemeProvider } from "@/lib/theme-context";
+
+// Runs before first paint to set the `.dark` class from the stored choice (or
+// the OS preference), preventing a flash of the wrong theme on load/reload.
+const themeScript = `(function(){try{var t=localStorage.getItem('hydroscout_theme');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}var r=document.documentElement;if(t==='dark'){r.classList.add('dark');}r.style.colorScheme=t;}catch(e){}})();`;
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -36,9 +41,15 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${abeezee.variable} antialiased`}
+      suppressHydrationWarning
     >
-     <body className="h-screen w-screen flex flex-col" style={{ margin: 0 }}>
-  <AuthProvider>{children}</AuthProvider>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+     <body className="h-screen w-screen flex flex-col bg-white text-neutral-900 dark:bg-[#0b0f14] dark:text-neutral-100" style={{ margin: 0 }}>
+  <ThemeProvider>
+    <AuthProvider>{children}</AuthProvider>
+  </ThemeProvider>
 </body>
     </html>
   );

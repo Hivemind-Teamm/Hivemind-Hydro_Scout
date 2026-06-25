@@ -545,7 +545,7 @@ export default function HydroScoutDashboard() {
         <div className="pointer-events-none absolute left-1/2 top-[84px] z-[1200] -translate-x-1/2">
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold shadow-md ${
-              error ? 'bg-[#91191E] text-white' : 'bg-white/95 text-neutral-600'
+              error ? 'bg-[#91191E] text-white' : 'bg-white/95 text-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-300'
             }`}
           >
             {error ? `Couldn't load hydrants: ${error}` : 'Loading hydrants…'}
@@ -651,9 +651,9 @@ export default function HydroScoutDashboard() {
         <>
           <div className="pointer-events-auto absolute inset-0 z-[5000] bg-black/35" onClick={() => setDeletedHydrant(null)} />
           <div className="pointer-events-none absolute inset-0 z-[5001] flex items-center justify-center">
-            <div className="pointer-events-auto anim-fade-scale flex w-[320px] flex-col items-center gap-4 rounded-2xl bg-white px-8 py-8 shadow-2xl text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#91191E]/10">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#91191E" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <div className="pointer-events-auto anim-fade-scale flex w-[320px] flex-col items-center gap-4 rounded-2xl bg-white px-8 py-8 shadow-2xl text-center dark:bg-neutral-900">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#91191E]/10 dark:bg-[#e0353b]/15">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-[#91191E] dark:text-[#e0353b]">
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                   <path d="M10 11v6"/><path d="M14 11v6"/>
@@ -661,9 +661,9 @@ export default function HydroScoutDashboard() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-bold text-neutral-800">Hydrant No Longer Exists</p>
-                <p className="mt-1 text-[11px] text-neutral-500 leading-relaxed">
-                  <span className="font-semibold text-neutral-700">{deletedHydrant.id}</span> — {deletedHydrant.name}<br />
+                <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">Hydrant No Longer Exists</p>
+                <p className="mt-1 text-[11px] text-neutral-500 leading-relaxed dark:text-neutral-400">
+                  <span className="font-semibold text-neutral-700 dark:text-neutral-200">{deletedHydrant.id}</span> — {deletedHydrant.name}<br />
                   has been removed by an administrator.
                 </p>
               </div>

@@ -2,9 +2,20 @@
 @import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
 @import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
 
+/* Class-based dark mode: `dark:` utilities apply when a `.dark` ancestor is
+   present (we toggle `.dark` on <html>). This replaces Tailwind's default
+   prefers-color-scheme behaviour so the in-app toggle is authoritative. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+}
+
+/* Dark theme tokens — applied whenever <html> carries the `.dark` class. */
+.dark {
+  --background: #0b0f14;
+  --foreground: #e5e7eb;
 }
 
 @theme inline {
@@ -14,17 +25,16 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-abeezee), Arial, sans-serif;
+}
+
+/* Smooth the transition when toggling themes (chrome only — not the map). */
+.theme-transition,
+.theme-transition * {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 /* ── Panel / modal entrance animations ── */
@@ -175,3 +185,18 @@ body {
   transition: background 0.15s;
 }
 .admin-btn-ghost:hover { background: #f3f4f6; }
+
+/* ── Dark-mode overrides for the admin primitives ── */
+.dark .admin-input {
+  border-color: #374151;
+  background: #1f2937;
+  color: #e5e7eb;
+}
+.dark .admin-input::placeholder { color: #6b7280; }
+.dark .admin-input:focus { border-color: #d4555a; background: #111827; }
+
+.dark .admin-btn-ghost {
+  border-color: #374151;
+  color: #d1d5db;
+}
+.dark .admin-btn-ghost:hover { background: #1f2937; }
