@@ -481,7 +481,10 @@ export default function HydroScoutDashboard() {
           className={`pointer-events-none absolute inset-0 z-[9999] flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm transition-opacity duration-500 ${splashFading ? 'opacity-0' : 'opacity-100'}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/Hydro-Scout%20Logo.png" alt="" className="mb-5 h-20 w-20 object-contain opacity-90" style={{ animation: 'bounce-dot 1.8s ease-in-out infinite' }} />
+          <img src="/Hydro-Scout%20Logo.png" alt="" className="mb-2 h-20 w-20 object-contain opacity-90" style={{ animation: 'bounce-dot 1.8s ease-in-out infinite' }} />
+          <span className="mb-5 text-4xl font-extrabold tracking-tight text-white">
+            Hydro-<span className="text-[#e0353b]">Scout</span>
+          </span>
           <div className="flex gap-2">
             <span className="bounce-dot-1 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
             <span className="bounce-dot-2 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
