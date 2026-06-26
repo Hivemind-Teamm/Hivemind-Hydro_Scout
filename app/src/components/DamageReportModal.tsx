@@ -69,8 +69,8 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
 
   return (
     // Backdrop
-    <div className="anim-fade pointer-events-auto absolute inset-0 z-[4000] flex items-center justify-center bg-black/40">
-      <div className="anim-fade-scale relative flex h-[90vh] max-h-[600px] w-[90vw] max-w-[720px] overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="anim-fade pointer-events-auto absolute inset-0 z-[4000] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="anim-fade-scale relative flex h-[90vh] max-h-[600px] w-[90vw] max-w-[720px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header ── */}
         <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-[#91191E] px-5 py-3">
@@ -89,36 +89,36 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
         <div className="mt-[46px] flex flex-1 overflow-hidden">
 
           {/* Left panel */}
-          <div className="flex w-[220px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-neutral-200 bg-neutral-50 p-4">
+          <div className="flex w-[220px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-800">
             {/* Mini map */}
-            <div className="h-[140px] overflow-hidden rounded-lg border border-neutral-200">
+            <div className="h-[140px] overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
               <MiniMap lat={hydrant.lat} lng={hydrant.lng} />
             </div>
 
             {/* Hydrant summary */}
             <div>
-              <p className="text-sm font-bold text-neutral-800">{hydrant.name}</p>
-              <p className="text-[11px] text-neutral-400">{hydrant.id} · {hydrant.id}</p>
+              <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">{hydrant.name}</p>
+              <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{hydrant.id} · {hydrant.id}</p>
               <div className="mt-2 grid grid-cols-3 gap-1 text-[10px]">
                 <div>
-                  <p className="font-semibold uppercase tracking-wide text-neutral-400">Status</p>
+                  <p className="font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Status</p>
                   <p className="font-bold" style={{ color: meta.color }}>{meta.legendLabel}</p>
                 </div>
                 <div>
-                  <p className="font-semibold uppercase tracking-wide text-neutral-400">Pressure</p>
+                  <p className="font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Pressure</p>
                   <p className="font-bold" style={{ color: PRESSURE_COLOR[hydrant.pressure] }}>{hydrant.pressure}</p>
                 </div>
                 <div>
-                  <p className="font-semibold uppercase tracking-wide text-neutral-400">Last Insp.</p>
-                  <p className="font-bold text-neutral-700">{lastInspection}</p>
+                  <p className="font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Last Insp.</p>
+                  <p className="font-bold text-neutral-700 dark:text-neutral-200">{lastInspection}</p>
                 </div>
               </div>
             </div>
 
             {/* Guidelines */}
-            <div className="rounded-lg border border-neutral-200 bg-white p-3">
-              <p className="mb-1 text-[10px] font-bold text-[#91191E]">Reporting Guidelines</p>
-              <p className="text-[11px] leading-relaxed text-neutral-500">
+            <div className="rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
+              <p className="mb-1 text-[10px] font-bold text-[#91191E] dark:text-[#e0353b]">Reporting Guidelines</p>
+              <p className="text-[11px] leading-relaxed text-neutral-500 dark:text-neutral-400">
                 Submit a damage report only after on-site verification. Include clear photos of the affected hydrant component. Reports are routed to the Station Head for review and may be forwarded to the concessionaire for resolution.
               </p>
             </div>
@@ -128,27 +128,27 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
           <div className="flex flex-1 flex-col overflow-y-auto px-5 py-4">
 
             {/* Hydrant Information */}
-            <p className="mb-2 text-xs font-bold text-[#91191E]">Hydrant Information</p>
+            <p className="mb-2 text-xs font-bold text-[#91191E] dark:text-[#e0353b]">Hydrant Information</p>
             <div className="mb-4 grid grid-cols-2 gap-3">
               <ReadonlyField label="Hydrant ID" value={hydrant.id} />
               <ReadonlyField label="Location" value={hydrant.name} />
             </div>
 
             {/* Report Details */}
-            <p className="mb-2 text-xs font-bold text-[#91191E]">Report Details</p>
+            <p className="mb-2 text-xs font-bold text-[#91191E] dark:text-[#e0353b]">Report Details</p>
             <div className="mb-3 grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Date Reported</span>
-                <div className="flex items-center rounded-lg border border-neutral-200 px-3 py-2">
-                  <span className="flex-1 text-xs text-neutral-700">{today}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Date Reported</span>
+                <div className="flex items-center rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-700">
+                  <span className="flex-1 text-xs text-neutral-700 dark:text-neutral-200">{today}</span>
                   <CalendarIcon />
                 </div>
               </label>
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Reported By</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Reported By</span>
                 <button
                   onClick={onOpenAccount}
-                  className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-xs text-left font-semibold text-[#91191E] hover:underline"
+                  className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-xs text-left font-semibold text-[#91191E] hover:underline dark:border-neutral-700 dark:bg-neutral-800 dark:text-[#e0353b]"
                 >
                   {displayName}
                 </button>
@@ -156,54 +156,54 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
             </div>
 
             <label className="mb-3 flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Damage Type</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Damage Type</span>
               <select
                 value={damageType}
                 onChange={(e) => setDamageType(e.target.value)}
-                className="rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-700 focus:border-[#91191E] focus:outline-none"
+                className="rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-700 focus:border-[#91191E] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
               >
                 {DAMAGE_TYPES.map((t) => <option key={t}>{t}</option>)}
               </select>
             </label>
 
             <label className="mb-4 flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Description</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Description</span>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                className="resize-none rounded-lg border border-neutral-200 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none"
+                className="resize-none rounded-lg border border-neutral-200 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
                 placeholder="Describe the damage observed..."
               />
             </label>
 
             {/* Photo Evidence */}
-            <p className="mb-2 text-xs font-bold text-[#91191E]">Photo Evidence</p>
+            <p className="mb-2 text-xs font-bold text-[#91191E] dark:text-[#e0353b]">Photo Evidence</p>
             <button
               onClick={() => setPhotos((p) => [...p, ''])}
-              className="mb-3 flex h-20 w-full items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100"
+              className="mb-3 flex h-20 w-full items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700"
             >
               +
             </button>
             {photos.length > 0 && (
               <div className="mb-4 flex flex-wrap gap-2">
                 {photos.map((_, i) => (
-                  <div key={i} className="relative flex h-14 w-14 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50">
+                  <div key={i} className="relative flex h-14 w-14 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-800">
                     <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#91191E]" />
-                    <span className="text-[10px] text-neutral-400">Photo</span>
+                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500">Photo</span>
                   </div>
                 ))}
               </div>
             )}
 
             {/* Footer */}
-            <div className="mt-auto border-t border-neutral-200 pt-3">
-              {error && <p className="mb-2 text-right text-[11px] font-medium text-[#91191E]">{error}</p>}
+            <div className="mt-auto border-t border-neutral-200 pt-3 dark:border-neutral-700">
+              {error && <p className="mb-2 text-right text-[11px] font-medium text-[#91191E] dark:text-[#e0353b]">{error}</p>}
               <div className="flex justify-end gap-3">
                 <button
                   onClick={onClose}
                   disabled={saving}
-                  className="rounded-lg border border-neutral-200 px-6 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+                  className="rounded-lg border border-neutral-200 px-6 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
                   Cancel
                 </button>
@@ -226,8 +226,8 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
 function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>
-      <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{label}</span>
+      <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400">
         {value}
       </div>
     </div>

@@ -3,7 +3,8 @@
 import { useMemo } from 'react';
 import { countByStatus, type Hydrant } from '../data/hydrants';
 import { type Report } from '../data/reports';
-import { type Role } from '@/lib/auth-context';
+import { useAuth, type Role } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 
 interface Props {
   hydrants: Hydrant[];
@@ -40,10 +41,44 @@ function computeZones(hydrants: Hydrant[]): ZoneData[] {
     .slice(0, 4);
 }
 
+/* ── Trend computation ────────────────────────────────────────────────────── */
+function computeTrendData(hydrants: Hydrant[]): { points: number[]; labels: string[] } {
+  const now = new Date();
+  const weeks = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - (4 - i) * 7);
+    return d;
+  });
+
+  const points = weeks.map(weekEnd => {
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+    let operational = 0;
+    let counted = 0;
+    for (const h of hydrants) {
+      counted++;
+      const before = h.register.filter(r => r.date && r.date <= weekEndStr);
+      if (before.length === 0) {
+        if (h.status === 'operational') operational++;
+      } else {
+        const latest = before.reduce((a, b) => (a.date > b.date ? a : b));
+        if (latest.statusColor === '#2fbf4f') operational++;
+      }
+    }
+    return counted > 0 ? Math.round((operational / counted) * 100) : 0;
+  });
+
+  const labels = weeks.map(d =>
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  );
+
+  return { points, labels };
+}
+
 /* ── Donut chart ──────────────────────────────────────────────────────────── */
 function DonutChart({
   operational, reduced, out, total,
 }: { operational: number; reduced: number; out: number; total: number }) {
+  const { isDark } = useTheme();
   const r = 40;
   const cx = 56;
   const cy = 56;
@@ -68,7 +103,7 @@ function DonutChart({
   return (
     <div className="flex items-center gap-5">
       <svg width="112" height="112" viewBox="0 0 112 112" className="shrink-0">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f3f4f6" strokeWidth="15" />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={isDark ? '#374151' : '#f3f4f6'} strokeWidth="15" />
         {arcs.map((arc, i) =>
           arc.dashLen > 0 ? (
             <circle
@@ -82,7 +117,7 @@ function DonutChart({
             />
           ) : null
         )}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="800" fill="#111827">
+        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="800" fill={isDark ? '#f3f4f6' : '#111827'}>
           {operationalPct}%
         </text>
         <text x={cx} y={cy + 11} textAnchor="middle" fontSize="6.5" fontWeight="700" fill="#9ca3af" letterSpacing="0.8">
@@ -98,8 +133,8 @@ function DonutChart({
         ].map(item => (
           <div key={item.label} className="flex items-center gap-2">
             <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: item.color }} />
-            <span className="text-neutral-500">{item.label}</span>
-            <span className="ml-2 font-bold tabular-nums text-neutral-800">{item.value}</span>
+            <span className="text-neutral-500 dark:text-neutral-400">{item.label}</span>
+            <span className="ml-2 font-bold tabular-nums text-neutral-800 dark:text-neutral-100">{item.value}</span>
           </div>
         ))}
       </div>
@@ -108,57 +143,44 @@ function DonutChart({
 }
 
 /* ── Trend chart ──────────────────────────────────────────────────────────── */
-function TrendChart({ currentPct }: { currentPct: number }) {
-  const start = Math.max(currentPct - 14, 35);
-  const pts = [
-    start,
-    start + (currentPct - start) * 0.18,
-    start + (currentPct - start) * 0.44,
-    start + (currentPct - start) * 0.72,
-    currentPct,
-  ];
+function TrendChart({ points, labels }: { points: number[]; labels: string[] }) {
+  const { isDark } = useTheme();
 
   const W = 460;
   const H = 120;
   const PAD = { top: 16, right: 12, bottom: 28, left: 36 };
   const cW = W - PAD.left - PAD.right;
   const cH = H - PAD.top - PAD.bottom;
-  const minY = Math.floor(Math.min(...pts) / 10) * 10 - 5;
-  const maxY = Math.ceil(Math.max(...pts) / 10) * 10 + 5;
+  const minY = Math.max(0, Math.floor(Math.min(...points) / 10) * 10 - 5);
+  const maxY = Math.min(100, Math.ceil(Math.max(...points) / 10) * 10 + 5);
+  const range = maxY - minY || 1;
 
-  const toX = (i: number) => PAD.left + (i / (pts.length - 1)) * cW;
-  const toY = (v: number) => PAD.top + cH - ((v - minY) / (maxY - minY)) * cH;
+  const toX = (i: number) => PAD.left + (i / (points.length - 1)) * cW;
+  const toY = (v: number) => PAD.top + cH - ((v - minY) / range) * cH;
 
-  const pathD = pts.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(v)}`).join(' ');
-  const areaD = `${pathD} L ${toX(pts.length - 1)} ${H - PAD.bottom} L ${toX(0)} ${H - PAD.bottom} Z`;
-  const weeks = ['WK1', 'WK2', 'WK3', 'WK4', 'WK5'];
+  const pathD = points.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(v)}`).join(' ');
+  const areaD = `${pathD} L ${toX(points.length - 1)} ${H - PAD.bottom} L ${toX(0)} ${H - PAD.bottom} Z`;
 
   return (
-    <div>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
-        {[25, 50, 75].filter(v => v >= minY && v <= maxY).map(v => (
-          <g key={v}>
-            <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)}
-              stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 3" />
-            <text x={PAD.left - 5} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{v}%</text>
-          </g>
-        ))}
-        <path d={areaD} fill="#91191E" opacity="0.06" />
-        <path d={pathD} fill="none" stroke="#91191E" strokeWidth="2" strokeLinejoin="round" />
-        {pts.map((v, i) => (
-          <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill="#91191E" stroke="white" strokeWidth="1.5" />
-        ))}
-        {weeks.map((w, i) => (
-          <text key={w} x={toX(i)} y={H - PAD.bottom + 13} textAnchor="middle" fontSize="9" fill="#9ca3af" fontWeight="600">
-            {w}
-          </text>
-        ))}
-      </svg>
-      <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
-        <span className="mt-0.5 shrink-0">⚠</span>
-        <span>Sample data — trend logging begins at deployment. Shown here to demonstrate the chart layout.</span>
-      </div>
-    </div>
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+      {[25, 50, 75].filter(v => v >= minY && v <= maxY).map(v => (
+        <g key={v}>
+          <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)}
+            stroke={isDark ? '#374151' : '#e5e7eb'} strokeWidth="1" strokeDasharray="4 3" />
+          <text x={PAD.left - 5} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{v}%</text>
+        </g>
+      ))}
+      <path d={areaD} fill="#91191E" opacity={isDark ? 0.18 : 0.06} />
+      <path d={pathD} fill="none" stroke={isDark ? '#e0353b' : '#91191E'} strokeWidth="2" strokeLinejoin="round" />
+      {points.map((v, i) => (
+        <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill={isDark ? '#e0353b' : '#91191E'} stroke={isDark ? '#0b0f14' : 'white'} strokeWidth="1.5" />
+      ))}
+      {labels.map((w, i) => (
+        <text key={w} x={toX(i)} y={H - PAD.bottom + 13} textAnchor="middle" fontSize="9" fill="#9ca3af" fontWeight="600">
+          {w}
+        </text>
+      ))}
+    </svg>
   );
 }
 
@@ -172,12 +194,12 @@ const RATING_META = {
 function ZoneRow({ name, total, operational, rating }: ZoneData) {
   const meta = RATING_META[rating];
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 py-2.5 last:border-0">
+    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 py-2.5 last:border-0 dark:border-neutral-800">
       <div className="flex items-center gap-2.5">
         <span className="h-5 w-1 shrink-0 rounded-full" style={{ background: meta.color }} />
         <div>
-          <p className="text-xs font-bold text-neutral-800">{name}</p>
-          <p className="text-[11px] text-neutral-400">{total} hyd · {operational} op</p>
+          <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100">{name}</p>
+          <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{total} hyd · {operational} op</p>
         </div>
       </div>
       <span
@@ -193,10 +215,10 @@ function ZoneRow({ name, total, operational, rating }: ZoneData) {
 /* ── Card wrapper ─────────────────────────────────────────────────────────── */
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col rounded-xl border border-neutral-200 bg-white shadow-sm">
-      <div className="border-b border-neutral-100 px-5 py-3">
-        <p className="text-sm font-bold text-neutral-800">{title}</p>
-        {subtitle && <p className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-400">{subtitle}</p>}
+    <div className="flex flex-col rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="border-b border-neutral-100 px-5 py-3 dark:border-neutral-800">
+        <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">{title}</p>
+        {subtitle && <p className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
       </div>
       <div className="flex-1 px-5 py-4">{children}</div>
     </div>
@@ -206,36 +228,29 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 /* ── Stat box ─────────────────────────────────────────────────────────────── */
 function StatBox({ value, label, sub }: { value: number; label: string; sub?: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 p-3">
-      <span className="text-3xl font-extrabold tabular-nums text-[#91191E]">{value}</span>
-      <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">{label}</span>
-      {sub && <span className="text-[10px] text-neutral-400">{sub}</span>}
+    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+      <span className="text-3xl font-extrabold tabular-nums text-[#91191E] dark:text-[#e0353b]">{value}</span>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">{label}</span>
+      {sub && <span className="text-[10px] text-neutral-400 dark:text-neutral-500">{sub}</span>}
     </div>
-  );
-}
-
-/* ── Admin action button ──────────────────────────────────────────────────── */
-function AdminAction({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <button className="flex w-full items-center gap-3 rounded-lg border border-neutral-200 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-neutral-700 transition-colors hover:border-[#91191E] hover:bg-red-50 hover:text-[#91191E]">
-      <span className="shrink-0 text-neutral-400 group-hover:text-[#91191E]">{icon}</span>
-      {label}
-    </button>
   );
 }
 
 /* ── Main component ───────────────────────────────────────────────────────── */
 export default function OperationsDashboard({ hydrants, reports, role, onClose }: Props) {
+  const { user } = useAuth();
   const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
   const total = hydrants.length;
-  const operationalPct = total > 0 ? Math.round((counts.operational / total) * 100) : 0;
   const openReports  = reports.filter(r => r.status === 'pending').length;
   const obstructed   = hydrants.filter(h => h.hazard && !['None', '—', '', 'none'].includes(h.hazard)).length;
   const verified     = hydrants.filter(h => h.register.length > 0).length;
 
   const zones   = useMemo(() => computeZones(hydrants), [hydrants]);
-  const isAdmin = role === 'admin';
+  const trend   = useMemo(() => computeTrendData(hydrants), [hydrants]);
   const roleLabel = role === 'admin' ? 'Admin' : 'Head';
+
+  const displayName = user?.displayName
+    || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User');
 
   const s = {
     fill: 'none', stroke: 'currentColor',
@@ -246,23 +261,16 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
 
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-[6000] flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between bg-[#91191E] px-8 py-4 shadow-lg">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-red-300">
-            QC Central Fire District · {roleLabel}
-          </p>
-          <h1 className="text-xl font-extrabold uppercase tracking-wide text-white">
-            Operations Dashboard
-          </h1>
+      {/* Top header */}
+      <header className="flex shrink-0 items-center justify-between bg-white px-6 py-3 shadow-sm dark:bg-neutral-900">
+        <Logo />
+        <div className="flex items-center gap-3">
+          <span className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Welcome, {displayName}</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#91191E] text-white ring-2 ring-[#FED42E]">
+            <UserGlyph />
+          </span>
         </div>
-        <button
-          onClick={onClose}
-          className="flex items-center gap-2 rounded-lg border border-red-700 bg-red-900/40 px-4 py-2 text-xs font-bold text-red-200 transition-colors hover:bg-red-800 hover:text-white"
-        >
-          ← Back to Map
-        </button>
-      </div>
+      </header>
 
       {/* Brand bar */}
       <div
@@ -270,8 +278,33 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
         style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #91191E 70px, #91191E 140px)' }}
       />
 
+      {/* Sub-header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            title="Back to map"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-[#91191E] dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
+          >
+            <BackGlyph /> Map
+          </button>
+          <span className="h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <h1 className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">Operations Dashboard</h1>
+          <span className="flex items-center gap-1.5 rounded-full bg-[#91191E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+            <LockGlyph /> {roleLabel}
+          </span>
+        </div>
+        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+          <span className="font-bold text-neutral-600 dark:text-neutral-300">{total}</span> Hydrants
+          <span className="mx-1.5">·</span>
+          <span className="font-bold text-neutral-600 dark:text-neutral-300">{openReports}</span> Open Reports
+          <span className="mx-1.5">·</span>
+          <span className="font-bold text-neutral-600 dark:text-neutral-300">{obstructed}</span> Obstructed
+        </p>
+      </div>
+
       {/* Grid body */}
-      <div className="grid flex-1 grid-cols-3 gap-4 overflow-y-auto bg-neutral-100 p-6">
+      <div className="grid flex-1 grid-cols-3 gap-4 overflow-y-auto bg-neutral-100 p-6 dark:bg-neutral-950">
 
         {/* Status Breakdown */}
         <Card title="Status Breakdown" subtitle={`LIVE · ${total} HYDRANTS IN AOR`}>
@@ -304,66 +337,65 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
               {zones.map(z => <ZoneRow key={z.name} {...z} />)}
             </div>
           ) : (
-            <p className="text-xs text-neutral-400">No zone data available.</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500">No zone data available.</p>
           )}
         </Card>
 
         {/* Condition Trend */}
-        <div className="col-span-2">
+        <div className="col-span-3">
           <Card title="Condition Trend" subtitle="OPERATIONAL % OVER TIME">
-            <TrendChart currentPct={operationalPct} />
+            <TrendChart points={trend.points} labels={trend.labels} />
           </Card>
         </div>
-
-        {/* Administration */}
-        <Card title="Administration" subtitle="ADMIN ONLY">
-          {isAdmin ? (
-            <div className="flex flex-col gap-2">
-              <AdminAction
-                label="Manage Users & Roles"
-                icon={
-                  <svg width="14" height="14" viewBox="0 0 24 24" {...s}>
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                }
-              />
-              <AdminAction
-                label="Bulk-Import Hydrants · CSV"
-                icon={
-                  <svg width="14" height="14" viewBox="0 0 24 24" {...s}>
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                }
-              />
-              <AdminAction
-                label="Data Quality & Validation"
-                icon={
-                  <svg width="14" height="14" viewBox="0 0 24 24" {...s}>
-                    <polyline points="9 11 12 14 22 4" />
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                  </svg>
-                }
-              />
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" {...s} className="text-neutral-300">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              <p className="text-xs font-bold text-neutral-500">Admin access required</p>
-              <p className="text-[11px] text-neutral-400">
-                These tools are restricted to system administrators.
-              </p>
-            </div>
-          )}
-        </Card>
       </div>
     </div>
+  );
+}
+
+/* ── Local helpers ────────────────────────────────────────────────────────── */
+
+const stroke = {
+  fill: 'none', stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
+
+function Logo() {
+  return (
+    <div className="flex items-center gap-1">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/Hydro-Scout%20Logo.png" alt="Hydro-Scout" width={44} height={44} className="h-11 w-11 object-contain" />
+      <span className="text-xl font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">
+        Hydro-<span className="text-[#e0353b]">Scout</span>
+      </span>
+    </div>
+  );
+}
+
+function UserGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" {...stroke}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+    </svg>
+  );
+}
+
+function BackGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" {...stroke}>
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
+
+function LockGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" {...stroke}>
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
   );
 }

@@ -12,7 +12,7 @@ export default function LocationPreviewPanel({ lat, lng, address, onPinHydrant, 
   const isLoading = address === 'Loading…';
 
   return (
-    <div className="anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] w-72 overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] w-72 overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
       {/* Header */}
       <div className="flex items-center gap-2 bg-[#91191E] px-4 py-3">
         <PinIcon />
@@ -31,19 +31,19 @@ export default function LocationPreviewPanel({ lat, lng, address, onPinHydrant, 
           <CoordField label="Latitude"  value={lat.toFixed(6)} />
           <CoordField label="Longitude" value={lng.toFixed(6)} />
         </div>
-        <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2">
-          <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Address</p>
-          <p className={`text-xs leading-snug ${isLoading ? 'italic text-neutral-400' : 'text-neutral-700'}`}>
+        <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-800">
+          <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Address</p>
+          <p className={`text-xs leading-snug ${isLoading ? 'italic text-neutral-400 dark:text-neutral-500' : 'text-neutral-700 dark:text-neutral-200'}`}>
             {address}
           </p>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="flex gap-2 border-t border-neutral-100 px-4 py-3">
+      <div className="flex gap-2 border-t border-neutral-100 px-4 py-3 dark:border-neutral-700">
         <button
           onClick={onDismiss}
-          className="flex-1 rounded-lg border border-neutral-200 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-50"
+          className="flex-1 rounded-lg border border-neutral-200 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           Cancel
         </button>
@@ -60,9 +60,9 @@ export default function LocationPreviewPanel({ lat, lng, address, onPinHydrant, 
 
 function CoordField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2">
-      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
-      <p className="font-mono text-xs font-bold text-neutral-700">{value}</p>
+    <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-800">
+      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{label}</p>
+      <p className="font-mono text-xs font-bold text-neutral-700 dark:text-neutral-200">{value}</p>
     </div>
   );
 }

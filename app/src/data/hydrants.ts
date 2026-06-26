@@ -48,6 +48,8 @@ export interface Hydrant {
   distanceMin: number;
   notes: HydrantNote[];
   register: HydrantRegisterEntry[];
+  // Cloudinary secure URLs of field photos, oldest → newest.
+  photos: string[];
 }
 
 export interface StatusMeta {
@@ -186,6 +188,10 @@ export function hydrantFromDoc(id: string, d: DocumentData): Hydrant {
 
   const hazards: string[] = Array.isArray(d.hazards) ? d.hazards : [];
 
+  const photos: string[] = Array.isArray(d.photos)
+    ? d.photos.filter((p): p is string => typeof p === 'string')
+    : [];
+
   // Notes: prefer a structured fieldNotes array; otherwise synthesize one
   // from the single seeded `notes` string + inspector.
   let notes: HydrantNote[] = [];
@@ -227,19 +233,20 @@ export function hydrantFromDoc(id: string, d: DocumentData): Hydrant {
     lng,
     status,
     pressure: toPressure(d.pressureStatus),
-    key: d.keyWrenchNeeded ? 'Required' : 'None',
+    key: d.keyWrench && d.keyWrench !== 'None' ? 'Required' : (d.keyWrenchNeeded ? 'Required' : 'None'),
     type: d.sourceType ?? 'Fire Hydrant',
     mounting: d.mounting ?? 'Above ground',
-    keyWrench: d.keyWrenchNeeded ? 'Required' : 'Not required',
+    keyWrench: d.keyWrench ?? (d.keyWrenchNeeded ? 'Required' : 'None'),
     area: deriveArea(d.address),
     outlets: typeof d.outletCount === 'number' ? d.outletCount : 0,
     color: d.hydrantColor ?? 'Unspecified',
     concessionaire: d.ownershipJurisdiction ?? 'Unspecified',
-    landmark: (typeof d.address === 'string' && d.address) || d.nearestLandmark || '—',
+    landmark: d.nearestLandmark || (typeof d.address === 'string' && d.address) || '—',
     hazard: hazards.length ? hazards.join(', ') : 'None',
     distanceM: 0,
     distanceMin: 0,
     notes,
     register,
+    photos,
   };
 }

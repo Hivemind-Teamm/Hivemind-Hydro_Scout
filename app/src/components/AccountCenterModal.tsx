@@ -55,7 +55,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
 
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-[5000] flex items-center justify-center bg-black/40">
-      <div className="anim-fade-scale relative flex h-[95vh] w-[95vw] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+      <div className="anim-fade-scale relative flex h-[95vh] w-[95vw] flex-col overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
 
         {/* Close */}
         <button
@@ -88,7 +88,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
           {/* Left — Account info */}
           <div className="flex flex-col gap-4">
             <section>
-              <p className="mb-4 text-sm font-bold text-[#91191E]">Account Information</p>
+              <p className="mb-4 text-sm font-bold text-[#91191E] dark:text-[#e0353b]">Account Information</p>
               <div className="grid grid-cols-2 gap-4">
                 <ReadonlyField label="Your ID"       value={user?.uid?.slice(0, 10) ?? '—'} />
                 <ReadonlyField label="Personal Name" value={displayName} />
@@ -98,7 +98,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             </section>
 
             <section>
-              <p className="mb-4 text-sm font-bold text-[#91191E]">Account Details</p>
+              <p className="mb-4 text-sm font-bold text-[#91191E] dark:text-[#e0353b]">Account Details</p>
               <div className="grid grid-cols-2 gap-4">
                 <ReadonlyField label="Member Since"    value={user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'} />
                 <ReadonlyField label="Last Login"      value={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleDateString() : '—'} />
@@ -109,13 +109,13 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
 
             {/* Upgrade banner — show for general users */}
             {isGeneral && (
-              <div className="flex items-center gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+              <div className="flex items-center gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 dark:border-red-500/30 dark:bg-red-950/30">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#91191E] text-white">
                   <HydrantGlyph size={22} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-[#91191E]">Become an Authorized User</p>
-                  <p className="text-xs leading-relaxed text-neutral-500">
+                  <p className="text-sm font-bold text-[#91191E] dark:text-[#e0353b]">Become an Authorized User</p>
+                  <p className="text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
                     Sign up to gain access to features such as hydrant status management, signed inspection notes, and damage reporting.
                   </p>
                 </div>
@@ -130,9 +130,9 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
 
           {/* Right — Access & Security */}
           <div className="flex flex-col gap-4">
-            <p className="text-sm font-bold text-[#91191E]">Access &amp; Security</p>
+            <p className="text-sm font-bold text-[#91191E] dark:text-[#e0353b]">Access &amp; Security</p>
 
-            <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 overflow-hidden">
+            <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 overflow-hidden dark:divide-neutral-800 dark:border-neutral-700">
               <AccessRow label="Current Role"      value={roleLabel}          highlight="badge" />
               <AccessRow label="Map Access"        value={access.mapAccess}   highlight={green(access.mapAccess) ? 'green' : 'gray'} />
               <AccessRow label="Routing &amp; OTW" value={access.routing}     highlight={green(access.routing) ? 'green' : 'gray'} />
@@ -143,7 +143,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             <div className="mt-auto flex flex-col gap-3 pt-2">
               {isSignedIn ? (
                 <>
-                  <button className="w-full rounded-xl border border-neutral-200 py-3 text-base font-semibold text-neutral-700 hover:bg-neutral-50">
+                  <button className="w-full rounded-xl border border-neutral-200 py-3 text-base font-semibold text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800">
                     Change Password
                   </button>
                   <div className="w-full">
@@ -163,7 +163,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
                   </button>
                   <button
                     onClick={handleSignUp}
-                    className="w-full rounded-xl border border-neutral-200 py-3 text-base font-semibold text-neutral-700 hover:bg-neutral-50"
+                    className="w-full rounded-xl border border-neutral-200 py-3 text-base font-semibold text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
                   >
                     Create Account
                   </button>
@@ -180,8 +180,8 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
 function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-semibold text-neutral-400">{label}</span>
-      <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-2.5 text-sm text-neutral-500 truncate">
+      <span className="text-xs font-semibold text-neutral-400 dark:text-neutral-500">{label}</span>
+      <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-2.5 text-sm text-neutral-500 truncate dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400">
         {value}
       </div>
     </div>
@@ -191,11 +191,11 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
 function AccessRow({ label, value, highlight }: { label: string; value: string; highlight: 'badge' | 'green' | 'gray' }) {
   return (
     <div className="flex items-center justify-between px-5 py-3.5">
-      <span className="text-sm text-neutral-500" dangerouslySetInnerHTML={{ __html: label }} />
+      <span className="text-sm text-neutral-500 dark:text-neutral-400" dangerouslySetInnerHTML={{ __html: label }} />
       {highlight === 'badge' ? (
         <span className="rounded-full bg-[#FED42E] px-3 py-1 text-xs font-bold text-neutral-800">{value}</span>
       ) : (
-        <span className={`text-sm font-bold ${highlight === 'green' ? 'text-[#2fbf4f]' : 'text-neutral-400'}`}>{value}</span>
+        <span className={`text-sm font-bold ${highlight === 'green' ? 'text-[#2fbf4f]' : 'text-neutral-400 dark:text-neutral-500'}`}>{value}</span>
       )}
     </div>
   );

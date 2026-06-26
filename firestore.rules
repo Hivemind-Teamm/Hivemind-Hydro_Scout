@@ -49,18 +49,18 @@ service cloud.firestore {
       // Public landing page: anyone can VIEW hydrants without signing in.
       allow read: if true;
 
-      allow create: if isAuthorized() || isAdmin();
+      allow create: if isAuthorized() || isHead() || isAdmin();
 
       allow update: if isAdmin()
         || (isAuthorized() && onlyChangedFields([
               'status', 'operationalStatus', 'notes', 'fieldNotes', 'register',
-              'photoURL', 'photoUrl', 'hazardFlags', 'hazards',
+              'photoURL', 'photoUrl', 'photos', 'hazardFlags', 'hazards',
               'pressureStatus', 'waterCleanliness',
               'updatedBy', 'updatedAt'
             ]))
         || (isHead() && onlyChangedFields([
               'operationalStatus', 'pressureStatus', 'waterCleanliness',
-              'hazards', 'notes', 'fieldNotes', 'register',
+              'hazards', 'photos', 'notes', 'fieldNotes', 'register',
               'lastMaintenanceDate', 'nextMaintenanceDate',
               'updatedBy', 'updatedAt'
             ]));
@@ -81,6 +81,14 @@ service cloud.firestore {
     // by the nested rule above — they need this recursive-wildcard match.
     match /{path=**}/reports/{reportId} {
       allow read: if true;
+    }
+
+    // ---------- meta / counters ----------
+    // The hydrant ID counter (HYD-001, HYD-002, …) lives here.
+    // Authorized, head, and admin may read+write so createHydrant() can
+    // atomically increment the counter inside a transaction.
+    match /meta/{docId} {
+      allow read, write: if isAuthorized() || isHead() || isAdmin();
     }
 
     // ---------- default deny ----------
