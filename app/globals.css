@@ -245,6 +245,9 @@ body {
 .scroll-fade.is-scrolling::-webkit-scrollbar-thumb        { background-color: rgba(100,100,100,0.35); }
 .dark .scroll-fade.is-scrolling::-webkit-scrollbar-thumb  { background-color: rgba(255,255,255,0.2);  }
 
+/* ── Marker cluster — white number in dark mode ── */
+.dark .marker-cluster span { color: #ffffff; }
+
 /* ── Loading splash bounce dots ── */
 @keyframes bounce-dot {
   0%, 80%, 100% { transform: translateY(0); }

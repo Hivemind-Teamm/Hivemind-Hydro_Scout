@@ -478,7 +478,7 @@ export default function HydroScoutDashboard() {
       {/* ── Initial loading splash ── */}
       {!splashDone && (
         <div
-          className={`pointer-events-none absolute inset-0 z-[9999] flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm transition-opacity duration-500 ${splashFading ? 'opacity-0' : 'opacity-100'}`}
+          className={`pointer-events-none absolute inset-0 z-[9999] flex flex-col items-center justify-center bg-neutral-700 backdrop-blur-sm transition-opacity duration-500 ${splashFading ? 'opacity-0' : 'opacity-100'}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Hydro-Scout%20Logo.png" alt="" className="mb-2 h-20 w-20 object-contain opacity-90" style={{ animation: 'bounce-dot 1.8s ease-in-out infinite' }} />

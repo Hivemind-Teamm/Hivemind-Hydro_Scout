@@ -17,7 +17,7 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-black/85">
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-neutral-700">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/Hydro-Scout%20Logo.png"
