@@ -12,6 +12,7 @@ interface HydrantInfoPanelProps {
   onFlyTo: (lat: number, lng: number) => void;
   onRoute: () => void;
   isOtw: boolean;
+  otwMeta?: { distanceM: number; durationS: number } | null;
 }
 
 const PRESSURE_COLOR: Record<string, string> = {
@@ -21,7 +22,14 @@ const PRESSURE_COLOR: Record<string, string> = {
   None:     '#9aa0a6',
 };
 
-export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo, onRoute, isOtw }: HydrantInfoPanelProps) {
+function formatDist(m: number) {
+  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`;
+}
+function formatEta(s: number) {
+  return s < 60 ? `${s}s` : `${Math.round(s / 60)} min ETA`;
+}
+
+export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo, onRoute, isOtw, otwMeta }: HydrantInfoPanelProps) {
   const { role } = useAuth();
   const meta = STATUS_META[hydrant.status];
   const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
@@ -54,7 +62,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         </button>
       </div>
 
-      {/* Lead photo — the hydrant's main field photo (photos[0]) */}
+      {/* Lead photo */}
       {hydrant.photos.length > 0 && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -111,6 +119,34 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
             </button>
           )}
         </div>
+
+        {/* ETA / road distance strip — visible while routing is active */}
+        {isOtw && otwMeta && (
+          <div className="mt-2 flex items-center justify-center gap-3 rounded-lg bg-red-50 dark:bg-red-950/30 px-3 py-2">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-red-700 dark:text-red-400">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+              </svg>
+              {formatDist(otwMeta.distanceM)}
+            </span>
+            <span className="h-3 w-px bg-red-200 dark:bg-red-800" />
+            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              {formatEta(otwMeta.durationS)}
+            </span>
+            <span className="text-[10px] text-neutral-400 dark:text-neutral-500">via road</span>
+          </div>
+        )}
+
+        {/* Loading ETA indicator */}
+        {isOtw && !otwMeta && (
+          <div className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-neutral-50 dark:bg-neutral-800 px-3 py-2">
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-neutral-300 border-t-red-500" />
+            <span className="text-xs text-neutral-400">Calculating route…</span>
+          </div>
+        )}
 
         <button
           className="mt-2 w-full text-center text-xs text-[#91191E] dark:text-[#e0353b] hover:underline"

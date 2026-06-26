@@ -13,6 +13,8 @@ import UserProfileModal, { type ViewingUser } from './UserProfileModal';
 import OperationsDashboard from './OperationsDashboard';
 import PinHydrantModal from './PinHydrantModal';
 import LocationPreviewPanel from './LocationPreviewPanel';
+import NearestHydrantPanel from './NearestHydrantPanel';
+import OtwHazardPanel from './OtwHazardPanel';
 import {
   countByStatus,
   type Hydrant,
@@ -21,12 +23,14 @@ import {
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
 import { haversineM, formatDistance, distToRouteM } from '@/lib/haversine';
+import { type RankedHydrant } from '@/lib/nearest-hydrant';
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
 const OTW_ROUTE_KEY    = 'hydroscout_otw_route';
 const OTW_MIN_ZOOM     = 13;
 const OTW_MAX_ZOOM     = 19;
-const ROUTE_BUFFER_M   = 300; // hydrants within 300m of route are shown in OTW mode
+const ROUTE_BUFFER_M   = 300;
+const ROUTE_CORRIDOR_M = 300;
 
 export default function HydroScoutDashboard() {
   const [provider, setProvider] = useState<MapProvider>('mapbox');
@@ -50,12 +54,18 @@ export default function HydroScoutDashboard() {
   const [otwRoute,         setOtwRoute]         = useState<[number, number][] | null>(null);
   const [viewingUser, setViewingUser] = useState<ViewingUser | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const geoErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Nearest hydrant state
+  const [nearestHydrant, setNearestHydrant] = useState<RankedHydrant | null>(null);
+  const [otwMeta, setOtwMeta] = useState<{ distanceM: number; durationS: number } | null>(null);
+
+  const geoErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controllerRef = useRef<MapController | null>(null);
   const otwFetchedForRef = useRef<string | null>(null);
   const otwRestoredRef  = useRef(false);
   const otwRouteRef     = useRef<[number, number][] | null>(null);
+  const lastRouteFetchRef = useRef<number>(0);
+  const ROUTE_FETCH_INTERVAL_MS = 10_000;
 
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [deletedHydrant, setDeletedHydrant] = useState<{ id: string; name: string } | null>(null);
@@ -70,7 +80,6 @@ export default function HydroScoutDashboard() {
     if (!loading) setLastSynced(new Date());
   }, [loading, hydrants]);
 
-  // Persist OTW hydrant ID to localStorage
   useEffect(() => {
     if (otwHydrant) {
       localStorage.setItem(OTW_HYDRANT_KEY, otwHydrant.id);
@@ -80,69 +89,80 @@ export default function HydroScoutDashboard() {
     }
   }, [otwHydrant]);
 
-  // Persist route geometry to localStorage
   useEffect(() => {
     if (otwRoute) localStorage.setItem(OTW_ROUTE_KEY, JSON.stringify(otwRoute));
   }, [otwRoute]);
 
-  // Restore OTW state once hydrants are loaded after a refresh
   useEffect(() => {
     if (loading || !hydrants.length || otwRestoredRef.current) return;
     otwRestoredRef.current = true;
-
     const savedId = localStorage.getItem(OTW_HYDRANT_KEY);
     if (!savedId) return;
-
     const hydrant = hydrants.find((h) => h.id === savedId);
     if (!hydrant) {
       localStorage.removeItem(OTW_HYDRANT_KEY);
       localStorage.removeItem(OTW_ROUTE_KEY);
       return;
     }
-
     setOtwHydrant(hydrant);
-
     const savedRoute = localStorage.getItem(OTW_ROUTE_KEY);
     if (savedRoute) {
       try {
         setOtwRoute(JSON.parse(savedRoute) as [number, number][]);
-        otwFetchedForRef.current = savedId; // skip re-fetch; we already have the route
-      } catch { /* corrupt data — will re-fetch naturally */ }
+        otwFetchedForRef.current = savedId;
+      } catch { /* corrupt data */ }
     }
   }, [hydrants, loading]);
 
-  // Fetch real road route whenever OTW target changes (re-fetches once GPS becomes available too)
   useEffect(() => {
     if (!otwHydrant || !userLocation) {
       setOtwRoute(null);
+      setOtwMeta(null);
       otwFetchedForRef.current = null;
       return;
     }
-    // Guard: don't re-fetch on every GPS tick — only when the target hydrant changes
-    if (otwFetchedForRef.current === otwHydrant.id) return;
+
+    // Rate limit: only re-fetch if hydrant changed OR enough time has passed
+    const now = Date.now();
+    const hydrantChanged = otwFetchedForRef.current !== otwHydrant.id;
+    const rateLimitOk = now - lastRouteFetchRef.current >= ROUTE_FETCH_INTERVAL_MS;
+    if (!hydrantChanged && !rateLimitOk) return;
+
     otwFetchedForRef.current = otwHydrant.id;
+    lastRouteFetchRef.current = now;
 
     let cancelled = false;
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
     const coords = `${userLocation.lng},${userLocation.lat};${otwHydrant.lng},${otwHydrant.lat}`;
+
+    // Mapbox Directions: request duration + distance in addition to geometry
     const url = token
-      ? `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&access_token=${token}`
+      ? `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&annotations=duration,distance&access_token=${token}`
       : `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`;
 
     fetch(url)
-      .then((r) => r.json())
-      .then((data: { routes?: Array<{ geometry: { coordinates: [number, number][] } }> }) => {
-        if (!cancelled) {
-          const routeCoords = data.routes?.[0]?.geometry?.coordinates;
-          if (routeCoords?.length) setOtwRoute(routeCoords);
+      .then((r) => {
+        if (!r.ok) throw new Error(`Directions API ${r.status}`);
+        return r.json();
+      })
+      .then((data: { routes?: Array<{ geometry: { coordinates: [number, number][] }; distance: number; duration: number }> }) => {
+        if (cancelled) return;
+        const route = data.routes?.[0];
+        if (!route) return;
+        if (route.geometry?.coordinates?.length) setOtwRoute(route.geometry.coordinates);
+        // Extract ETA and road distance from API response
+        if (typeof route.distance === 'number' && typeof route.duration === 'number') {
+          setOtwMeta({ distanceM: Math.round(route.distance), durationS: Math.round(route.duration) });
         }
       })
-      .catch(() => { /* falls back to straight line */ });
+      .catch((err) => {
+        console.warn('[Directions API] fetch failed, keeping last route:', err);
+        // Don't clear existing route on error — graceful degradation
+      });
 
     return () => { cancelled = true; };
-  }, [otwHydrant, userLocation]);
+  }, [otwHydrant, userLocation, ROUTE_FETCH_INTERVAL_MS]);
 
-  // Keep ref in sync, apply zoom limits and auto-fit whenever route changes
   useEffect(() => {
     otwRouteRef.current = otwRoute;
     if (!otwRoute) {
@@ -174,7 +194,6 @@ export default function HydroScoutDashboard() {
     const ctrl = controllerRef.current;
     if (ctrl) {
       const rawZoom = ctrl.getZoom();
-      // Mapbox uses 512px tiles; Leaflet uses 256px — offset by 1 zoom level to match visual scale
       const correctedZoom = provider === 'mapbox' ? rawZoom + 1 : rawZoom - 1;
       setMapViewport({ center: ctrl.getCenter(), zoom: correctedZoom });
     }
@@ -187,7 +206,6 @@ export default function HydroScoutDashboard() {
 
   const handleMapReady = useCallback((controller: MapController) => {
     controllerRef.current = controller;
-    // If OTW was restored from localStorage before the map initialised, apply limits + fit now
     if (otwRouteRef.current) {
       requestAnimationFrame(() => {
         controller.setZoomLimits(OTW_MIN_ZOOM, OTW_MAX_ZOOM);
@@ -204,9 +222,6 @@ export default function HydroScoutDashboard() {
     });
   }, []);
 
-  // Auto-start watching position on mount. The orb updates as the user moves.
-  // watchId ref lets us clean up on unmount; geoErrorRef remembers the last
-  // failure so the GPS button can explain why there's no fix.
   const watchIdRef = useRef<number | null>(null);
   const geoErrorRef = useRef<GeolocationPositionError | null>(null);
   useEffect(() => {
@@ -217,16 +232,9 @@ export default function HydroScoutDashboard() {
         setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       (err) => {
-        // Keep the last error so handleLocate can surface it; without this the
-        // orb just silently never appears (denied / timeout / insecure origin).
         geoErrorRef.current = err;
         console.warn('[geolocation] watchPosition error', err.code, err.message);
       },
-      // Passive tracking uses network-level accuracy: it resolves on laptops /
-      // desktops that have no GPS (where a high-accuracy request just comes back
-      // as POSITION_UNAVAILABLE / TIMEOUT), is low-power, and is plenty for "where
-      // am I on the map". The GPS button below asks for a precise fix on demand.
-      // Bounded timeout + maximumAge let a recent cached fix show the orb promptly.
       { enableHighAccuracy: false, timeout: 30000, maximumAge: 30000 },
     );
     return () => {
@@ -240,8 +248,6 @@ export default function HydroScoutDashboard() {
     geoErrorTimerRef.current = setTimeout(() => setGeoError(null), 8000);
   }, []);
 
-  // GPS button: fly to a known fix, or actively request one (and report why it
-  // failed) when we don't have a location yet.
   const handleLocate = useCallback(() => {
     if (userLocation) {
       controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 17);
@@ -273,11 +279,6 @@ export default function HydroScoutDashboard() {
           : 'Could not determine your location. Please try again.',
       );
     };
-    // High-accuracy GPS often can't get a fix on a desktop / indoors / weak signal
-    // and comes back as TIMEOUT or POSITION_UNAVAILABLE. In both cases retry once
-    // with low accuracy, which uses fast network/Wi-Fi positioning, before giving
-    // up. A generous maximumAge also lets a recent cached fix return immediately
-    // instead of waiting on the GPS.
     navigator.geolocation.getCurrentPosition(
       onSuccess,
       (err) => {
@@ -306,9 +307,26 @@ export default function HydroScoutDashboard() {
     return result;
   }, [activeStatus, hydrants, otwRoute, otwHydrant]);
 
-  // Keep the selected hydrant in sync with live updates (e.g. after an edit).
-  // When it's gone from Firestore entirely (deleted by admin), close all panels
-  // and flash the "removed" notice.
+  // Compute which hydrant IDs are within the route corridor — used by DilimanMap
+  // to visually distinguish route hydrants from off-route ones.
+  // Also derive hazard list: non-operational hydrants along the route.
+  const { nearRouteIds, routeHazards } = useMemo(() => {
+    if (!otwRoute || otwRoute.length < 2) {
+      return { nearRouteIds: null, routeHazards: [] };
+    }
+    const ids = new Set<string>();
+    const hazards: typeof hydrants = [];
+    for (const h of hydrants) {
+      if (distToRouteM(h.lat, h.lng, otwRoute) <= ROUTE_CORRIDOR_M) {
+        ids.add(h.id);
+        if (h.status === 'out' || h.status === 'reduced') {
+          hazards.push(h);
+        }
+      }
+    }
+    return { nearRouteIds: ids, routeHazards: hazards };
+  }, [hydrants, otwRoute]);
+
   useEffect(() => {
     if (!selectedHydrant || loading) return;
     const fresh = hydrants.find((h) => h.id === selectedHydrant.id);
@@ -346,7 +364,6 @@ export default function HydroScoutDashboard() {
     setShowReport(false);
   }, [selectedHydrant]);
 
-  // Each panel closes only itself — mini panel and siblings stay visible.
   const handleCloseFullDetails = useCallback(() => setShowFullDetails(false), []);
   const handleCloseEdit        = useCallback(() => setShowEdit(false), []);
   const handleCloseReport      = useCallback(() => setShowReport(false), []);
@@ -357,11 +374,8 @@ export default function HydroScoutDashboard() {
 
   const handleRoute = useCallback(() => {
     if (!selectedHydrant) return;
-    // Start OTW mode immediately so the banner appears right away.
     setOtwHydrant(selectedHydrant);
-    // If we already have a location the route fetch effect will run on its own.
     if (userLocation) return;
-    // No location yet — request a one-shot fix so the route can be drawn.
     if (!('geolocation' in navigator)) return;
     const onSuccess = (pos: GeolocationPosition) => {
       geoErrorRef.current = null;
@@ -369,7 +383,6 @@ export default function HydroScoutDashboard() {
     };
     const onFinalError = (err: GeolocationPositionError) => {
       geoErrorRef.current = err;
-      // OTW banner is already visible; just note that the route line needs GPS.
       if (err.code === err.PERMISSION_DENIED) {
         showGeoError('Location permission is blocked — route line unavailable.');
       }
@@ -391,7 +404,13 @@ export default function HydroScoutDashboard() {
     );
   }, [selectedHydrant, userLocation, showGeoError]);
 
-  const handleCancelOtw = useCallback(() => { setOtwHydrant(null); setOtwRoute(null); otwFetchedForRef.current = null; }, []);
+  const handleCancelOtw = useCallback(() => {
+    setOtwHydrant(null);
+    setOtwRoute(null);
+    setOtwMeta(null);
+    otwFetchedForRef.current = null;
+    lastRouteFetchRef.current = 0;
+  }, []);
 
   const handleOpenAccount = useCallback(() => {
     setShowAccount(true);
@@ -400,13 +419,11 @@ export default function HydroScoutDashboard() {
   const handleToggleAddHydrant = useCallback(() => {
     setAddHydrantMode((prev) => {
       if (!prev) {
-        // entering mode — clear any selected hydrant
         setSelectedHydrant(null);
         setShowFullDetails(false);
         setShowEdit(false);
         setShowReport(false);
       } else {
-        // exiting mode — clear pending pin
         setPendingLocation(null);
       }
       return !prev;
@@ -428,6 +445,14 @@ export default function HydroScoutDashboard() {
     }
   }, []);
 
+  // Handle nearest hydrant selection — fly map to it
+  const handleNearestHydrantSelect = useCallback((hydrant: RankedHydrant | null) => {
+    setNearestHydrant(hydrant);
+    if (hydrant) {
+      controllerRef.current?.flyTo(hydrant.lat, hydrant.lng, 17);
+    }
+  }, []);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden">
       <MapView
@@ -445,6 +470,7 @@ export default function HydroScoutDashboard() {
         userLocation={userLocation}
         otwHydrant={otwHydrant}
         otwRoute={otwRoute}
+        nearRouteIds={nearRouteIds}
         initialCenter={mapViewport?.center}
         initialZoom={mapViewport?.zoom}
       />
@@ -473,6 +499,23 @@ export default function HydroScoutDashboard() {
         isOtw={!!otwHydrant}
       />
 
+      {/* ── Nearest Hydrant Panel — bottom-left, above map, below modals ── */}
+      <div style={{ position: "absolute", bottom: 32, left: 16, zIndex: 1100, pointerEvents: "none" }}>
+        <NearestHydrantPanel
+          userPosition={userLocation}
+          onHydrantSelect={handleNearestHydrantSelect}
+          selectedHydrantId={nearestHydrant?.id ?? null}
+        />
+      </div>
+
+      {/* OTW Hazard Panel — bottom-right, visible during OTW mode when hazards exist */}
+      {otwHydrant && (
+        <OtwHazardPanel
+          hazards={routeHazards}
+          onSelectHydrant={handleSelectHydrant}
+        />
+      )}
+
       {/* OTW banner */}
       {otwHydrant && (
         <div className="pointer-events-auto absolute left-1/2 top-[68px] z-[2000] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-red-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale">
@@ -481,16 +524,26 @@ export default function HydroScoutDashboard() {
           <span className="text-red-400 text-xs">·</span>
           <span className="text-xs font-mono text-red-200">{otwHydrant.id}</span>
           <span className="max-w-[120px] truncate text-xs text-red-300">{otwHydrant.name}</span>
-          {userLocation && (
+          {otwMeta ? (
+            <>
+              <span className="text-red-400 text-xs">·</span>
+              <span className="text-xs font-bold text-white">{formatDistance(otwMeta.distanceM)}</span>
+              <span className="text-red-400 text-xs">·</span>
+              <span className="text-xs font-bold text-emerald-300">
+                {otwMeta.durationS < 60
+                  ? `${otwMeta.durationS}s`
+                  : `${Math.round(otwMeta.durationS / 60)} min`}
+              </span>
+            </>
+          ) : userLocation ? (
             <>
               <span className="text-red-400 text-xs">·</span>
               <span className="text-xs font-bold text-white">
                 {formatDistance(haversineM(userLocation.lat, userLocation.lng, otwHydrant.lat, otwHydrant.lng))}
               </span>
             </>
-          )}
+          ) : null}
           <span className="mx-1 h-3 w-px bg-white/20" />
-          {/* Recenter: fly to current GPS position */}
           <button
             title="Recenter to my location"
             onClick={() => userLocation && controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 16)}
@@ -501,7 +554,6 @@ export default function HydroScoutDashboard() {
               <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
             </svg>
           </button>
-          {/* Show Full Route: fit the map to the entire route polyline */}
           <button
             title="Show full route"
             onClick={() => otwRoute && controllerRef.current?.fitRoute(otwRoute)}
@@ -543,11 +595,9 @@ export default function HydroScoutDashboard() {
       {/* Live-data status pill */}
       {(loading || error) && (
         <div className="pointer-events-none absolute left-1/2 top-[84px] z-[1200] -translate-x-1/2">
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold shadow-md ${
-              error ? 'bg-[#91191E] text-white' : 'bg-white/95 text-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-300'
-            }`}
-          >
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold shadow-md ${
+            error ? 'bg-[#91191E] text-white' : 'bg-white/95 text-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-300'
+          }`}>
             {error ? `Couldn't load hydrants: ${error}` : 'Loading hydrants…'}
           </span>
         </div>
@@ -560,31 +610,30 @@ export default function HydroScoutDashboard() {
         </>
       )}
 
-{/* Mini info panel — always visible when a hydrant is selected */}
-       {selectedHydrant && (
-         <HydrantInfoPanel
-           hydrant={selectedHydrant}
-           onClose={handleCloseAll}
-           onOpenFullDetails={() => { setShowFullDetails(true); setShowEdit(false); setShowReport(false); }}
-           onEdit={() => setShowEdit(true)}
-           onReport={() => setShowReport(true)}
-           onFlyTo={(lat, lng) => controllerRef.current?.flyTo(lat, lng, 17)}
-           onRoute={handleRoute}
-           isOtw={otwHydrant?.id === selectedHydrant?.id}
-         />
-       )}
+      {selectedHydrant && (
+        <HydrantInfoPanel
+          hydrant={selectedHydrant}
+          onClose={handleCloseAll}
+          onOpenFullDetails={() => { setShowFullDetails(true); setShowEdit(false); setShowReport(false); }}
+          onEdit={() => setShowEdit(true)}
+          onReport={() => setShowReport(true)}
+          onFlyTo={(lat, lng) => controllerRef.current?.flyTo(lat, lng, 17)}
+          onRoute={handleRoute}
+          isOtw={otwHydrant?.id === selectedHydrant?.id}
+          otwMeta={otwHydrant?.id === selectedHydrant?.id ? otwMeta : null}
+        />
+      )}
 
-{/* Sub-panels: each closes only itself, mini panel and siblings stay */}
-       {selectedHydrant && showFullDetails && (
-         <FullDetailsPanel
-           hydrant={selectedHydrant}
-           onClose={handleCloseFullDetails}
-           onViewUser={handleViewUser}
-           onFlyTo={(lat, lng) => controllerRef.current?.flyTo(lat, lng, 17)}
-           distanceM={userLocation ? haversineM(userLocation.lat, userLocation.lng, selectedHydrant.lat, selectedHydrant.lng) : null}
-           isOtw={otwHydrant?.id === selectedHydrant?.id}
-         />
-       )}
+      {selectedHydrant && showFullDetails && (
+        <FullDetailsPanel
+          hydrant={selectedHydrant}
+          onClose={handleCloseFullDetails}
+          onViewUser={handleViewUser}
+          onFlyTo={(lat, lng) => controllerRef.current?.flyTo(lat, lng, 17)}
+          distanceM={userLocation ? haversineM(userLocation.lat, userLocation.lng, selectedHydrant.lat, selectedHydrant.lng) : null}
+          isOtw={otwHydrant?.id === selectedHydrant?.id}
+        />
+      )}
       {selectedHydrant && showEdit && (
         <EditStatusPanel
           hydrant={selectedHydrant}
@@ -600,25 +649,20 @@ export default function HydroScoutDashboard() {
         />
       )}
 
-      {/* Account Center */}
       {showAccount && (
         <AccountCenterModal onClose={() => setShowAccount(false)} />
       )}
 
-      {/* Location preview panel — shown after clicking map in add hydrant mode */}
       {addHydrantMode && pendingLocation && (
         <LocationPreviewPanel
           lat={pendingLocation.lat}
           lng={pendingLocation.lng}
           address={pendingLocation.address}
-          onPinHydrant={() => {
-            setShowPinHydrant(true);
-          }}
+          onPinHydrant={() => setShowPinHydrant(true)}
           onDismiss={() => setPendingLocation(null)}
         />
       )}
 
-      {/* Pin Hydrant modal (authorized / head / admin) */}
       {showPinHydrant && (
         <PinHydrantModal
           onClose={() => { setShowPinHydrant(false); setPendingLocation(null); setAddHydrantMode(false); }}
@@ -628,7 +672,6 @@ export default function HydroScoutDashboard() {
         />
       )}
 
-      {/* Operations Dashboard (head / admin only) */}
       {showOpsDashboard && (
         <OperationsDashboard
           hydrants={hydrants}
@@ -638,7 +681,6 @@ export default function HydroScoutDashboard() {
         />
       )}
 
-      {/* User profile viewer */}
       {viewingUser && (
         <UserProfileModal
           user={viewingUser}
@@ -646,7 +688,6 @@ export default function HydroScoutDashboard() {
         />
       )}
 
-      {/* Hydrant deleted notice */}
       {deletedHydrant && (
         <>
           <div className="pointer-events-auto absolute inset-0 z-[5000] bg-black/35" onClick={() => setDeletedHydrant(null)} />
