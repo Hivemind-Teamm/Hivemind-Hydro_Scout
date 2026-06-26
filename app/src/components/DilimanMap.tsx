@@ -9,29 +9,11 @@ import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './h
 import { STATUS_META, type Hydrant, type HydrantStatus } from '../data/hydrants';
 import type { MapController, PendingPin } from './MapView';
 
-// Match Leaflet config exactly: maxClusterRadius=60, disableClusteringAtZoom=16.
-// Supercluster's `maxZoom` is the last zoom at which points still cluster, so
-// `maxZoom=15` means everything de-clusters at zoom 16 — identical to Leaflet's
-// `disableClusteringAtZoom={16}`.
 const CLUSTER_RADIUS = 60;
 const CLUSTER_MAX_ZOOM = 15;
-
-// Whole-world bbox so we cluster every hydrant regardless of viewport — Leaflet
-// clusters all markers too, not just the ones currently on screen.
 const WORLD_BBOX: [number, number, number, number] = [-180, -85, 180, 85];
-
-// Leaflet runs at integer zoom (zoomSnap=1), so its clusters always match the
-// on-screen scale. Mapbox zoom is continuous, so we round (not floor) to the
-// nearest integer level: flooring would keep pins clustered as if at the lower
-// zoom for the whole band (e.g. still clustered at 15.9), making them break out
-// far too late. Rounding makes them split at ~the half-zoom — the same scale
-// Leaflet would have snapped to.
 const clusterLevel = (zoom: number) => Math.round(zoom);
-
-// How long a pin takes to slide between its real position and the cluster
-// centre. Mirrors Leaflet.markercluster's zoom-animation feel.
 const PIN_GLIDE = '0.35s cubic-bezier(0.4, 0, 0.2, 1)';
-
 
 type HydrantProps = { hydrantId: string; status: HydrantStatus };
 
@@ -42,8 +24,6 @@ interface ClusterMarker {
   count: number;
 }
 
-// For each hydrant: the centroid of the cluster it belongs to at the current
-// zoom, or null when it stands on its own.
 type HydrantPlacement = Map<string, { lng: number; lat: number } | null>;
 
 interface ClusterLayout {
@@ -66,6 +46,7 @@ interface DilimanMapProps {
   userLocation?: { lat: number; lng: number } | null;
   otwHydrant?: Hydrant | null;
   otwRoute?: [number, number][] | null;
+  nearRouteIds?: Set<string> | null;
   initialCenter?: { lat: number; lng: number };
   initialZoom?: number;
   isDark?: boolean;
@@ -87,22 +68,15 @@ const DASH_SEQUENCE = [
 
 export default function DilimanMap({
   hydrants, selectedHydrantId, onLoad, onError, onMapReady,
-  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom, isDark = false,
+  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false,
 }: DilimanMapProps) {
   const mapRef = useRef<MapRef>(null);
   const otwAnimRef = useRef<number | null>(null);
-  // Bumped on every Mapbox `style.load`. Switching basemap style (light↔dark)
-  // tears down imperatively-added sources/layers, so the OTW setup effects key
-  // off this to re-add the route source + layers after a style swap.
   const [styleEpoch, setStyleEpoch] = useState(0);
-  // The live mapbox instance, held in state (not just the ref) so render can
-  // call `project()` for pixel offsets without reading a ref during render.
   const [mapInstance, setMapInstance] = useState<ReturnType<MapRef['getMap']> | null>(null);
-  // Floored map zoom — clustering only changes when this crosses an integer, so
-  // we recompute the layout per zoom level instead of on every fractional frame.
   const [clusterZoom, setClusterZoom] = useState(clusterLevel(DEFAULT_ZOOM));
 
-  // Rebuild the Supercluster index whenever the hydrant set changes.
+
   const supercluster = useMemo(() => {
     const index = new Supercluster<HydrantProps>({
       radius: CLUSTER_RADIUS,
@@ -118,8 +92,6 @@ export default function DilimanMap({
     return index;
   }, [hydrants]);
 
-  // Resolve, for the current zoom, which hydrants are clustered (and into which
-  // centroid) and which clusters to draw. Pure function of index + zoom.
   const layout = useMemo<ClusterLayout>(() => {
     const clusters: ClusterMarker[] = [];
     const placement: HydrantPlacement = new Map();
@@ -139,8 +111,6 @@ export default function DilimanMap({
     return { clusters, placement };
   }, [supercluster, clusterZoom]);
 
-  // Keep `clusterZoom` in step with the camera. We update only when the floored
-  // zoom actually changes, so panning never triggers a re-cluster.
   useEffect(() => {
     if (!mapInstance) return;
     const sync = () => {
@@ -152,14 +122,11 @@ export default function DilimanMap({
     return () => { if (mapInstance.loaded()) mapInstance.off('zoom', sync); };
   }, [mapInstance]);
 
-  // Keep the crosshair cursor in sync with add-hydrant mode.
   useEffect(() => {
     if (!mapInstance) return;
     mapInstance.getCanvas().style.cursor = addHydrantMode ? 'crosshair' : '';
   }, [addHydrantMode, mapInstance]);
 
-  // A new basemap style (theme toggle) wipes custom sources/layers; bump the
-  // epoch so the OTW setup effects below re-add them once the style is ready.
   useEffect(() => {
     if (!mapInstance) return;
     const onStyleLoad = () => setStyleEpoch((e) => e + 1);
@@ -167,9 +134,6 @@ export default function DilimanMap({
     return () => { if (mapInstance.loaded()) mapInstance.off('style.load', onStyleLoad); };
   }, [mapInstance]);
 
-  // Shift+drag to rotate. We disable box-zoom (the default shift+drag action)
-  // and replace it with bearing control. A ref keeps the cursor restoration
-  // correct without recreating the listeners every time addHydrantMode changes.
   const addHydrantModeRef = useRef(addHydrantMode);
   useEffect(() => { addHydrantModeRef.current = addHydrantMode; }, [addHydrantMode]);
 
@@ -216,25 +180,19 @@ export default function DilimanMap({
     };
   }, [mapInstance]);
 
-  // OTW effect 1: initialise source + layers once the map instance is ready
   useEffect(() => {
     if (!mapInstance || mapInstance.getSource(OTW_SOURCE)) return;
     mapInstance.addSource(OTW_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-    // Outer glow — wide, blurred, very transparent
     mapInstance.addLayer({ id: OTW_GLOW_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#DC2626', 'line-width': 22, 'line-opacity': 0.15, 'line-blur': 8 } });
-    // Core — medium, solid red
     mapInstance.addLayer({ id: OTW_BG_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#F87171', 'line-width': 7, 'line-opacity': 0.5 } });
-    // Animated dashes on top — light red so they look like light moving through
     mapInstance.addLayer({ id: OTW_LINE_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#EF4444', 'line-width': 3, 'line-dasharray': [0, 4, 3] } });
   }, [mapInstance, styleEpoch]);
 
-  // OTW effect 2: update line geometry when coords or route changes
   useEffect(() => {
     if (!mapInstance || !mapInstance.getSource(OTW_SOURCE)) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const src = mapInstance.getSource(OTW_SOURCE) as any;
     if (otwHydrant && userLocation) {
-      // Use real road route if available, fall back to straight line while fetching
       const coordinates: [number, number][] = otwRoute ?? [[userLocation.lng, userLocation.lat], [otwHydrant.lng, otwHydrant.lat]];
       src.setData({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } }] });
     } else {
@@ -242,7 +200,6 @@ export default function DilimanMap({
     }
   }, [mapInstance, otwHydrant, userLocation, otwRoute, styleEpoch]);
 
-  // OTW effect 3: show/hide layers and drive the dash animation
   useEffect(() => {
     if (!mapInstance) return;
     const vis = otwHydrant ? 'visible' : 'none';
@@ -299,8 +256,6 @@ export default function DilimanMap({
     onLoad?.();
   }, [onLoad, onMapReady]);
 
-  // Clicking a cluster zooms to the level where it breaks apart — the pins then
-  // glide outward from the centroid, mirroring Leaflet's expand-on-click.
   const handleClusterClick = useCallback((cluster: ClusterMarker) => {
     if (addHydrantMode || !mapInstance) return;
     const zoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id), 18);
@@ -330,13 +285,10 @@ export default function DilimanMap({
         onLoad={handleLoad}
         onError={(e: unknown) => onError?.(e)}
         onClick={(e: { lngLat: { lat: number; lng: number } }) => {
-          // Marker clicks stop propagation, so any click that reaches the map is
-          // on empty ground: either drop a pin or dismiss the selection.
           if (addHydrantMode) onMapClick(e.lngLat.lat, e.lngLat.lng);
           else onMapBackgroundClick();
         }}
       >
-        {/* 3D buildings — only rendered when pitch is active */}
         {is3D && (
           <Layer
             id="3d-buildings"
@@ -354,12 +306,6 @@ export default function DilimanMap({
           />
         )}
 
-        {/* Hydrant pins. Every hydrant is always mounted at its true location;
-            when it belongs to a cluster we translate its inner content to the
-            cluster centroid and fade it out, so it visibly slides INTO the
-            cluster (zoom out) and slides BACK OUT (zoom in) — the Leaflet feel.
-            The geo-positioning transform stays on the Marker root (never
-            animated); only the inner wrapper transitions. */}
         {map && hydrants.map((h) => {
           const centroid = layout.placement.get(h.id);
           const clustered = !!centroid;
@@ -376,6 +322,14 @@ export default function DilimanMap({
           const selected = selectedHydrantId === h.id;
           const meta = STATUS_META[h.status];
 
+          // OTW mode visual states
+          const isOtwTarget = otwHydrant?.id === h.id;
+          const nearRoute = nearRouteIds?.has(h.id) ?? false;
+          const inOtwMode = !!otwRoute;
+          // Dim hydrants that are off-route during OTW mode
+          const offRoute = inOtwMode && !nearRoute && !isOtwTarget;
+          const isHazard = nearRoute && (h.status === 'out' || h.status === 'reduced');
+
           return (
             <Marker
               key={h.id}
@@ -388,14 +342,24 @@ export default function DilimanMap({
                 style={{
                   position: 'relative',
                   transform: `translate(${dx}px, ${dy}px)`,
-                  opacity: clustered ? 0 : 1,
+                  opacity: clustered ? 0 : offRoute ? 0.25 : 1,
                   transition: `transform ${PIN_GLIDE}, opacity 0.3s ease`,
                   pointerEvents: clustered ? 'none' : 'auto',
                   cursor: addHydrantMode ? 'crosshair' : 'pointer',
                   willChange: 'transform, opacity',
+                  filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : isHazard ? 'drop-shadow(0 0 5px #f59e0b)' : nearRoute ? 'drop-shadow(0 0 4px #34d399)' : undefined,
                 }}
               >
                 {selected && <div className="hydrant-pulse-ring" />}
+                {/* Route-corridor hydrant glow ring */}
+                {nearRoute && !selected && !clustered && (
+                  <div style={{
+                    position: 'absolute', inset: -5, borderRadius: '50%',
+                    border: `2px solid ${isHazard ? '#f59e0b' : '#34d399'}`,
+                    animation: 'route-ring-pulse 2s ease-out infinite',
+                    pointerEvents: 'none',
+                  }} />
+                )}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={meta.iconUrl}
@@ -416,8 +380,6 @@ export default function DilimanMap({
           );
         })}
 
-        {/* Cluster badges. Keyed by zoom so each level pops in fresh, matching
-            Leaflet where the bubble appears as its children fold inward. */}
         {map && layout.clusters.map((cluster) => (
           <Marker
             key={`cluster-${clusterZoom}-${cluster.id}`}
@@ -467,6 +429,8 @@ export default function DilimanMap({
           </Marker>
         )}
       </MapGL>
+
+      {/* Nearest Hydrant Panel — overlaid top-left of the map */}
     </div>
   );
 }
