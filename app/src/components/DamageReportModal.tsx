@@ -73,14 +73,14 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
       <div className="anim-fade-scale relative flex h-[90vh] max-h-[600px] w-[90vw] max-w-[720px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header ── */}
-        <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-[#91191E] px-5 py-3">
+        <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-[#e0353b] px-5 py-3">
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-white">Hydrant Damage Report</span>
             <span className="rounded-full bg-[#FED42E] px-2.5 py-0.5 text-[10px] font-bold text-neutral-800">
               Authorized User
             </span>
           </div>
-          <button onClick={onClose} className="rounded-full p-1 text-red-200 hover:bg-red-800 hover:text-white">
+          <button onClick={onClose} className="rounded-full p-1 text-red-200 transition-all duration-150 ease-out hover:bg-red-800 hover:text-white hover:scale-110 active:scale-90 active:duration-75">
             ✕
           </button>
         </div>
@@ -92,7 +92,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
           <div className="flex w-[220px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-800">
             {/* Mini map */}
             <div className="h-[140px] overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
-              <MiniMap lat={hydrant.lat} lng={hydrant.lng} />
+              <MiniMap lat={hydrant.lat} lng={hydrant.lng} status={hydrant.status} />
             </div>
 
             {/* Hydrant summary */}
@@ -117,7 +117,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
 
             {/* Guidelines */}
             <div className="rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
-              <p className="mb-1 text-[10px] font-bold text-[#91191E] dark:text-[#e0353b]">Reporting Guidelines</p>
+              <p className="mb-1 text-[10px] font-bold text-[#e0353b] dark:text-[#e0353b]">Reporting Guidelines</p>
               <p className="text-[11px] leading-relaxed text-neutral-500 dark:text-neutral-400">
                 Submit a damage report only after on-site verification. Include clear photos of the affected hydrant component. Reports are routed to the Station Head for review and may be forwarded to the concessionaire for resolution.
               </p>
@@ -125,17 +125,17 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
           </div>
 
           {/* Right panel */}
-          <div className="flex flex-1 flex-col overflow-y-auto px-5 py-4">
+          <div className="scroll-fade flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
 
             {/* Hydrant Information */}
-            <p className="mb-2 text-xs font-bold text-[#91191E] dark:text-[#e0353b]">Hydrant Information</p>
+            <p className="mb-2 text-xs font-bold text-[#e0353b] dark:text-[#e0353b]">Hydrant Information</p>
             <div className="mb-4 grid grid-cols-2 gap-3">
               <ReadonlyField label="Hydrant ID" value={hydrant.id} />
               <ReadonlyField label="Location" value={hydrant.name} />
             </div>
 
             {/* Report Details */}
-            <p className="mb-2 text-xs font-bold text-[#91191E] dark:text-[#e0353b]">Report Details</p>
+            <p className="mb-2 text-xs font-bold text-[#e0353b] dark:text-[#e0353b]">Report Details</p>
             <div className="mb-3 grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Date Reported</span>
@@ -148,7 +148,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Reported By</span>
                 <button
                   onClick={onOpenAccount}
-                  className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-xs text-left font-semibold text-[#91191E] hover:underline dark:border-neutral-700 dark:bg-neutral-800 dark:text-[#e0353b]"
+                  className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-xs text-left font-semibold text-[#e0353b] transition-all duration-150 ease-out hover:bg-white hover:shadow-sm hover:scale-[1.02] active:scale-[0.98] active:duration-75 dark:border-neutral-700 dark:bg-neutral-800 dark:text-[#e0353b] dark:hover:bg-neutral-750"
                 >
                   {displayName}
                 </button>
@@ -160,7 +160,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
               <select
                 value={damageType}
                 onChange={(e) => setDamageType(e.target.value)}
-                className="rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-700 focus:border-[#91191E] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                className="rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-700 focus:border-[#e0353b] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
               >
                 {DAMAGE_TYPES.map((t) => <option key={t}>{t}</option>)}
               </select>
@@ -172,13 +172,13 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                className="resize-none rounded-lg border border-neutral-200 px-3 py-2 text-xs focus:border-[#91191E] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                className="resize-none rounded-lg border border-neutral-200 px-3 py-2 text-xs focus:border-[#e0353b] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
                 placeholder="Describe the damage observed..."
               />
             </label>
 
             {/* Photo Evidence */}
-            <p className="mb-2 text-xs font-bold text-[#91191E] dark:text-[#e0353b]">Photo Evidence</p>
+            <p className="mb-2 text-xs font-bold text-[#e0353b] dark:text-[#e0353b]">Photo Evidence</p>
             <button
               onClick={() => setPhotos((p) => [...p, ''])}
               className="mb-3 flex h-20 w-full items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700"
@@ -189,7 +189,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
               <div className="mb-4 flex flex-wrap gap-2">
                 {photos.map((_, i) => (
                   <div key={i} className="relative flex h-14 w-14 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-800">
-                    <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#91191E]" />
+                    <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#e0353b]" />
                     <span className="text-[10px] text-neutral-400 dark:text-neutral-500">Photo</span>
                   </div>
                 ))}
@@ -198,19 +198,19 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
 
             {/* Footer */}
             <div className="mt-auto border-t border-neutral-200 pt-3 dark:border-neutral-700">
-              {error && <p className="mb-2 text-right text-[11px] font-medium text-[#91191E] dark:text-[#e0353b]">{error}</p>}
+              {error && <p className="mb-2 text-right text-[11px] font-medium text-[#e0353b] dark:text-[#e0353b]">{error}</p>}
               <div className="flex justify-end gap-3">
                 <button
                   onClick={onClose}
                   disabled={saving}
-                  className="rounded-lg border border-neutral-200 px-6 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                  className="rounded-lg border border-neutral-200 px-6 py-2 text-sm font-semibold text-neutral-600 transition-all duration-150 ease-out hover:bg-neutral-50 hover:scale-[1.02] active:scale-[0.97] active:duration-75 disabled:opacity-50 disabled:pointer-events-none dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={saving}
-                  className="rounded-lg bg-[#91191E] px-6 py-2 text-sm font-bold text-white hover:bg-[#7a1419] disabled:opacity-60"
+                  className="rounded-lg bg-[#e0353b] px-6 py-2 text-sm font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.02] hover:shadow-[0_4px_14px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75 disabled:opacity-60 disabled:pointer-events-none"
                 >
                   {saving ? 'Submitting…' : 'Submit'}
                 </button>

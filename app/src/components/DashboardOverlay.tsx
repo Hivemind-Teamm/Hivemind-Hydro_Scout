@@ -84,7 +84,7 @@ export default function DashboardOverlay({
     <div className="pointer-events-none absolute inset-0 select-none">
       {/* ---------- Header ---------- */}
       <header className="pointer-events-auto absolute inset-x-0 top-0 z-[1000]">
-        <div className="flex h-16 items-stretch justify-between overflow-visible bg-black/70 pl-2 pr-4">
+        <div className="flex h-16 w-full items-stretch justify-between overflow-visible bg-neutral-600/60 pl-2 pr-4 [backdrop-filter:blur(4px)] dark:bg-black/55">
           {/* Logo + subtitle */}
           <div className="flex items-center gap-0 border-r border-white/15 pr-4">
             <Logo />
@@ -94,9 +94,8 @@ export default function DashboardOverlay({
           <div className="flex flex-col justify-center border-r border-white/15 px-5">
             <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">Sheet</span>
             <button
-              title="Return to Diliman, Quezon City"
               onClick={() => onFlyTo(DILIMAN_CENTER.lat, DILIMAN_CENTER.lng, DEFAULT_ZOOM)}
-              className="mt-0.5 text-left text-xs font-bold text-white transition-colors hover:text-[#FED42E]"
+              className="mt-0.5 text-left text-xs font-bold text-white transition-colors hover:text-[#FED42E] active:scale-95"
             >
               AOR · Diliman, QC
             </button>
@@ -111,41 +110,44 @@ export default function DashboardOverlay({
             </div>
           </div>
 
-          {/* Admin Dashboard button — admin only */}
-          {role === 'admin' && (
-            <div className="ml-auto flex items-center border-l border-white/15 px-5">
+          {/* Right side — stable ml-auto group to prevent layout shift */}
+          <div className="ml-auto flex items-stretch">
+            {/* Admin Dashboard button — admin only */}
+            {role === 'admin' && (
+              <div className="flex items-center border-l border-white/15 px-5">
+                <button
+                  onClick={() => router.push('/admin')}
+                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition-all duration-150 ease-out hover:scale-[1.04] hover:shadow-[0_4px_14px_rgba(224,53,59,0.5)] active:scale-[0.96] active:duration-75"
+                  style={{ background: '#e0353b' }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                  Admin Dashboard
+                </button>
+              </div>
+            )}
+
+            {/* User info */}
+            <div className="flex items-center gap-3 border-l border-white/15 pl-4 pr-1">
+              <div className="flex flex-col justify-center">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">{displayRole}</span>
+                <span className="mt-0.5 text-xs font-bold text-white">{displayName}</span>
+              </div>
               <button
-                onClick={() => router.push('/admin')}
-                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition-all hover:brightness-90 active:scale-95"
-                style={{ background: '#91191E' }}
+                onClick={onOpenAccount}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-white transition-all duration-150 ease-out hover:scale-110 hover:shadow-[0_4px_14px_rgba(224,53,59,0.5)] active:scale-90 active:duration-75"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-                Admin Dashboard
+                <UserGlyph />
               </button>
             </div>
-          )}
-
-          {/* Authorized / user */}
-          <div className={`${role !== 'admin' ? 'ml-auto' : ''} flex flex-col justify-center border-l border-white/15 px-5`}>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">{displayRole}</span>
-            <button
-              onClick={onOpenAccount}
-              className="mt-0.5 flex items-center gap-2 transition-opacity hover:opacity-80"
-            >
-              <span className="text-xs font-bold text-white">{displayName}</span>
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#b11116] text-white">
-                <UserGlyph />
-              </span>
-            </button>
           </div>
         </div>
         {/* brand accent line */}
-        <div className="h-1 w-full" style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #91191E 70px, #91191E 140px)' }} />
+        <div className="h-1 w-full" style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #e0353b 70px, #e0353b 140px)' }} />
       </header>
 
       {/* ---------- Search + status filter pills ---------- */}
@@ -160,10 +162,12 @@ export default function DashboardOverlay({
               <button
                 key={status}
                 onClick={() => onSelectStatus(status)}
-                className="px-4 py-2 text-xs font-bold transition-all hover:brightness-90 active:scale-95"
+                className={`px-4 py-2 text-xs font-bold transition-all duration-150 ease-out hover:brightness-95 hover:scale-[1.04] active:scale-[0.96] active:duration-75 ${
+                  !active ? 'dark:bg-neutral-700 dark:text-neutral-100' : ''
+                }`}
                 style={{
-                  background: active ? meta.color : (isDark ? '#262b33' : '#ffffff'),
-                  color: active ? '#ffffff' : (isDark ? '#cbd5e1' : '#4b5563'),
+                  background: active ? meta.color : (!isDark ? '#ffffff' : undefined),
+                  color:      active ? '#ffffff'   : (!isDark ? '#4b5563' : undefined),
                 }}
               >
                 {meta.pillLabel}
@@ -199,16 +203,18 @@ export default function DashboardOverlay({
           <LayersGlyph />
         </ToolButton>
 
-        <div className="relative">
-          <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports}>
-            <ReportGlyph />
-          </ToolButton>
-          {hasPendingReports && (
-            <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#91191E] text-[9px] font-bold text-white">
-              !
-            </span>
-          )}
-        </div>
+        {role !== 'general' && role !== null && (
+          <div className="relative">
+            <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports}>
+              <ReportGlyph />
+            </ToolButton>
+            {hasPendingReports && (
+              <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e0353b] text-[9px] font-bold text-white">
+                !
+              </span>
+            )}
+          </div>
+        )}
 
         {canViewDashboard && (
           <ToolButton label="Operations Dashboard" onClick={onOpenDashboard} rounded>
@@ -217,11 +223,11 @@ export default function DashboardOverlay({
         )}
 
         {canPin && (
-          <div className="relative mt-1">
+          <div className="group relative mt-1">
             <button
-              title={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
+              aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
               onClick={onToggleAddHydrant}
-              className="relative flex h-11 w-11 items-center justify-center transition-all hover:opacity-90 active:scale-95"
+              className="relative flex h-11 w-11 items-center justify-center transition-all duration-150 ease-out hover:scale-110 hover:drop-shadow-[0_4px_8px_rgba(224,53,59,0.5)] active:scale-90 active:duration-75"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -230,9 +236,14 @@ export default function DashboardOverlay({
                 className="h-12 w-12 object-contain"
               />
             </button>
-            <span className={`pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#91191E] text-[9px]' : 'bg-[#2fbf4f] text-[11px]'}`}>
+            <span className={`pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#e0353b] text-[9px]' : 'bg-[#2fbf4f] text-[11px]'}`}>
               {addHydrantMode ? '✕' : '+'}
             </span>
+            <div className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-[9999] -translate-y-1/2 opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-hover:[transition-delay:500ms]">
+              <span className="block whitespace-nowrap rounded-lg bg-neutral-900/95 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-xl dark:bg-neutral-800 dark:ring-1 dark:ring-white/10">
+                {addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -241,15 +252,15 @@ export default function DashboardOverlay({
       <div className="absolute bottom-6 right-6 z-[1000] flex w-60 flex-col items-end gap-3">
         {/* GPS + 3D + theme buttons row — always visible */}
         <div className="pointer-events-auto flex gap-2">
-          <ToolButton label="Go to my location" onClick={onLocate} rounded>
+          <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide="top">
             <GpsGlyph />
           </ToolButton>
           {provider === 'mapbox' && (
-            <ToolButton label={is3D ? 'Switch to 2D view' : 'Switch to 3D view'} onClick={onToggle3D} rounded active={is3D}>
+            <ToolButton label={is3D ? 'Switch to 2D view' : 'Switch to 3D view'} onClick={onToggle3D} rounded active={is3D} tooltipSide="top">
               <ThreeDGlyph />
             </ToolButton>
           )}
-          <ToolButton label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme} rounded>
+          <ToolButton label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme} rounded tooltipSide="top">
             {isDark ? <SunGlyph /> : <MoonGlyph />}
           </ToolButton>
         </div>
@@ -289,7 +300,7 @@ export default function DashboardOverlay({
               })}
             </ul>
             {autoFallback && (
-              <p className="mt-3 border-t border-neutral-200 dark:border-neutral-700 pt-2 text-[11px] text-[#b11116] dark:text-[#e0353b]">
+              <p className="mt-3 border-t border-neutral-200 dark:border-neutral-700 pt-2 text-[11px] text-[#e0353b] dark:text-[#e0353b]">
                 Mapbox unavailable — showing OpenStreetMap.
               </p>
             )}
@@ -416,24 +427,44 @@ function ToolButton({
   onClick,
   active = false,
   rounded = false,
+  tooltipSide = 'right',
 }: {
   children: React.ReactNode;
   label: string;
   onClick: () => void;
   active?: boolean;
   rounded?: boolean;
+  tooltipSide?: 'right' | 'left' | 'top';
 }) {
+  const tooltipPos: Record<string, string> = {
+    right: 'left-[calc(100%+8px)] top-1/2 -translate-y-1/2',
+    left:  'right-[calc(100%+8px)] top-1/2 -translate-y-1/2',
+    top:   'bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2',
+  };
+
   return (
-    <button
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className={`flex h-11 w-11 items-center justify-center transition-all active:scale-90 ${
-        rounded ? 'rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.35)]' : ''
-      } ${active ? 'bg-[#f5c20a] text-neutral-900 hover:brightness-90' : 'bg-white text-neutral-600 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 hover:scale-105'}`}
-    >
-      {children}
-    </button>
+    <div className="group relative">
+      <button
+        aria-label={label}
+        onClick={onClick}
+        className={`flex h-11 w-11 items-center justify-center transition-all duration-150 ease-out active:scale-90 active:duration-75 ${
+          rounded ? 'rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.35)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.45)]' : ''
+        } ${
+          active
+            ? 'bg-[#f5c20a] text-neutral-900 hover:scale-105 hover:brightness-105'
+            : 'bg-white text-neutral-700 hover:scale-110 hover:bg-neutral-50 hover:shadow-md dark:bg-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-600 dark:hover:shadow-[0_4px_14px_rgba(0,0,0,0.5)]'
+        }`}
+      >
+        {children}
+      </button>
+      <div
+        className={`pointer-events-none absolute z-[9999] ${tooltipPos[tooltipSide]} opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-hover:[transition-delay:500ms]`}
+      >
+        <span className="block whitespace-nowrap rounded-lg bg-neutral-900/95 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-xl dark:bg-neutral-800 dark:ring-1 dark:ring-white/10">
+          {label}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -553,7 +584,7 @@ function GpsGlyph() {
 
 function UserGlyph() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" {...stroke}>
+    <svg width="20" height="20" viewBox="0 0 24 24" {...stroke}>
       <circle cx="12" cy="8" r="4" />
       <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
     </svg>

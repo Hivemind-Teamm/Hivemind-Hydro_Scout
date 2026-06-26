@@ -80,7 +80,7 @@ export default function SignUpPage() {
   const textColor = isDark ? "#e5e7eb" : "#000";
   const inputBg = isDark ? "#1f2937" : "#ffffff";
   const inputBorder = isDark ? "#374151" : "#ccc";
-  const errorColor = isDark ? "#f87171" : "#c00";
+  const errorColor = isDark ? "#e0353b" : "#e0353b";
 
   const inputStyle: React.CSSProperties = {
     padding: "13px 20px",

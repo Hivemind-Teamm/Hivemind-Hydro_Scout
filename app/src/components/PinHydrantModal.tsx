@@ -144,7 +144,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
       <div className="anim-fade-scale relative flex h-[95vh] w-[95vw] max-w-[1100px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
 
         {/* ── Header ── */}
-        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-[#91191E] px-6 py-3">
+        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-[#e0353b] px-6 py-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Hydrant%20Pin%20Red.png" alt="" className="h-8 w-8 object-contain brightness-0 invert" />
           <div className="flex-1">
@@ -153,7 +153,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-red-300 hover:bg-red-800 hover:text-white"
+            className="rounded-full p-1.5 text-red-300 transition-all duration-150 ease-out hover:bg-red-800 hover:text-white hover:scale-110 active:scale-90 active:duration-75"
           >
             ✕
           </button>
@@ -175,7 +175,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
               />
               <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">New Hydrant</p>
               {previewId ? (
-                <span className="rounded-full bg-[#91191E]/10 dark:bg-[#e0353b]/15 px-3 py-0.5 text-sm font-extrabold tracking-wide text-[#91191E] dark:text-[#e0353b]">
+                <span className="rounded-full bg-[#e0353b]/10 dark:bg-[#e0353b]/15 px-3 py-0.5 text-sm font-extrabold tracking-wide text-[#e0353b] dark:text-[#e0353b]">
                   {previewId}
                 </span>
               ) : (
@@ -220,7 +220,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
 
           {/* Right: scrollable form */}
           <div className="flex flex-1 flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-7 py-5 space-y-6">
+            <div className="scroll-fade min-h-0 flex-1 overflow-y-auto px-7 py-5 space-y-6">
 
               {/* Location */}
               <Section title="Location">
@@ -393,7 +393,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                     className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700 disabled:opacity-50"
                   >
                     {uploading ? (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-[#91191E]" />
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-[#e0353b]" />
                     ) : '+'}
                   </button>
                 </div>
@@ -405,7 +405,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Pinned By</p>
-                    <p className="font-bold text-[#91191E] dark:text-[#e0353b]">{displayName}</p>
+                    <p className="font-bold text-[#e0353b] dark:text-[#e0353b]">{displayName}</p>
                     <p>{roleLabel}</p>
                   </div>
                   <div>
@@ -423,19 +423,19 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
 
             {/* Footer */}
             <div className="shrink-0 border-t border-neutral-200 px-7 py-4 dark:border-neutral-700">
-              {error && <p className="mb-2 text-[11px] font-medium text-[#91191E] dark:text-[#e0353b]">{error}</p>}
+              {error && <p className="mb-2 text-[11px] font-medium text-[#e0353b] dark:text-[#e0353b]">{error}</p>}
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
                   disabled={saving}
-                  className="flex-1 rounded-xl border border-neutral-200 py-3 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800 disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-neutral-200 py-3 text-sm font-semibold text-neutral-600 transition-all duration-150 ease-out hover:bg-neutral-50 hover:scale-[1.02] active:scale-[0.97] active:duration-75 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:pointer-events-none"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={saving || uploading}
-                  className="flex-1 rounded-xl bg-[#91191E] py-3 text-sm font-bold text-white hover:bg-[#7a1419] disabled:opacity-60"
+                  className="flex-1 rounded-xl bg-[#e0353b] py-3 text-sm font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.02] hover:shadow-[0_4px_14px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75 disabled:opacity-60 disabled:pointer-events-none"
                 >
                   {saving ? 'Pinning…' : 'Pin Hydrant'}
                 </button>
@@ -449,12 +449,12 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
 }
 
 /* ── Shared helpers ── */
-const inputCls = 'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-700 focus:border-[#91191E] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100';
+const inputCls = 'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-700 focus:border-[#e0353b] focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-3 text-xs font-bold text-[#91191E] dark:text-[#e0353b]">{title}</p>
+      <p className="mb-3 text-xs font-bold text-[#e0353b] dark:text-[#e0353b]">{title}</p>
       {children}
     </div>
   );

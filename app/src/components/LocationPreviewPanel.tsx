@@ -14,7 +14,7 @@ export default function LocationPreviewPanel({ lat, lng, address, onPinHydrant, 
   return (
     <div className="anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] w-72 overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
       {/* Header */}
-      <div className="flex items-center gap-2 bg-[#91191E] px-4 py-3">
+      <div className="flex items-center gap-2 bg-[#e0353b] px-4 py-3">
         <PinIcon />
         <span className="flex-1 text-sm font-bold text-white">New Hydrant Location</span>
         <button
@@ -49,7 +49,7 @@ export default function LocationPreviewPanel({ lat, lng, address, onPinHydrant, 
         </button>
         <button
           onClick={onPinHydrant}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#91191E] py-2 text-xs font-bold text-white hover:bg-[#7a1419]"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#e0353b] py-2 text-xs font-bold text-white hover:bg-[#c42d32]"
         >
           <PinIcon small /> Pin Hydrant Here
         </button>

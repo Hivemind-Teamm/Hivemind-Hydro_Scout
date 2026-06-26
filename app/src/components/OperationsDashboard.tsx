@@ -170,10 +170,10 @@ function TrendChart({ points, labels }: { points: number[]; labels: string[] }) 
           <text x={PAD.left - 5} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{v}%</text>
         </g>
       ))}
-      <path d={areaD} fill="#91191E" opacity={isDark ? 0.18 : 0.06} />
-      <path d={pathD} fill="none" stroke={isDark ? '#e0353b' : '#91191E'} strokeWidth="2" strokeLinejoin="round" />
+      <path d={areaD} fill="#e0353b" opacity={isDark ? 0.18 : 0.06} />
+      <path d={pathD} fill="none" stroke={isDark ? '#e0353b' : '#e0353b'} strokeWidth="2" strokeLinejoin="round" />
       {points.map((v, i) => (
-        <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill={isDark ? '#e0353b' : '#91191E'} stroke={isDark ? '#0b0f14' : 'white'} strokeWidth="1.5" />
+        <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill={isDark ? '#e0353b' : '#e0353b'} stroke={isDark ? '#0b0f14' : 'white'} strokeWidth="1.5" />
       ))}
       {labels.map((w, i) => (
         <text key={w} x={toX(i)} y={H - PAD.bottom + 13} textAnchor="middle" fontSize="9" fill="#9ca3af" fontWeight="600">
@@ -188,7 +188,7 @@ function TrendChart({ points, labels }: { points: number[]; labels: string[] }) 
 const RATING_META = {
   good:     { color: '#2fbf4f', bg: '#e6f9ec', label: 'GOOD'     },
   moderate: { color: '#f5a623', bg: '#fff4e0', label: 'MODERATE' },
-  poor:     { color: '#91191E', bg: '#fce8e9', label: 'POOR'     },
+  poor:     { color: '#e0353b', bg: '#fce8e9', label: 'POOR'     },
 };
 
 function ZoneRow({ name, total, operational, rating }: ZoneData) {
@@ -229,7 +229,7 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 function StatBox({ value, label, sub }: { value: number; label: string; sub?: string }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
-      <span className="text-3xl font-extrabold tabular-nums text-[#91191E] dark:text-[#e0353b]">{value}</span>
+      <span className="text-3xl font-extrabold tabular-nums text-[#e0353b] dark:text-[#e0353b]">{value}</span>
       <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">{label}</span>
       {sub && <span className="text-[10px] text-neutral-400 dark:text-neutral-500">{sub}</span>}
     </div>
@@ -266,7 +266,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
         <Logo />
         <div className="flex items-center gap-3">
           <span className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Welcome, {displayName}</span>
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#91191E] text-white ring-2 ring-[#FED42E]">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e0353b] text-white ring-2 ring-[#FED42E]">
             <UserGlyph />
           </span>
         </div>
@@ -275,7 +275,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
       {/* Brand bar */}
       <div
         className="h-1 w-full shrink-0"
-        style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #91191E 70px, #91191E 140px)' }}
+        style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #e0353b 70px, #e0353b 140px)' }}
       />
 
       {/* Sub-header */}
@@ -284,13 +284,13 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
           <button
             onClick={onClose}
             title="Back to map"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-[#91191E] dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-[#e0353b] hover:scale-[1.04] active:scale-[0.96] active:duration-75 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
           >
             <BackGlyph /> Map
           </button>
           <span className="h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
           <h1 className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">Operations Dashboard</h1>
-          <span className="flex items-center gap-1.5 rounded-full bg-[#91191E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+          <span className="flex items-center gap-1.5 rounded-full bg-[#e0353b] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
             <LockGlyph /> {roleLabel}
           </span>
         </div>
@@ -304,7 +304,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
       </div>
 
       {/* Grid body */}
-      <div className="grid flex-1 grid-cols-3 gap-4 overflow-y-auto bg-neutral-100 p-6 dark:bg-neutral-950">
+      <div className="scroll-fade grid min-h-0 flex-1 grid-cols-3 gap-4 overflow-y-auto bg-neutral-100 p-6 dark:bg-neutral-950">
 
         {/* Status Breakdown */}
         <Card title="Status Breakdown" subtitle={`LIVE · ${total} HYDRANTS IN AOR`}>

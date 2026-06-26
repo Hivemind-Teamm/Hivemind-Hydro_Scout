@@ -4,6 +4,7 @@ import "./globals.css";
 import 'leaflet/dist/leaflet.css';
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/lib/theme-context";
+import ScrollBehavior from "./src/components/ScrollBehavior";
 
 // Runs before first paint to set the `.dark` class from the stored choice (or
 // the OS preference), preventing a flash of the wrong theme on load/reload.
@@ -48,6 +49,7 @@ export default function RootLayout({
       </head>
      <body className="h-screen w-screen flex flex-col bg-white text-neutral-900 dark:bg-[#0b0f14] dark:text-neutral-100" style={{ margin: 0 }}>
   <ThemeProvider>
+    <ScrollBehavior />
     <AuthProvider>{children}</AuthProvider>
   </ThemeProvider>
 </body>

@@ -30,7 +30,7 @@ function createClusterIcon(cluster: { getChildCount: () => number }) {
       display:flex;align-items:center;justify-content:center;
       backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
       box-shadow:0 0 12px rgba(254,212,46,0.35),0 3px 8px rgba(0,0,0,0.4);
-      color:#91191E;font-size:13px;font-weight:800;font-family:Arial,sans-serif;
+      color:#e0353b;font-size:13px;font-weight:800;font-family:Arial,sans-serif;
       text-shadow:0 1px 2px rgba(255,255,255,0.4);
     ">${count}</div>`,
     className: '',
@@ -41,7 +41,7 @@ function createClusterIcon(cluster: { getChildCount: () => number }) {
 
 
 const pendingPinIcon = L.divIcon({
-  html: `<div style="width:14px;height:14px;background:#FED42E;border:2.5px solid #91191E;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.45)"></div>`,
+  html: `<div style="width:14px;height:14px;background:#FED42E;border:2.5px solid #e0353b;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.45)"></div>`,
   className: '',
   iconSize: [14, 14],
   iconAnchor: [7, 7],

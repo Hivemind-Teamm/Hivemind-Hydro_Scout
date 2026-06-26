@@ -184,8 +184,8 @@ export default function DilimanMap({
     if (!mapInstance || mapInstance.getSource(OTW_SOURCE)) return;
     mapInstance.addSource(OTW_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     mapInstance.addLayer({ id: OTW_GLOW_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#DC2626', 'line-width': 22, 'line-opacity': 0.15, 'line-blur': 8 } });
-    mapInstance.addLayer({ id: OTW_BG_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#F87171', 'line-width': 7, 'line-opacity': 0.5 } });
-    mapInstance.addLayer({ id: OTW_LINE_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#EF4444', 'line-width': 3, 'line-dasharray': [0, 4, 3] } });
+    mapInstance.addLayer({ id: OTW_BG_LAYER,   type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#F87171', 'line-width': 7, 'line-opacity': 0.5 } });
+    mapInstance.addLayer({ id: OTW_LINE_LAYER,  type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#EF4444', 'line-width': 3, 'line-dasharray': [0, 4, 3] } });
   }, [mapInstance, styleEpoch]);
 
   useEffect(() => {
@@ -401,7 +401,7 @@ export default function DilimanMap({
                 justifyContent: 'center',
                 backdropFilter: 'blur(8px)',
                 boxShadow: '0 0 12px rgba(254,212,46,0.35), 0 3px 8px rgba(0,0,0,0.4)',
-                color: '#91191E',
+                color: '#e0353b',
                 fontSize: 13,
                 fontWeight: 800,
                 fontFamily: 'Arial, sans-serif',
@@ -416,7 +416,7 @@ export default function DilimanMap({
 
         {pendingPin && (
           <Marker longitude={pendingPin.lng} latitude={pendingPin.lat} anchor="center">
-            <div style={{ width: 14, height: 14, background: '#FED42E', border: '2.5px solid #91191E', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }} />
+            <div style={{ width: 14, height: 14, background: '#FED42E', border: '2.5px solid #e0353b', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }} />
           </Marker>
         )}
 

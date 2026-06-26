@@ -48,7 +48,7 @@ export const ROLE_META: Record<UserRole, RoleMeta> = {
   general:    { label: 'General',    badgeBg: '#f1f5f9', badgeText: '#475569', dot: '#94a3b8' },
   authorized: { label: 'Authorized', badgeBg: '#fff4e0', badgeText: '#b45309', dot: '#f59e0b' },
   head:       { label: 'Head',       badgeBg: '#ede9fe', badgeText: '#6d28d9', dot: '#7c3aed' },
-  admin:      { label: 'Admin',      badgeBg: '#fce8e9', badgeText: '#91191E', dot: '#91191E' },
+  admin:      { label: 'Admin',      badgeBg: '#fce8e9', badgeText: '#e0353b', dot: '#e0353b' },
 };
 
 export interface AppUser {

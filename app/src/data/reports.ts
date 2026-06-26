@@ -24,7 +24,7 @@ export interface Report {
 export const STATUS_COLORS: Record<ReportStatus, { border: string; badge: string; text: string; label: string }> = {
   pending:  { border: '#f5a623', badge: '#fff4e0', text: '#c97a00', label: 'Pending'  },
   resolved: { border: '#2fbf4f', badge: '#e6f9ec', text: '#1e8a39', label: 'Resolved' },
-  denied:   { border: '#91191E', badge: '#fce8e9', text: '#91191E', label: 'Denied'   },
+  denied:   { border: '#e0353b', badge: '#fce8e9', text: '#e0353b', label: 'Denied'   },
 };
 
 function toStatus(value: unknown): ReportStatus {

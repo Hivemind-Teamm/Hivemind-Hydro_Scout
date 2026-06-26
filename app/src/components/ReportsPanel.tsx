@@ -18,6 +18,8 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
   const canResolve = role === 'head' || role === 'admin';
   const [filter, setFilter] = useState<Filter>('all');
 
+  if (!role || role === 'general') return null;
+
   const counts = {
     all:      reports.length,
     pending:  reports.filter((r) => r.status === 'pending').length,
@@ -50,7 +52,7 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
             onClick={() => setFilter(tab.key)}
             className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wide transition-colors ${
               filter === tab.key
-                ? 'border-b-2 border-[#FED42E] text-[#91191E] dark:text-[#e0353b]'
+                ? 'border-b-2 border-[#FED42E] text-[#e0353b] dark:text-[#e0353b]'
                 : 'text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
             }`}
           >
@@ -60,7 +62,7 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
       </div>
 
       {/* Report list */}
-      <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
+      <div className="scroll-fade min-h-0 flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
         {visible.map((report) => (
           <ReportCard key={report.id} report={report} onViewUser={onViewUser} canResolve={canResolve} />
         ))}
@@ -98,7 +100,7 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
       style={{ borderLeft: `3px solid ${sc.border}` }}
     >
       <div className="mb-1 flex items-start justify-between gap-2">
-        <span className="text-[10px] font-bold text-[#91191E]">{report.id}</span>
+        <span className="text-[10px] font-bold text-[#e0353b]">{report.id}</span>
         <span
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
           style={{ background: sc.badge, color: sc.text }}
@@ -111,7 +113,7 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
       <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
         <button
           onClick={() => onViewUser(report.reporter, report.role)}
-          className="font-semibold text-[#91191E] hover:underline dark:text-[#e0353b]"
+          className="font-semibold text-[#e0353b] hover:underline dark:text-[#e0353b]"
         >
           {report.reporter}
         </button>
@@ -123,20 +125,20 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
           <button
             onClick={() => handleStatusChange('resolved')}
             disabled={saving}
-            className="flex-1 rounded py-1 text-[10px] font-bold bg-[#e6f9ec] text-[#1e8a39] hover:bg-[#c6f0d1] disabled:opacity-50"
+            className="flex-1 rounded py-1 text-[10px] font-bold bg-[#e6f9ec] text-[#1e8a39] transition-all duration-150 ease-out hover:bg-[#c6f0d1] hover:scale-[1.03] hover:shadow-sm active:scale-[0.97] active:duration-75 disabled:opacity-50 disabled:pointer-events-none"
           >
             {saving ? '…' : 'Resolve'}
           </button>
           <button
             onClick={() => handleStatusChange('denied')}
             disabled={saving}
-            className="flex-1 rounded py-1 text-[10px] font-bold bg-[#fce8e9] text-[#91191E] hover:bg-[#f9d0d2] disabled:opacity-50"
+            className="flex-1 rounded py-1 text-[10px] font-bold bg-[#fce8e9] text-[#e0353b] transition-all duration-150 ease-out hover:bg-[#f9d0d2] hover:scale-[1.03] hover:shadow-sm active:scale-[0.97] active:duration-75 disabled:opacity-50 disabled:pointer-events-none"
           >
             {saving ? '…' : 'Deny'}
           </button>
         </div>
       )}
-      {err && <p className="mt-1 text-[10px] text-[#91191E] dark:text-[#e0353b]">{err}</p>}
+      {err && <p className="mt-1 text-[10px] text-[#e0353b] dark:text-[#e0353b]">{err}</p>}
     </div>
   );
 }

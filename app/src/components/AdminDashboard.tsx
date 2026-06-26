@@ -23,7 +23,7 @@ import {
 import { useHydrants, createHydrant } from '../data/store';
 import { type HydrantStatus } from '../data/hydrants';
 
-/* ════════════════════════════════ Root ════════════════════════════════ */
+/* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   const { user } = useAuth();
@@ -39,51 +39,53 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   }, [users]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-neutral-100 dark:bg-neutral-950">
-      {/* ── Top header ── */}
-      <header className="flex shrink-0 items-center justify-between bg-white px-6 py-3 shadow-sm dark:bg-neutral-900">
-        <Logo />
-        <div className="flex items-center gap-3">
-          <span className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Welcome, {adminName}</span>
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#91191E] text-white ring-2 ring-[#FED42E]">
-            <UserGlyph />
-          </span>
-        </div>
-      </header>
+    <div className="min-h-screen w-screen bg-neutral-100 dark:bg-neutral-950">
+      {/* ── Sticky top bar (header + brand line + sub-header) ── */}
+      <div className="sticky top-0 z-10 flex flex-col shadow-sm">
+        <header className="flex items-center justify-between bg-white px-6 py-3 dark:bg-neutral-900">
+          <Logo />
+          <div className="flex items-center gap-3">
+            <span className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Welcome, {adminName}</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e0353b] text-white ring-2 ring-[#FED42E]">
+              <UserGlyph />
+            </span>
+          </div>
+        </header>
 
-      {/* brand accent line */}
-      <div
-        className="h-1 w-full shrink-0"
-        style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #91191E 70px, #91191E 140px)' }}
-      />
+        {/* brand accent line */}
+        <div
+          className="h-1 w-full"
+          style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #e0353b 70px, #e0353b 140px)' }}
+        />
 
-      {/* ── Sub-header ── */}
-      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            title="Back to map"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-[#91191E] dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
-          >
-            <BackGlyph /> Map
-          </button>
-          <span className="h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
-          <h1 className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">System Administration</h1>
-          <span className="flex items-center gap-1.5 rounded-full bg-[#91191E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-            <LockGlyph /> Admin Only
-          </span>
+        {/* Sub-header */}
+        <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              title="Back to map"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-[#e0353b] hover:scale-[1.04] active:scale-[0.96] active:duration-75 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
+            >
+              <BackGlyph /> Map
+            </button>
+            <span className="h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
+            <h1 className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">System Administration</h1>
+            <span className="flex items-center gap-1.5 rounded-full bg-[#e0353b] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+              <LockGlyph /> Admin Only
+            </span>
+          </div>
+          <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+            <span className="font-bold text-neutral-600 dark:text-neutral-300">{stationCount}</span> Stations
+            <span className="mx-1.5">·</span>
+            <span className="font-bold text-neutral-600 dark:text-neutral-300">{hydrants.length}</span> Hydrants
+            <span className="mx-1.5">·</span>
+            <span className="font-bold text-neutral-600 dark:text-neutral-300">{users.length}</span> Accounts
+          </p>
         </div>
-        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
-          <span className="font-bold text-neutral-600 dark:text-neutral-300">{stationCount}</span> Stations
-          <span className="mx-1.5">·</span>
-          <span className="font-bold text-neutral-600 dark:text-neutral-300">{hydrants.length}</span> Hydrants
-          <span className="mx-1.5">·</span>
-          <span className="font-bold text-neutral-600 dark:text-neutral-300">{users.length}</span> Accounts
-        </p>
       </div>
 
-      {/* ── Body ── */}
-      <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
+      {/* ── Body — grows naturally, window scrolls ── */}
+      <div className="flex flex-col gap-5 p-6">
         <ManageUsersCard
           users={users}
           loading={loading}
@@ -96,7 +98,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   );
 }
 
-/* ═══════════════════════════ Manage Users card ═══════════════════════════ */
+/* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Manage Users card �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 function ManageUsersCard({
   users, loading, error, currentUid,
@@ -136,7 +138,7 @@ function ManageUsersCard({
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#91191E] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#7a1419] active:scale-95"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#e0353b] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.04] hover:shadow-[0_4px_12px_rgba(224,53,59,0.4)] active:scale-[0.96] active:duration-75"
         >
           <PlusGlyph /> Create Account
         </button>
@@ -144,7 +146,7 @@ function ManageUsersCard({
 
       {/* Toolbar: search + role filter pills */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-        <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 focus-within:border-[#91191E] focus-within:bg-white dark:border-neutral-700 dark:bg-neutral-800 dark:focus-within:bg-neutral-800">
+        <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 focus-within:border-[#e0353b] focus-within:bg-white dark:border-neutral-700 dark:bg-neutral-800 dark:focus-within:bg-neutral-800">
           <SearchGlyph />
           <input
             value={search}
@@ -162,7 +164,7 @@ function ManageUsersCard({
                 onClick={() => setRoleFilter(f.key)}
                 className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
                   active
-                    ? 'bg-[#91191E] text-white shadow-sm'
+                    ? 'bg-[#e0353b] text-white shadow-sm'
                     : 'border border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600 dark:border-neutral-700 dark:text-neutral-500 dark:hover:border-neutral-600 dark:hover:text-neutral-300'
                 }`}
               >
@@ -190,7 +192,7 @@ function ManageUsersCard({
               <SkeletonRows />
             ) : error ? (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-sm text-[#91191E] dark:text-[#e0353b]">
+                <td colSpan={5} className="px-6 py-10 text-center text-sm text-[#e0353b] dark:text-[#e0353b]">
                   Couldn’t load accounts: {error}
                 </td>
               </tr>
@@ -242,7 +244,7 @@ function UserRow({
       {/* User */}
       <td className="px-6 py-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#91191E] text-xs font-extrabold text-white">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-xs font-extrabold text-white">
             {user.initials}
           </span>
           <div className="min-w-0">
@@ -280,7 +282,7 @@ function UserRow({
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={onEdit}
-            className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-bold text-neutral-600 transition-colors hover:border-neutral-300 hover:bg-neutral-50 active:scale-95 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
+            className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-bold text-neutral-600 transition-all duration-150 ease-out hover:border-neutral-300 hover:bg-neutral-50 hover:scale-[1.04] active:scale-[0.96] active:duration-75 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
           >
             Edit
           </button>
@@ -288,7 +290,7 @@ function UserRow({
             onClick={onRemove}
             disabled={isSelf}
             title={isSelf ? "You can't remove your own account" : 'Remove account'}
-            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-[#91191E] transition-colors hover:bg-red-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-500/30 dark:text-[#e0353b] dark:hover:bg-red-950/40"
+            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-[#e0353b] transition-all duration-150 ease-out hover:bg-red-50 hover:scale-[1.04] hover:shadow-sm active:scale-[0.96] active:duration-75 disabled:cursor-not-allowed disabled:opacity-40 disabled:pointer-events-none dark:border-red-500/30 dark:text-[#e0353b] dark:hover:bg-red-950/40"
           >
             Remove
           </button>
@@ -322,7 +324,7 @@ function SkeletonRows() {
   );
 }
 
-/* ════════════════════════════ Create account modal ════════════════════════ */
+/* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Create account modal �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 function CreateAccountModal({ onClose }: { onClose: () => void }) {
   const [displayName, setDisplayName] = useState('');
@@ -415,7 +417,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
           </div>
         </Field>
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#e0353b] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
       </div>
 
       <ModalFooter>
@@ -428,7 +430,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* ═══════════════════════════════ Edit user modal ══════════════════════════ */
+/* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Edit user modal �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }) {
   const [role, setRole] = useState<UserRole>(user.role);
@@ -453,7 +455,7 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
     <ModalShell title="Edit Account" subtitle={user.email} onClose={onClose}>
       <div className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-800/50">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#91191E] text-sm font-extrabold text-white">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-sm font-extrabold text-white">
             {user.initials}
           </span>
           <div>
@@ -490,7 +492,7 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
             Role will change from <b>{ROLE_META[user.role].label}</b> to <b>{ROLE_META[role].label}</b>.
           </p>
         )}
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#e0353b] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
       </div>
 
       <ModalFooter>
@@ -503,7 +505,7 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
   );
 }
 
-/* ════════════════════════════ Remove user modal ═══════════════════════════ */
+/* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Remove user modal �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 function RemoveUserModal({ user, onClose }: { user: AppUser; onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
@@ -531,7 +533,7 @@ function RemoveUserModal({ user, onClose }: { user: AppUser; onClose: () => void
         <p className="rounded-lg bg-neutral-50 px-3 py-2 text-[11px] text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500">
           Note: this deletes the user’s directory record. Fully revoking the sign-in credential requires the Firebase Admin SDK on a server.
         </p>
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#91191E] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#e0353b] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
       </div>
 
       <ModalFooter>
@@ -539,7 +541,7 @@ function RemoveUserModal({ user, onClose }: { user: AppUser; onClose: () => void
         <button
           onClick={handleRemove}
           disabled={submitting}
-          className="rounded-lg bg-[#91191E] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#7a1419] disabled:opacity-60"
+          className="rounded-lg bg-[#e0353b] px-5 py-2.5 text-sm font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.03] hover:shadow-[0_4px_14px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75 disabled:opacity-60 disabled:pointer-events-none"
         >
           {submitting ? 'Removing…' : 'Remove Account'}
         </button>
@@ -548,7 +550,7 @@ function RemoveUserModal({ user, onClose }: { user: AppUser; onClose: () => void
   );
 }
 
-/* ═══════════════════════════ Bulk import card ═════════════════════════════ */
+/* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Bulk import card �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 interface ParsedRow {
   line: number;
@@ -654,13 +656,13 @@ function BulkImportCard({ adminName }: { adminName: string }) {
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-              dragOver ? 'border-[#91191E] bg-red-50 dark:bg-red-950/30' : 'border-neutral-300 bg-neutral-50/60 hover:border-neutral-400 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800/40 dark:hover:border-neutral-600 dark:hover:bg-neutral-800'
+              dragOver ? 'border-[#e0353b] bg-red-50 dark:bg-red-950/30' : 'border-neutral-300 bg-neutral-50/60 hover:border-neutral-400 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800/40 dark:hover:border-neutral-600 dark:hover:bg-neutral-800'
             }`}
           >
-            <span className="text-[#91191E] dark:text-[#e0353b]"><ImportGlyph /></span>
+            <span className="text-[#e0353b] dark:text-[#e0353b]"><ImportGlyph /></span>
             <p className="text-sm font-bold text-neutral-700 dark:text-neutral-200">Drop Spreadsheet Here</p>
             <p className="text-xs text-neutral-400 dark:text-neutral-500">
-              or <span className="font-bold text-[#91191E] underline dark:text-[#e0353b]">browse files</span> to upload
+              or <span className="font-bold text-[#e0353b] underline dark:text-[#e0353b]">browse files</span> to upload
             </p>
             <input
               ref={fileInputRef}
@@ -687,7 +689,7 @@ function BulkImportCard({ adminName }: { adminName: string }) {
               </div>
               <div className="mt-2 flex items-center gap-4 text-sm font-bold">
                 <span className="text-[#2fbf4f]">{result.rows.length} valid</span>
-                <span className={result.errors.length ? 'text-[#91191E] dark:text-[#e0353b]' : 'text-neutral-300 dark:text-neutral-600'}>
+                <span className={result.errors.length ? 'text-[#e0353b] dark:text-[#e0353b]' : 'text-neutral-300 dark:text-neutral-600'}>
                   {result.errors.length} error{result.errors.length === 1 ? '' : 's'}
                 </span>
               </div>
@@ -705,7 +707,7 @@ function BulkImportCard({ adminName }: { adminName: string }) {
                 <button
                   onClick={commit}
                   disabled={committing}
-                  className="mt-3 w-full rounded-lg bg-[#91191E] py-2.5 text-xs font-bold text-white transition-colors hover:bg-[#7a1419] disabled:opacity-60"
+                  className="mt-3 w-full rounded-lg bg-[#e0353b] py-2.5 text-xs font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.02] hover:shadow-[0_4px_14px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75 disabled:opacity-60 disabled:pointer-events-none"
                 >
                   {committing ? 'Committing…' : `Commit ${result.rows.length} valid hydrant${result.rows.length === 1 ? '' : 's'}`}
                 </button>
@@ -730,7 +732,7 @@ function BulkImportCard({ adminName }: { adminName: string }) {
           </div>
           <button
             onClick={downloadTemplate}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#91191E] py-2.5 text-xs font-bold text-[#91191E] transition-colors hover:bg-red-50 active:scale-95 dark:border-[#e0353b] dark:text-[#e0353b] dark:hover:bg-red-950/40"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#e0353b] py-2.5 text-xs font-bold text-[#e0353b] transition-all duration-150 ease-out hover:bg-red-50 hover:scale-[1.02] hover:shadow-sm active:scale-[0.97] active:duration-75 dark:border-[#e0353b] dark:text-[#e0353b] dark:hover:bg-red-950/40"
           >
             <DownloadGlyph /> Download Import Template
           </button>
@@ -834,7 +836,7 @@ function parseHydrantCsv(fileName: string, text: string, adminName: string): Par
   return { fileName, rows, errors };
 }
 
-/* ════════════════════════════ Shared modal pieces ═════════════════════════ */
+/* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Shared modal pieces �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 function ModalShell({
   title, subtitle, onClose, tone = 'brand', children,
@@ -851,12 +853,12 @@ function ModalShell({
         className="anim-fade-scale w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className={`flex items-center justify-between px-6 py-4 ${tone === 'danger' ? 'bg-[#91191E]' : 'bg-[#91191E]'}`}>
+        <div className={`flex items-center justify-between px-6 py-4 ${tone === 'danger' ? 'bg-[#e0353b]' : 'bg-[#e0353b]'}`}>
           <div>
             <h3 className="text-base font-extrabold text-white">{title}</h3>
             {subtitle && <p className="text-xs text-red-200">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-red-200 hover:bg-red-900 hover:text-white">✕</button>
+          <button onClick={onClose} className="rounded-full p-1.5 text-red-200 transition-all duration-150 ease-out hover:bg-red-900 hover:text-white hover:scale-110 active:scale-90 active:duration-75">✕</button>
         </div>
         {children}
       </div>

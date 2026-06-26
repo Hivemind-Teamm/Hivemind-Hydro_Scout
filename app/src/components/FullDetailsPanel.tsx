@@ -7,7 +7,7 @@ import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { formatDistance } from '@/lib/haversine';
 import { deleteHydrantPhoto, setDisplayPhoto } from '../data/store';
 
-type Tab = 'quick' | 'details' | 'register' | 'admin';
+type Tab = 'quick' | 'details' | 'admin';
 
 const PRESSURE_COLOR: Record<string, string> = {
   Strong: '#2fbf4f', Moderate: '#f5a623', Low: '#e05c2a', None: '#9aa0a6',
@@ -32,6 +32,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
   const menuRef = useRef<HTMLDivElement>(null);
   const meta = STATUS_META[hydrant.status];
 
+  const isAdmin       = role === 'admin';
   const isHeadOrAdmin = role === 'head' || role === 'admin';
   const canAnnotate   = role === 'authorized' || role === 'head' || role === 'admin';
 
@@ -64,7 +65,9 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
     finally { setMenuBusy(false); setPhotoMenu(null); }
   };
 
-  // Admin tab is always visible — non-head/admin see a restricted-access screen.
+  const tabs: Tab[] = isAdmin
+    ? ['quick', 'details', 'admin']
+    : ['quick', 'details'];
 
   return (
     <div className="anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[69px] z-[3000] flex w-[420px] flex-col bg-white dark:bg-neutral-900 shadow-2xl">
@@ -89,7 +92,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => onFlyTo(hydrant.lat, hydrant.lng)}
-              className="flex items-center gap-1 text-sm font-bold text-neutral-800 hover:underline dark:text-neutral-100"
+              className="flex items-center gap-1 text-sm font-bold text-neutral-800 transition-all duration-150 ease-out hover:text-[#e0353b] hover:translate-x-0.5 active:scale-[0.97] active:duration-75 dark:text-neutral-100"
               title="Zoom to hydrant"
             >
               <LocateIcon />
@@ -111,7 +114,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 
         <button
           onClick={onClose}
-          className="mt-0.5 shrink-0 rounded-full p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          className="mt-0.5 shrink-0 rounded-full p-1 text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-neutral-700 hover:scale-110 active:scale-90 active:duration-75 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
         >
           ✕
         </button>
@@ -119,7 +122,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 
       {/* ── Tabs ── */}
       <div className="flex border-b border-neutral-200 text-[11px] font-bold uppercase tracking-wide dark:border-neutral-700">
-        {(['quick', 'details', 'register', 'admin'] as Tab[]).map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -129,22 +132,16 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
                 : 'text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
             }`}
           >
-            {t === 'admin' ? (
-              <span className="flex items-center justify-center gap-1">
-                Admin
-                <LockIcon locked={!isHeadOrAdmin} />
-              </span>
-            ) : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
 
       {/* ── Tab content ── */}
-      <div className="flex-1 overflow-y-auto">
-        {tab === 'quick'    && <QuickTab    hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
-        {tab === 'details'  && <DetailsTab  hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} onPhotoContextMenu={handlePhotoContextMenu} />}
-        {tab === 'register' && <RegisterTab hydrant={hydrant} onViewUser={onViewUser} />}
-        {tab === 'admin'    && <AdminTab    hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} />}
+      <div className="scroll-fade min-h-0 flex-1 overflow-y-auto">
+        {tab === 'quick'   && <QuickTab   hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
+        {tab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} onPhotoContextMenu={handlePhotoContextMenu} />}
+        {tab === 'admin'   && <AdminTab   hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} />}
       </div>
 
       {/* Photo context menu — rendered via portal to escape the CSS transform stacking context */}
@@ -158,7 +155,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
             <>
               <button
                 onClick={() => { window.open(photoMenu.url, '_blank'); setPhotoMenu(null); }}
-                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:text-neutral-200 dark:hover:bg-neutral-700"
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-neutral-700 transition-all duration-100 hover:bg-neutral-50 hover:pl-5 active:scale-[0.98] dark:text-neutral-200 dark:hover:bg-neutral-700"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 View Full Image
@@ -166,7 +163,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
               <button
                 onClick={handleMakeDisplay}
                 disabled={menuBusy || hydrant.photos[0] === photoMenu.url}
-                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 dark:text-neutral-200 dark:hover:bg-neutral-700"
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-neutral-700 transition-all duration-100 hover:bg-neutral-50 hover:pl-5 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none dark:text-neutral-200 dark:hover:bg-neutral-700"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
                 {hydrant.photos[0] === photoMenu.url ? 'Already Display Photo' : menuBusy ? 'Updating…' : 'Make Display Photo'}
@@ -174,7 +171,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
               <div className="mx-3 h-px bg-neutral-100 dark:bg-neutral-700" />
               <button
                 onClick={() => setPhotoMenu({ ...photoMenu, confirming: true })}
-                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-[#91191E] hover:bg-red-50 dark:text-[#e0353b] dark:hover:bg-red-950/40"
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-[#e0353b] transition-all duration-100 hover:bg-red-50 hover:pl-5 active:scale-[0.98] dark:text-[#e0353b] dark:hover:bg-red-950/40"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                 Delete Image
@@ -184,10 +181,10 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
             <div className="px-4 py-3">
               <p className="mb-2.5 text-[11px] font-semibold text-neutral-700 dark:text-neutral-200">Delete this photo permanently?</p>
               <div className="flex gap-2">
-                <button onClick={handleDelete} disabled={menuBusy} className="flex-1 rounded-lg bg-[#91191E] py-1.5 text-[11px] font-bold text-white hover:bg-[#7a1419] disabled:opacity-60">
+                <button onClick={handleDelete} disabled={menuBusy} className="flex-1 rounded-lg bg-[#e0353b] py-1.5 text-[11px] font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.03] hover:shadow-[0_4px_12px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75 disabled:opacity-60 disabled:pointer-events-none">
                   {menuBusy ? 'Deleting…' : 'Delete'}
                 </button>
-                <button onClick={() => setPhotoMenu(null)} className="flex-1 rounded-lg border border-neutral-200 py-1.5 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-700">
+                <button onClick={() => setPhotoMenu(null)} className="flex-1 rounded-lg border border-neutral-200 py-1.5 text-[11px] font-semibold text-neutral-600 transition-all duration-150 ease-out hover:bg-neutral-50 hover:scale-[1.03] active:scale-[0.97] active:duration-75 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-700">
                   Cancel
                 </button>
               </div>
@@ -262,7 +259,7 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
             {[...hydrant.photos].reverse().map((url, i) => (
               <div
                 key={url}
-                className="relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-neutral-200 hover:opacity-90 dark:border-neutral-700"
+                className="relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-neutral-200 transition-all duration-150 ease-out hover:scale-[1.04] hover:shadow-md hover:z-10 active:scale-[0.97] active:duration-75 dark:border-neutral-700"
                 onClick={() => window.open(url, '_blank')}
                 onContextMenu={isHeadOrAdmin ? (e) => onPhotoContextMenu(e, url) : undefined}
                 title={isHeadOrAdmin ? 'Click to view · Right-click for options' : 'Click to view'}
@@ -298,7 +295,7 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
               <div className="flex-1 rounded-lg bg-neutral-100 px-2.5 py-2 dark:bg-neutral-800">
                 <button
                   onClick={() => onViewUser(n.user, 'Authorized User')}
-                  className="text-[10px] font-semibold text-[#91191E] hover:underline mb-0.5 block dark:text-[#e0353b]"
+                  className="text-[10px] font-semibold text-[#e0353b] hover:underline mb-0.5 block dark:text-[#e0353b]"
                 >
                   {n.user}
                 </button>
@@ -309,51 +306,45 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
           ))}
         </div>
         {canAnnotate && (
-          <button className="mt-3 w-full text-right text-xs font-medium text-[#91191E] hover:underline dark:text-[#e0353b]">
+          <button className="mt-3 w-full text-right text-xs font-medium text-[#e0353b] hover:underline dark:text-[#e0353b]">
             Add notes
           </button>
         )}
       </div>
-    </div>
-  );
-}
 
-/* ──────────────────────── REGISTER ──────────────────────── */
-function RegisterTab({ hydrant, onViewUser }: { hydrant: Hydrant; onViewUser: (name: string, role: string) => void }) {
-  return (
-    <div className="px-4 py-4">
-      <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
-        Status Register — Chronological
-      </p>
-
-      <div className="flex flex-col gap-3">
-        {hydrant.register.map((entry, i) => (
-          <div key={i} className="flex gap-2.5">
-            <div className="flex flex-col items-center">
-              <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: entry.statusColor }} />
-              {i < hydrant.register.length - 1 && <div className="mt-1 w-px flex-1 bg-neutral-200 dark:bg-neutral-700" />}
+      {/* Status history */}
+      <div className="mt-5">
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+          Status History — Chronological
+        </p>
+        <div className="flex flex-col gap-3">
+          {hydrant.register.map((entry, i) => (
+            <div key={i} className="flex gap-2.5">
+              <div className="flex flex-col items-center">
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: entry.statusColor }} />
+                {i < hydrant.register.length - 1 && <div className="mt-1 w-px flex-1 bg-neutral-200 dark:bg-neutral-700" />}
+              </div>
+              <div className="pb-3">
+                <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">{entry.action}</p>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                  by{' '}
+                  <button
+                    onClick={() => onViewUser(entry.by, entry.role)}
+                    className="font-semibold text-[#e0353b] hover:underline dark:text-[#e0353b]"
+                  >
+                    {entry.by}
+                  </button>
+                  {' '}· {entry.role}
+                </p>
+                <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{entry.date}</p>
+              </div>
             </div>
-            <div className="pb-3">
-              <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">{entry.action}</p>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                by{' '}
-                <button
-                  onClick={() => onViewUser(entry.by, entry.role)}
-                  className="font-semibold text-[#91191E] hover:underline dark:text-[#e0353b]"
-                >
-                  {entry.by}
-                </button>
-                {' '}· {entry.role}
-              </p>
-              <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{entry.date}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-        <span className="mt-0.5 shrink-0">ⓘ</span>
-        <p>Inspector names stay visible to logged-in users (lawful under RA 10173) so inspectors can confirm their own work. Entries are immutable once signed.</p>
+          ))}
+        </div>
+        <div className="mt-4 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+          <span className="mt-0.5 shrink-0">ⓘ</span>
+          <p>Inspector names stay visible to logged-in users (lawful under RA 10173) so inspectors can confirm their own work. Entries are immutable once signed.</p>
+        </div>
       </div>
     </div>
   );
@@ -397,14 +388,14 @@ function AdminTab({ hydrant, isHeadOrAdmin }: { hydrant: Hydrant; isHeadOrAdmin:
           </table>
 
           <div className="flex flex-col gap-3 pt-2">
-            <p className="text-xs font-bold text-[#91191E] dark:text-[#e0353b]">Administrative Actions</p>
+            <p className="text-xs font-bold text-[#e0353b] dark:text-[#e0353b]">Administrative Actions</p>
             <button className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">
               Validate Hydrant Record
             </button>
             <button className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">
               Flag for Re-inspection
             </button>
-            <button className="w-full rounded-lg border border-red-200 py-2.5 text-xs font-semibold text-[#91191E] hover:bg-red-50 dark:border-red-500/30 dark:text-[#e0353b] dark:hover:bg-red-950/40">
+            <button className="w-full rounded-lg border border-red-200 py-2.5 text-xs font-semibold text-[#e0353b] hover:bg-red-50 dark:border-red-500/30 dark:text-[#e0353b] dark:hover:bg-red-950/40">
               Decommission Hydrant
             </button>
           </div>

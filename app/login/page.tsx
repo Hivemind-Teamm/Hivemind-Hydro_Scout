@@ -27,7 +27,7 @@ function LoginContent() {
   const textColor = isDark ? "#e5e7eb" : "#000";
   const inputBg = isDark ? "#1f2937" : "#ffffff";
   const inputBorder = isDark ? "#374151" : "#ccc";
-  const errorColor = isDark ? "#f87171" : "#c00";
+  const errorColor = isDark ? "#e0353b" : "#e0353b";
   const baseInputStyle: React.CSSProperties = {
     padding: "13px 20px",
     borderRadius: 24,
@@ -189,6 +189,7 @@ function LoginContent() {
             <button
               type="submit"
               disabled={submitting}
+              className="active:scale-[0.97]"
               style={{
                 marginTop: 8,
                 padding: "16px 20px",
@@ -201,8 +202,18 @@ function LoginContent() {
                 cursor: submitting ? "default" : "pointer",
                 width: "100%",
                 fontFamily: "inherit",
+                transition: "transform 0.1s, background 0.15s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
               }}
             >
+              {submitting && (
+                <svg className="anim-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+              )}
               {submitting ? "Logging in..." : "Login"}
             </button>
 
@@ -210,6 +221,7 @@ function LoginContent() {
             <button
               type="button"
               onClick={() => router.push("/signup")}
+              className="active:scale-[0.97]"
               style={{
                 padding: "15px 20px",
                 borderRadius: 24,
@@ -221,6 +233,7 @@ function LoginContent() {
                 cursor: "pointer",
                 width: "100%",
                 fontFamily: "inherit",
+                transition: "transform 0.1s, opacity 0.15s",
               }}
             >
               Sign Up

@@ -1,7 +1,7 @@
 'use client';
 
 const ROLE_COLORS: Record<string, string> = {
-  Admin:             '#91191E',
+  Admin:             '#e0353b',
   Head:              '#7c3aed',
   'Authorized User': '#d97706',
   'General User':    '#6b7280',
@@ -26,14 +26,14 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
       <div className="relative w-[90vw] max-w-[340px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
 
         {/* Header */}
-        <div className="flex flex-col items-center gap-2 bg-[#91191E] px-6 py-6">
+        <div className="flex flex-col items-center gap-2 bg-[#e0353b] px-6 py-6">
           <button
             onClick={onClose}
             className="absolute right-3 top-3 rounded-full p-1.5 text-red-200 hover:bg-red-900 hover:text-white"
           >
             ✕
           </button>
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xl font-extrabold text-[#91191E]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xl font-extrabold text-[#e0353b]">
             {initials}
           </div>
           <p className="text-base font-extrabold text-white">{user.name}</p>

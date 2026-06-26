@@ -17,16 +17,20 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div
-        style={{
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#FED42E",
-        }}
-      >
-        <span style={{ fontSize: 48, fontWeight: 700, color: "#000" }}>Loading…</span>
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-black/85">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/Hydro-Scout%20Logo.png"
+          alt=""
+          className="mb-5 h-20 w-20 object-contain opacity-90"
+          style={{ animation: 'bounce-dot 1.8s ease-in-out infinite' }}
+        />
+        <div className="flex gap-2">
+          <span className="bounce-dot-1 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
+          <span className="bounce-dot-2 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
+          <span className="bounce-dot-3 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
+        </div>
+        <p className="mt-4 text-xs font-semibold uppercase tracking-widest text-white/50">Signing you in…</p>
       </div>
     );
   }

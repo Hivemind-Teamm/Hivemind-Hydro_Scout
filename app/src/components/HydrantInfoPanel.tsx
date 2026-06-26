@@ -95,7 +95,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         <div className="flex items-center gap-2">
           <button
             onClick={onRoute}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-colors ${isOtw ? 'bg-red-700 hover:bg-red-800 active:bg-red-900' : 'bg-[#91191E] hover:bg-[#7a1419] active:bg-[#611014]'}`}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-colors ${isOtw ? 'bg-red-700 hover:bg-red-800 active:bg-red-900' : 'bg-[#e0353b] hover:bg-[#c42d32] active:bg-[#9e2428]'}`}
           >
             <RouteIcon />
             {isOtw ? 'Routing…' : 'Route'}
@@ -149,7 +149,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         )}
 
         <button
-          className="mt-2 w-full text-center text-xs text-[#91191E] dark:text-[#e0353b] hover:underline"
+          className="mt-2 w-full text-center text-xs text-[#e0353b] dark:text-[#e0353b] hover:underline"
           onClick={onOpenFullDetails}
         >
           Open full details →

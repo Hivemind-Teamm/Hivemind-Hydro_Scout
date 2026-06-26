@@ -71,10 +71,25 @@ export default function HydroScoutDashboard() {
   const [deletedHydrant, setDeletedHydrant] = useState<{ id: string; name: string } | null>(null);
   const deletedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Splash screen — shown until BOTH the map is ready AND hydrant data has loaded
+  const [splashDone, setSplashDone] = useState(false);
+  const [splashFading, setSplashFading] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const splashStartedRef = useRef(false);
+
   const { role } = useAuth();
   const { hydrants, loading, error } = useHydrants();
   const { reports, loading: reportsLoading } = useReports();
   const hasPendingReports = reports.some((r) => r.status === 'pending');
+
+  useEffect(() => {
+    if (!loading && mapReady && !splashStartedRef.current) {
+      splashStartedRef.current = true;
+      setSplashFading(true);
+      const t = setTimeout(() => setSplashDone(true), 500);
+      return () => clearTimeout(t);
+    }
+  }, [loading, mapReady]);
 
   useEffect(() => {
     if (!loading) setLastSynced(new Date());
@@ -137,8 +152,8 @@ export default function HydroScoutDashboard() {
 
     // Mapbox Directions: request duration + distance in addition to geometry
     const url = token
-      ? `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&annotations=duration,distance&access_token=${token}`
-      : `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`;
+      ? `https://api.mapbox.com/directions/v5/mapbox/walking/${coords}?geometries=geojson&overview=full&annotations=duration,distance&access_token=${token}`
+      : `https://router.project-osrm.org/route/v1/foot/${coords}?geometries=geojson&overview=full`;
 
     fetch(url)
       .then((r) => {
@@ -200,12 +215,16 @@ export default function HydroScoutDashboard() {
     if (provider === 'mapbox') {
       setIs3D(false);
       controllerRef.current?.setPitch(0);
+    } else {
+      // User is manually switching back to Mapbox — clear the auto-fallback warning.
+      setAutoFallback(false);
     }
     setProvider(provider === 'mapbox' ? 'leaflet' : 'mapbox');
   }, [provider]);
 
   const handleMapReady = useCallback((controller: MapController) => {
     controllerRef.current = controller;
+    setMapReady(true);
     if (otwRouteRef.current) {
       requestAnimationFrame(() => {
         controller.setZoomLimits(OTW_MIN_ZOOM, OTW_MAX_ZOOM);
@@ -455,6 +474,23 @@ export default function HydroScoutDashboard() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
+
+      {/* ── Initial loading splash ── */}
+      {!splashDone && (
+        <div
+          className={`pointer-events-none absolute inset-0 z-[9999] flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm transition-opacity duration-500 ${splashFading ? 'opacity-0' : 'opacity-100'}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/Hydro-Scout%20Logo.png" alt="" className="mb-5 h-20 w-20 object-contain opacity-90" style={{ animation: 'bounce-dot 1.8s ease-in-out infinite' }} />
+          <div className="flex gap-2">
+            <span className="bounce-dot-1 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
+            <span className="bounce-dot-2 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
+            <span className="bounce-dot-3 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
+          </div>
+          <p className="mt-4 text-xs font-semibold tracking-widest text-white/50 uppercase">Loading map…</p>
+        </div>
+      )}
+
       <MapView
         provider={provider}
         hydrants={visibleHydrants}
@@ -596,7 +632,7 @@ export default function HydroScoutDashboard() {
       {(loading || error) && (
         <div className="pointer-events-none absolute left-1/2 top-[84px] z-[1200] -translate-x-1/2">
           <span className={`rounded-full px-3 py-1 text-xs font-semibold shadow-md ${
-            error ? 'bg-[#91191E] text-white' : 'bg-white/95 text-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-300'
+            error ? 'bg-[#e0353b] text-white' : 'bg-white/95 text-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-300'
           }`}>
             {error ? `Couldn't load hydrants: ${error}` : 'Loading hydrants…'}
           </span>
@@ -693,8 +729,8 @@ export default function HydroScoutDashboard() {
           <div className="pointer-events-auto absolute inset-0 z-[5000] bg-black/35" onClick={() => setDeletedHydrant(null)} />
           <div className="pointer-events-none absolute inset-0 z-[5001] flex items-center justify-center">
             <div className="pointer-events-auto anim-fade-scale flex w-[320px] flex-col items-center gap-4 rounded-2xl bg-white px-8 py-8 shadow-2xl text-center dark:bg-neutral-900">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#91191E]/10 dark:bg-[#e0353b]/15">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-[#91191E] dark:text-[#e0353b]">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#e0353b]/10 dark:bg-[#e0353b]/15">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-[#e0353b] dark:text-[#e0353b]">
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                   <path d="M10 11v6"/><path d="M14 11v6"/>
@@ -710,7 +746,7 @@ export default function HydroScoutDashboard() {
               </div>
               <button
                 onClick={() => { setDeletedHydrant(null); if (deletedTimerRef.current) clearTimeout(deletedTimerRef.current); }}
-                className="w-full rounded-lg bg-[#91191E] py-2 text-xs font-bold text-white hover:bg-[#7a1419] active:bg-[#611014]"
+                className="w-full rounded-lg bg-[#e0353b] py-2 text-xs font-bold text-white hover:bg-[#c42d32] active:bg-[#9e2428]"
               >
                 Dismiss
               </button>
