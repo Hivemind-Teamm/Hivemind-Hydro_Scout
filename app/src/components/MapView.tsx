@@ -40,16 +40,17 @@ interface MapViewProps {
   userLocation?: { lat: number; lng: number } | null;
   otwHydrant?: Hydrant | null;
   otwRoute?: [number, number][] | null;
+  nearRouteIds?: Set<string> | null;
   initialCenter?: { lat: number; lng: number };
   initialZoom?: number;
 }
 
-export default function MapView({ provider, hydrants, selectedHydrantId, onMapboxError, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom }: MapViewProps) {
+export default function MapView({ provider, hydrants, selectedHydrantId, onMapboxError, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom }: MapViewProps) {
   const { isDark } = useTheme();
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       {provider === 'mapbox' ? (
-        <DilimanMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onError={onMapboxError} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} pendingPin={pendingPin} is3D={is3D} userLocation={userLocation} otwHydrant={otwHydrant} otwRoute={otwRoute} initialCenter={initialCenter} initialZoom={initialZoom} isDark={isDark} />
+        <DilimanMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onError={onMapboxError} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} pendingPin={pendingPin} is3D={is3D} userLocation={userLocation} otwHydrant={otwHydrant} otwRoute={otwRoute} nearRouteIds={nearRouteIds} initialCenter={initialCenter} initialZoom={initialZoom} isDark={isDark} />
       ) : (
         <LeafletMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} pendingPin={pendingPin} userLocation={userLocation} otwHydrant={otwHydrant} otwRoute={otwRoute} initialCenter={initialCenter} initialZoom={initialZoom} isDark={isDark} />
       )}
