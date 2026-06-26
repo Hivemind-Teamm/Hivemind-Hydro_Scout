@@ -477,7 +477,7 @@ function Logo() {
         alt="Hydro-Scout"
         width={52}
         height={52}
-        className="h-[52px] w-[52px] translate-y-1 object-contain"
+        className="h-[52px] w-[52px] translate-y-1 object-contain dark:drop-shadow-[0_0_10px_rgba(224,53,59,0.7)]"
       />
       <span className="text-2xl font-extrabold tracking-tight text-white">
         Hydro-<span className="text-[#e0353b]">Scout</span>
