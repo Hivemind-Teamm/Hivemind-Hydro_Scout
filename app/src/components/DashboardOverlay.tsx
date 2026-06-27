@@ -156,6 +156,11 @@ export default function DashboardOverlay({
           <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide="left">
             <GpsGlyph />
           </ToolButton>
+          {provider === 'mapbox' && (
+            <ToolButton label={is3D ? 'Switch to 2D view' : 'Switch to 3D view'} onClick={onToggle3D} rounded active={is3D} tooltipSide="left">
+              <ThreeDGlyph />
+            </ToolButton>
+          )}
         </div>
 
         {/* Slide-in menu drawer */}
