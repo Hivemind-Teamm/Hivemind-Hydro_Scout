@@ -71,6 +71,17 @@ body {
    Animate only opacity if a marker fade-in is wanted. */
 .leaflet-marker-icon { animation: fade-in 0.2s ease-out both; }
 
+/* OSM/Leaflet cluster bubbles — emulate Mapbox's clean cluster transition.
+   The rule above pins opacity:1 (fill-mode `both`), which cancels
+   markercluster's clusterHide() fade — so on zoom-in the bubble lingers opaque
+   while the pins fly out, then pops away. `backwards` keeps the fade-IN but
+   releases opacity afterwards, letting the bubble actually fade OUT; the faster
+   ease-out transition makes it clear out as the pins separate. */
+.leaflet-marker-icon.hydrant-cluster-icon { animation-fill-mode: backwards; }
+.leaflet-cluster-anim .leaflet-marker-icon.hydrant-cluster-icon {
+  transition: transform 0.3s ease-out, opacity 0.2s ease-out;
+}
+
 @keyframes stripe-scroll {
   from { background-position: 0 0; }
   to   { background-position: 28px 28px; }

@@ -33,7 +33,7 @@ function createClusterIcon(cluster: { getChildCount: () => number }) {
       color:#e0353b;font-size:13px;font-weight:800;font-family:Arial,sans-serif;
       text-shadow:0 1px 2px rgba(255,255,255,0.4);
     ">${count}</div>`,
-    className: '',
+    className: 'hydrant-cluster-icon',
     iconSize: [42, 42],
     iconAnchor: [21, 21],
   });
@@ -67,10 +67,31 @@ function MapClickHandler({ addHydrantMode, onMapClick, onMapBackgroundClick }: {
 function ZoomBridge({ onMapReady }: { onMapReady?: (controller: MapController) => void }) {
   const map = useMap();
   useEffect(() => {
+    // Smooth, eased zoom that holds the center fixed. Leaflet's native
+    // map.zoomIn()/zoomOut() snap instantly; flyTo with an unchanged center
+    // eases like Mapbox — this is what the click-away "zoom out" gesture uses.
+    const smoothZoomBy = (delta: number) =>
+      map.flyTo(map.getCenter(), map.getZoom() + delta, { duration: 0.6 });
+
     onMapReady?.({
-      zoomIn: () => map.zoomIn(),
-      zoomOut: () => map.zoomOut(),
-      flyTo: (lat, lng, zoom = 17) => map.flyTo([lat, lng], zoom, { animate: true, duration: 0.8 }),
+      zoomIn: () => smoothZoomBy(1),
+      zoomOut: () => smoothZoomBy(-1),
+      flyTo: (lat, lng, zoom = 17) => {
+        const target = L.latLng(lat, lng);
+        const zoomChanged = Math.abs(map.getZoom() - zoom) > 0.1;
+        const moved = map.getCenter().distanceTo(target) > 3; // metres
+        // Already at this view → do nothing. Leaflet's flyTo parabola
+        // degenerates for ~zero-length moves and visibly shakes the map
+        // (the "earthquake" when re-clicking the already-selected hydrant).
+        if (!moved && !zoomChanged) return;
+        if (!zoomChanged) {
+          // Same zoom → a plain glide. flyTo would still swoop out-and-back
+          // even for a short hop, which is the hydrant-to-hydrant "shake".
+          map.panTo(target, { animate: true, duration: 0.6 });
+        } else {
+          map.flyTo(target, zoom, { animate: true, duration: 0.8 });
+        }
+      },
       setPitch: () => { /* Leaflet does not support pitch */ },
       fitRoute: (coords, padding = 60) => {
         if (!coords.length) return;
@@ -113,6 +134,23 @@ interface LeafletMapProps {
 }
 
 export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom, isDark }: LeafletMapProps) {
+  // Cluster click → slow, eased zoom-in that emulates the Mapbox side's
+  // flyTo(expansionZoom, speed 1.4). markercluster's built-in zoomToBoundsOnClick
+  // uses an instant setView, which reads as a hard snap; we replace it.
+  const handleClusterClick = (e: L.LeafletMouseEvent) => {
+    // markercluster fires `clusterclick` with the clicked cluster as `.layer`.
+    const cluster = (e as unknown as {
+      layer?: { getBounds: () => L.LatLngBounds; _group?: { _map?: L.Map } };
+    }).layer;
+    const map = cluster?._group?._map;
+    if (!cluster || !map || addHydrantMode) return;
+    const bounds = cluster.getBounds();
+    // Zoom that reveals the cluster's children, capped like the Mapbox side (≤18).
+    const expansionZoom = Math.min(map.getBoundsZoom(bounds), 18, map.getMaxZoom());
+    const targetZoom = Math.max(map.getZoom() + 1, expansionZoom);
+    map.flyTo(bounds.getCenter(), targetZoom, { duration: 0.8 });
+  };
+
   return (
     <MapContainer
       center={[initialCenter?.lat ?? DILIMAN_CENTER.lat, initialCenter?.lng ?? DILIMAN_CENTER.lng]}
@@ -162,7 +200,12 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
         maxClusterRadius={60}
         disableClusteringAtZoom={16}
         showCoverageOnHover={false}
-        spiderfyOnMaxZoom
+        // Match Mapbox: clicking a cluster zooms in to reveal its hydrants
+        // rather than spiderfying them out on connector lines. The built-in
+        // zoom is disabled in favour of our own slow, eased flyTo (handleClusterClick).
+        spiderfyOnMaxZoom={false}
+        zoomToBoundsOnClick={false}
+        onClick={handleClusterClick}
       >
         {hydrants.map((h) => (
           <Marker

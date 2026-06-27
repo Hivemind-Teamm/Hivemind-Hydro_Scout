@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 
 interface HydrantInfoPanelProps {
@@ -35,13 +36,60 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
   const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelHeight, setPanelHeight] = useState<number | null>(null);
+  const dragStartY   = useRef(0);
+  const dragStartH   = useRef(0);
+
+  // Reset height when a different hydrant is selected
+  useEffect(() => { setPanelHeight(null); }, [hydrant.id]);
+
+  const onDragHandleDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragStartY.current = e.clientY;
+    dragStartH.current = panelRef.current?.offsetHeight ?? 0;
+
+    const DEAD_ZONE = 8; // px of intentional movement required before resize kicks in
+    const MIN_H = 120;
+
+    const onMove = (ev: MouseEvent) => {
+      const raw = ev.clientY - dragStartY.current;
+      // Ignore tiny movements — only resize after crossing the dead zone downward.
+      if (raw <= DEAD_ZONE) return;
+      const effective = raw - DEAD_ZONE;
+      setPanelHeight(Math.max(MIN_H, dragStartH.current - effective));
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
+
   return (
     <div
-      className="anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] w-80 overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl"
-      style={{ maxHeight: 'calc(100vh - 65px - 24px)' }}
+      ref={panelRef}
+      className="anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] flex flex-col overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl"
+      style={{
+        width: 'clamp(13rem, 22vw, 17rem)',
+        maxHeight: 'calc(100vh - 120px)',
+        ...(panelHeight !== null ? { height: panelHeight } : {}),
+      }}
     >
+      {/* Drag handle — top border, drag down to shrink */}
+      <div
+        onMouseDown={onDragHandleDown}
+        className="shrink-0 flex items-center justify-center h-3 cursor-s-resize select-none bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+        title="Drag down to resize"
+      >
+        <span className="w-8 h-0.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
+      </div>
+
       {/* Header */}
-      <div className="flex items-start justify-between bg-neutral-50 dark:bg-neutral-800 px-5 py-4">
+      <div className="flex shrink-0 items-start justify-between bg-neutral-50 dark:bg-neutral-800 px-5 pb-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{hydrant.id}</p>
           <button
@@ -62,17 +110,17 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         </button>
       </div>
 
-      {/* Lead photo */}
+      {/* Lead photo — 1:1, scales with card width */}
       {hydrant.photos.length > 0 && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={hydrant.photos[0]}
           alt={`${hydrant.name} field photo`}
-          className="aspect-square w-full object-cover"
+          className="aspect-square w-full min-h-0 shrink object-cover"
         />
       )}
 
-      <div className="px-5 py-4">
+      <div className="shrink-0 px-5 py-4">
         {/* Status / Pressure / Key row */}
         <div className="mb-3 grid grid-cols-3 divide-x divide-neutral-100 dark:divide-neutral-700 rounded-lg bg-neutral-50 dark:bg-neutral-800 py-2 text-center">
           <div className="px-2">

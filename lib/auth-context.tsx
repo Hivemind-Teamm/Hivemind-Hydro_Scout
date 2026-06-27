@@ -16,7 +16,7 @@ import {
   signOut as firebaseSignOut,
   User,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import { auth, db } from "./firebase";
 
@@ -74,14 +74,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        const [snap, idToken] = await Promise.all([
-          getDoc(doc(db, "users", firebaseUser.uid)),
-          firebaseUser.getIdToken(),
-        ]);
-        setRole((snap.exists() ? snap.data().role : null) as Role);
-        // Re-issue the session cookie on every auth state change (including
-        // page reload) so server routes like /api/upload can always verify the user.
-        await syncSessionCookie(idToken);
+        try {
+          const [snap, idToken] = await Promise.all([
+            getDoc(doc(db, "users", firebaseUser.uid)),
+            firebaseUser.getIdToken(),
+          ]);
+          setRole((snap.exists() ? snap.data().role ?? null : null) as Role);
+          // Re-issue the session cookie on every auth state change (including
+          // page reload) so server routes like /api/upload can always verify the user.
+          await syncSessionCookie(idToken);
+        } catch (err) {
+          console.error("Failed to load user role:", err);
+          setRole(null);
+        }
       } else {
         setRole(null);
         await syncSessionCookie(null);
@@ -100,14 +105,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       friendlyAuthError(err);
     }
 
-    await setDoc(
-      doc(db, "users", cred.user.uid),
-      { lastLoginAt: serverTimestamp() },
-      { merge: true }
-    );
+    // Only update lastLoginAt on an EXISTING document — never create one here,
+    // since a document created without a role field causes the user to appear
+    // as "general" even if an admin later assigns a higher role in Firestore.
+    try {
+      await updateDoc(doc(db, "users", cred.user.uid), { lastLoginAt: serverTimestamp() });
+    } catch (err: unknown) {
+      // Document doesn't exist yet (admin-created account whose Firestore write
+      // failed, or a manually imported Auth account).  Silently skip — the role
+      // will be read as null by onAuthStateChanged and the admin can assign one
+      // via the admin panel once the document is created.
+      if ((err as { code?: string }).code !== "not-found") throw err;
+    }
 
-    const idToken = await cred.user.getIdToken();
-    await syncSessionCookie(idToken);
+    // onAuthStateChanged fires after signInWithEmailAndPassword and handles
+    // syncSessionCookie — no need to call it again here.
   }
 
   async function signup(email: string, password: string, displayName: string) {
@@ -118,23 +130,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       friendlyAuthError(err);
     }
 
-    // Create the user document — new accounts always start as 'general'.
-    // merge:true is defensive: if a document somehow already exists for this
-    // uid, we never clobber an existing role (e.g. an admin) back to 'general'.
-    await setDoc(
-      doc(db, "users", cred.user.uid),
-      {
-        email,
-        displayName,
-        role: "general",
-        createdAt: serverTimestamp(),
-        lastLoginAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
+    // createUserWithEmailAndPassword always produces a brand-new UID, so no
+    // Firestore document for this UID can exist yet — write without merge so
+    // the document is created cleanly with role: "general".
+    await setDoc(doc(db, "users", cred.user.uid), {
+      email,
+      displayName,
+      role: "general",
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+    });
 
-    const idToken = await cred.user.getIdToken();
-    await syncSessionCookie(idToken);
+    // onAuthStateChanged fires after createUserWithEmailAndPassword and handles
+    // syncSessionCookie — no need to call it again here.
   }
 
   async function logout() {

@@ -25,13 +25,6 @@ export async function POST(req: NextRequest) {
     const auth = getAuth(app);
     const decoded = await auth.verifyIdToken(idToken);
 
-    // Issue a cryptographically signed Firebase session cookie. The role is
-    // NOT baked into the cookie — server routes re-read it from Firestore so a
-    // forged or stale cookie can't grant a role the user doesn't actually have.
-    const sessionCookie = await auth.createSessionCookie(idToken, {
-      expiresIn: SESSION_MAX_AGE * 1000, // milliseconds
-    });
-
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -40,7 +33,18 @@ export async function POST(req: NextRequest) {
       maxAge: SESSION_MAX_AGE,
     };
 
-    cookieStore.set(SESSION_COOKIE, sessionCookie, cookieOptions);
+    // Issue a signed Firebase session cookie — used by server routes like
+    // /api/upload to verify the caller without re-reading Firestore.
+    // Isolated try/catch so a quota-exceeded error here doesn't prevent
+    // session_meta from being written (session_meta is what the proxy needs).
+    try {
+      const sessionCookie = await auth.createSessionCookie(idToken, {
+        expiresIn: SESSION_MAX_AGE * 1000,
+      });
+      cookieStore.set(SESSION_COOKIE, sessionCookie, cookieOptions);
+    } catch (err) {
+      console.warn("createSessionCookie failed (quota?); proxy will still work via session_meta:", err);
+    }
 
     const userDoc = await getFirestore(app)
       .collection("users")
@@ -48,9 +52,9 @@ export async function POST(req: NextRequest) {
       .get();
     const role = userDoc.exists ? userDoc.data()?.role ?? null : null;
 
-    // session_meta is read by proxy.ts (middleware) to enforce route-level
-    // access control. It carries uid+role as plain JSON so the Edge-compatible
-    // proxy doesn't need to decode the Firebase JWT itself.
+    // session_meta is read by proxy.ts to enforce route-level access control.
+    // Always written — even when createSessionCookie fails — so the proxy is
+    // never blocked by Firebase Auth quota issues.
     cookieStore.set(
       SESSION_META_COOKIE,
       JSON.stringify({ uid: decoded.uid, role }),

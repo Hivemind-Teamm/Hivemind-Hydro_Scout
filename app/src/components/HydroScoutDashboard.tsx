@@ -393,18 +393,38 @@ export default function HydroScoutDashboard() {
 
   const handleRoute = useCallback(() => {
     if (!selectedHydrant) return;
-    setOtwHydrant(selectedHydrant);
-    if (userLocation) return;
-    if (!('geolocation' in navigator)) return;
+
+    // Already have a fix — enter route mode immediately.
+    if (userLocation) {
+      setOtwHydrant(selectedHydrant);
+      return;
+    }
+
+    // We already know location is blocked — don't enter route mode at all.
+    const prevErr = geoErrorRef.current;
+    if (prevErr && prevErr.code === prevErr.PERMISSION_DENIED) {
+      showGeoError('Location permission is blocked — enable it to route.');
+      return;
+    }
+    if (!('geolocation' in navigator)) {
+      showGeoError('Location isn’t available on this device — routing needs your position.');
+      return;
+    }
+
     const onSuccess = (pos: GeolocationPosition) => {
       geoErrorRef.current = null;
       setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      // Only enter route mode once we actually have a position.
+      setOtwHydrant(selectedHydrant);
     };
     const onFinalError = (err: GeolocationPositionError) => {
       geoErrorRef.current = err;
-      if (err.code === err.PERMISSION_DENIED) {
-        showGeoError('Location permission is blocked — route line unavailable.');
-      }
+      // Location blocked/unavailable → do NOT enter route mode (no En Route banner).
+      showGeoError(
+        err.code === err.PERMISSION_DENIED
+          ? 'Location permission is blocked — enable it to route.'
+          : 'Could not get your location — routing unavailable.',
+      );
     };
     navigator.geolocation.getCurrentPosition(
       onSuccess,

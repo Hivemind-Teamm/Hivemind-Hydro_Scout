@@ -112,6 +112,21 @@ export default function DashboardOverlay({
 
           {/* Right side — stable ml-auto group to prevent layout shift */}
           <div className="ml-auto flex items-stretch">
+            {/* Operations Dashboard button — head + admin */}
+            {canViewDashboard && (
+              <div className="flex items-center border-l border-white/15 px-5">
+                <button
+                  onClick={onOpenDashboard}
+                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition-all duration-150 ease-out hover:scale-[1.04] hover:shadow-[0_4px_14px_rgba(224,53,59,0.5)] active:scale-[0.96] active:duration-75"
+                  style={{ background: '#e0353b' }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                  </svg>
+                </button>
+              </div>
+            )}
+
             {/* Admin Dashboard button — admin only */}
             {role === 'admin' && (
               <div className="flex items-center border-l border-white/15 px-5">
@@ -197,7 +212,6 @@ export default function DashboardOverlay({
         <ToolButton
           label={provider === 'mapbox' ? 'Switch to OSM map' : 'Switch to Mapbox'}
           onClick={onToggleProvider}
-          active
           rounded
         >
           <LayersGlyph />
@@ -214,12 +228,6 @@ export default function DashboardOverlay({
               </span>
             )}
           </div>
-        )}
-
-        {canViewDashboard && (
-          <ToolButton label="Operations Dashboard" onClick={onOpenDashboard} rounded>
-            <StatsGlyph />
-          </ToolButton>
         )}
 
         {canPin && (
