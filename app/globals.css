@@ -31,6 +31,16 @@ body {
   font-family: var(--font-abeezee), Arial, sans-serif;
 }
 
+/* ── Responsive root scaling ──────────────────────────────────────────
+   The desktop chrome is almost entirely rem-based, so shrinking the root
+   font-size proportionally scales the whole UI (text, padding, heights,
+   panel widths) on smaller screens — WITHOUT touching the map, which sizes
+   itself in vw/vh and internal pixels. Large monitors (≥1536px) keep the
+   original 16px baseline; laptops/tablets get a tighter, better-fitting UI.
+   Tune these two numbers to taste — everything scales off them. */
+@media (max-width: 1535px) { html { font-size: 15px; } } /* MacBooks, small desktops */
+@media (max-width: 1279px) { html { font-size: 14px; } } /* tablets, small laptops  */
+
 /* Smooth the transition when toggling themes (chrome only — not the map). */
 .theme-transition,
 .theme-transition * {

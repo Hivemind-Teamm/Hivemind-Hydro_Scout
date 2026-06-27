@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
+import { useIsMobile } from '@/lib/use-media-query';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { createReport } from '../data/store';
 
@@ -35,6 +36,7 @@ interface DamageReportModalProps {
 
 export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: DamageReportModalProps) {
   const { user, role } = useAuth();
+  const isMobile = useIsMobile();
   const [damageType, setDamageType] = useState(DAMAGE_TYPES[0]);
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
@@ -86,10 +88,10 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
         </div>
 
         {/* ── Body (below header) ── */}
-        <div className="mt-[46px] flex flex-1 overflow-hidden">
+        <div className={`mt-[46px] flex flex-1 ${isMobile ? 'flex-col overflow-y-auto' : 'overflow-hidden'}`}>
 
           {/* Left panel */}
-          <div className="flex w-[220px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-800">
+          <div className={`flex shrink-0 flex-col gap-3 bg-neutral-50 p-4 dark:bg-neutral-800 ${isMobile ? 'w-full border-b border-neutral-200 dark:border-neutral-700' : 'w-[220px] overflow-y-auto border-r border-neutral-200 dark:border-neutral-700'}`}>
             {/* Mini map */}
             <div className="h-[140px] overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
               <MiniMap lat={hydrant.lat} lng={hydrant.lng} status={hydrant.status} />
@@ -125,7 +127,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
           </div>
 
           {/* Right panel */}
-          <div className="scroll-fade flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
+          <div className={`flex flex-col px-5 py-4 ${isMobile ? '' : 'scroll-fade min-h-0 flex-1 overflow-y-auto'}`}>
 
             {/* Hydrant Information */}
             <p className="mb-2 text-xs font-bold text-[#e0353b] dark:text-[#e0353b]">Hydrant Information</p>

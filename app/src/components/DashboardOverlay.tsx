@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
+import { useIsMobile } from '@/lib/use-media-query';
 import {
   STATUS_META,
   STATUS_ORDER,
@@ -64,9 +65,11 @@ export default function DashboardOverlay({
   const { user, role } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
-  const [showCounts, setShowCounts] = useState(true);
+  const [showCounts] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const displayName = user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest';
   const roleLabel: Record<string, string> = { admin: 'Admin', head: 'Head Inspector', authorized: 'Authorized', general: 'General' };
@@ -78,6 +81,169 @@ export default function DashboardOverlay({
       ? `Synced · ${lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
       : 'Live · Synced';
 
+  /* ======================== MOBILE LAYOUT ======================== */
+  if (isMobile) {
+    return (
+      <div className="pointer-events-none absolute inset-0 select-none">
+        {/* Slim top bar */}
+        <header className="pointer-events-auto absolute inset-x-0 top-0 z-[1000]">
+          <div className="flex h-14 items-center justify-between bg-neutral-600/60 px-3 [backdrop-filter:blur(4px)] dark:bg-black/55">
+            <div className="flex items-center gap-1.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/Hydro-Scout%20Logo.png" alt="" className="h-9 w-9 object-contain dark:drop-shadow-[0_0_8px_rgba(224,53,59,0.7)]" />
+              <span className="text-lg font-extrabold tracking-tight text-white">Hydro-<span className="text-[#e0353b]">Scout</span></span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${loading ? 'bg-amber-400' : 'bg-[#2fbf4f]'}`} />
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open menu"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-white transition-transform active:scale-90"
+              >
+                <MenuGlyph />
+              </button>
+            </div>
+          </div>
+          <div className="h-1 w-full" style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #e0353b 70px, #e0353b 140px)' }} />
+        </header>
+
+        {/* Search + horizontally-scrollable status pills */}
+        <div className="pointer-events-auto absolute inset-x-0 top-[3.75rem] z-[1100] flex flex-col gap-2 px-3 pt-2">
+          <LocationSearch onFlyTo={onFlyTo} mobile />
+          <div className="flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {STATUS_ORDER.map((status) => {
+              const meta = STATUS_META[status];
+              const active = activeStatus === status;
+              return (
+                <button
+                  key={status}
+                  onClick={() => onSelectStatus(status)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-all duration-150 ease-out active:scale-95 ${!active ? 'bg-white text-neutral-600 dark:bg-neutral-700 dark:text-neutral-100' : ''}`}
+                  style={{ background: active ? meta.color : undefined, color: active ? '#ffffff' : undefined }}
+                >
+                  {meta.pillLabel}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bottom-right FAB cluster — locate, reports, pin (zoom is pinch on touch) */}
+        <div className="pointer-events-auto absolute bottom-6 right-4 z-[1000] flex flex-col items-end gap-3">
+          {canPin && (
+            <button
+              aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
+              onClick={onToggleAddHydrant}
+              className="relative flex h-12 w-12 items-center justify-center transition-transform active:scale-90"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/Hydrant%20Pin%20Red.png" alt="Pin hydrant" className="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]" />
+              <span className={`pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#e0353b] text-[10px]' : 'bg-[#2fbf4f] text-xs'}`}>
+                {addHydrantMode ? '✕' : '+'}
+              </span>
+            </button>
+          )}
+          {role !== 'general' && role !== null && (
+            <div className="relative">
+              <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports} tooltipSide="left">
+                <ReportGlyph />
+              </ToolButton>
+              {hasPendingReports && (
+                <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e0353b] text-[9px] font-bold text-white">!</span>
+              )}
+            </div>
+          )}
+          <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide="left">
+            <GpsGlyph />
+          </ToolButton>
+        </div>
+
+        {/* Slide-in menu drawer */}
+        {mobileMenuOpen && (
+          <>
+            <div className="pointer-events-auto anim-fade absolute inset-0 z-[3500] bg-black/40" onClick={() => setMobileMenuOpen(false)} />
+            <div className="anim-slide-right pointer-events-auto absolute inset-y-0 right-0 z-[3600] flex w-[82%] max-w-[20rem] flex-col bg-white shadow-2xl dark:bg-neutral-900">
+              {/* User banner */}
+              <div className="flex items-center gap-3 bg-[#e0353b] px-4 py-4">
+                <button onClick={() => { setMobileMenuOpen(false); onOpenAccount(); }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15 text-white transition-transform active:scale-90">
+                  <UserGlyph />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-extrabold text-white">{displayName}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-red-200">{displayRole}</p>
+                </div>
+                <button onClick={() => setMobileMenuOpen(false)} aria-label="Close menu" className="flex h-8 w-8 items-center justify-center rounded-full text-red-100 transition-transform active:scale-90">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+
+              <div className="scroll-fade flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
+                {/* AOR */}
+                <MobileMenuRow
+                  label="Area of Responsibility"
+                  value="Diliman, QC"
+                  onClick={() => { setMobileMenuOpen(false); onFlyTo(DILIMAN_CENTER.lat, DILIMAN_CENTER.lng, DEFAULT_ZOOM); }}
+                  icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>}
+                />
+                {/* Data feed */}
+                <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
+                  <span className="text-neutral-400 dark:text-neutral-500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Data Feed</p>
+                    <p className="flex items-center gap-1.5 text-sm font-bold text-neutral-700 dark:text-neutral-100">
+                      <span className={`h-2 w-2 rounded-full ${loading ? 'bg-amber-400' : 'bg-[#2fbf4f]'}`} />{syncedLabel}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
+
+                {/* Live status counts */}
+                <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Live Count</p>
+                {STATUS_ORDER.map((status) => {
+                  const meta = STATUS_META[status];
+                  return (
+                    <div key={status} className="flex items-center justify-between px-3 py-1.5">
+                      <span className="flex items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={meta.iconUrl} alt="" width={16} height={21} style={{ filter: HYDRANT_PIN_FILTER, objectFit: 'contain' }} />
+                        <span className="text-sm font-semibold" style={{ color: meta.color }}>{meta.legendLabel}</span>
+                      </span>
+                      <span className="text-sm font-bold tabular-nums text-neutral-700 dark:text-neutral-200">{counts[status]}</span>
+                    </div>
+                  );
+                })}
+
+                <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
+
+                {canViewDashboard && (
+                  <MobileMenuRow label="Operations Dashboard" onClick={() => { setMobileMenuOpen(false); onOpenDashboard(); }} accent
+                    icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
+                  />
+                )}
+                {role === 'admin' && (
+                  <MobileMenuRow label="Admin Dashboard" onClick={() => { setMobileMenuOpen(false); router.push('/admin'); }} accent
+                    icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
+                  />
+                )}
+                <MobileMenuRow label={provider === 'mapbox' ? 'Map: Satellite (Mapbox)' : 'Map: Streets (OSM)'} onClick={onToggleProvider}
+                  icon={<LayersGlyph />}
+                />
+                <MobileMenuRow label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'} onClick={toggleTheme}
+                  icon={isDark ? <SunGlyph /> : <MoonGlyph />}
+                />
+                <MobileMenuRow label="Account Center" onClick={() => { setMobileMenuOpen(false); onOpenAccount(); }}
+                  icon={<UserGlyph />}
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  /* ======================== DESKTOP LAYOUT ======================== */
   return (
     // Root is click-through; each widget re-enables pointer events so the map
     // underneath stays pannable/zoomable everywhere else.
@@ -166,7 +332,7 @@ export default function DashboardOverlay({
       </header>
 
       {/* ---------- Search + status filter pills ---------- */}
-      <div className="pointer-events-auto absolute left-4 top-[76px] z-[1100] flex flex-wrap items-center gap-2">
+      <div className="pointer-events-auto absolute left-4 top-[4.75rem] z-[1100] flex flex-wrap items-center gap-2">
         <LocationSearch onFlyTo={onFlyTo} />
 
         <div className="flex overflow-hidden rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
@@ -195,7 +361,7 @@ export default function DashboardOverlay({
       {/* ---------- Left toolbar ---------- */}
 
       {/* Zoom buttons under the search bar */}
-      <div className="pointer-events-auto absolute left-4 top-[136px] z-[1000]">
+      <div className="pointer-events-auto absolute left-4 top-[8.5rem] z-[1000]">
         <div className="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-neutral-800 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
           <ToolButton label="Zoom in" onClick={onZoomIn}>
             <PlusGlyph />
@@ -208,7 +374,7 @@ export default function DashboardOverlay({
       </div>
 
       {/* Vertical toolbar — layers, reports, dashboard, then add hydrant at bottom */}
-      <div className="pointer-events-auto absolute left-4 top-[238px] z-[1000] flex flex-col gap-3">
+      <div className="pointer-events-auto absolute left-4 top-[14.875rem] z-[1000] flex flex-col gap-3">
         <ToolButton
           label={provider === 'mapbox' ? 'Switch to OSM map' : 'Switch to Mapbox'}
           onClick={onToggleProvider}
@@ -329,7 +495,7 @@ interface NominatimResult {
   display_name: string;
 }
 
-function LocationSearch({ onFlyTo }: { onFlyTo: (lat: number, lng: number, zoom?: number) => void }) {
+function LocationSearch({ onFlyTo, mobile = false }: { onFlyTo: (lat: number, lng: number, zoom?: number) => void; mobile?: boolean }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<NominatimResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -378,7 +544,7 @@ function LocationSearch({ onFlyTo }: { onFlyTo: (lat: number, lng: number, zoom?
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={mobile ? 'relative w-full' : 'relative'}>
       <div className="flex items-center gap-2 rounded-full bg-white dark:bg-neutral-800 px-4 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
         {loading ? <SpinnerGlyph /> : <SearchGlyph />}
         <input
@@ -387,7 +553,7 @@ function LocationSearch({ onFlyTo }: { onFlyTo: (lat: number, lng: number, zoom?
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); setQuery(''); } }}
           placeholder="Search Location"
-          className="w-44 bg-transparent text-sm text-neutral-700 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none"
+          className={`${mobile ? 'w-full flex-1' : 'w-44'} bg-transparent text-sm text-neutral-700 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none`}
         />
         {query && (
           <button onClick={() => { setQuery(''); setResults([]); setOpen(false); }} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200">
@@ -397,7 +563,7 @@ function LocationSearch({ onFlyTo }: { onFlyTo: (lat: number, lng: number, zoom?
       </div>
 
       {open && results.length > 0 && (
-        <ul className="absolute left-0 top-[calc(100%+6px)] z-[2000] w-80 overflow-hidden rounded-xl bg-white dark:bg-neutral-800 shadow-[0_8px_32px_rgba(0,0,0,0.22)]">
+        <ul className={`absolute left-0 top-[calc(100%+6px)] z-[2000] ${mobile ? 'w-full' : 'w-80'} overflow-hidden rounded-xl bg-white dark:bg-neutral-800 shadow-[0_8px_32px_rgba(0,0,0,0.22)]`}>
           {results.map((r, i) => {
             const parts = r.display_name.split(', ');
             const title = parts[0];
@@ -485,7 +651,7 @@ function Logo() {
         alt="Hydro-Scout"
         width={52}
         height={52}
-        className="h-[52px] w-[52px] translate-y-1 object-contain dark:drop-shadow-[0_0_10px_rgba(224,53,59,0.7)]"
+        className="h-[3.25rem] w-[3.25rem] translate-y-1 object-contain dark:drop-shadow-[0_0_10px_rgba(224,53,59,0.7)]"
       />
       <span className="text-2xl font-extrabold tracking-tight text-white">
         Hydro-<span className="text-[#e0353b]">Scout</span>
@@ -620,6 +786,34 @@ function SunGlyph() {
       <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
       <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
     </svg>
+  );
+}
+
+function MenuGlyph() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" {...stroke}>
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
+/* Mobile menu-drawer row */
+function MobileMenuRow({ label, value, icon, onClick, accent = false }: {
+  label: string; value?: string; icon: React.ReactNode; onClick: () => void; accent?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors active:bg-neutral-100 dark:active:bg-neutral-800"
+    >
+      <span className={accent ? 'text-[#e0353b]' : 'text-neutral-400 dark:text-neutral-500'}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        {value && <span className="block text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{label}</span>}
+        <span className={`block truncate text-sm font-bold ${accent ? 'text-[#e0353b]' : 'text-neutral-700 dark:text-neutral-100'}`}>{value ?? label}</span>
+      </span>
+    </button>
   );
 }
 

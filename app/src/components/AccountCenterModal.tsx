@@ -115,7 +115,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             <div className="anim-fade-scale mx-6 w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900">
               <p className="mb-1 text-sm font-extrabold text-neutral-800 dark:text-neutral-100">No changes made</p>
               <p className="mb-5 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
-                You haven't entered a new password. Do you want to exit without saving?
+                You haven&apos;t entered a new password. Do you want to exit without saving?
               </p>
               <div className="flex gap-2">
                 <button
@@ -167,7 +167,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
         </div>
 
         {/* Body */}
-        <div className="scroll-fade grid min-h-0 flex-1 grid-cols-2 gap-5 overflow-y-auto px-6 py-5">
+        <div className="scroll-fade grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto px-6 py-5 md:grid-cols-2">
 
           {/* Left — Account info */}
           <div className="flex flex-col gap-4">

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
+import { useIsMobile } from '@/lib/use-media-query';
 import { type HydrantStatus } from '../data/hydrants';
 import { createHydrant } from '../data/store';
 
@@ -36,6 +37,7 @@ interface PinHydrantModalProps {
 
 export default function PinHydrantModal({ onClose, initialLat, initialLng, initialAddress }: PinHydrantModalProps) {
   const { user, role } = useAuth();
+  const isMobile = useIsMobile();
 
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
   const roleLabel   = role ? (ROLE_LABELS[role] ?? role) : 'Authorized User';
@@ -160,10 +162,10 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
         </div>
 
         {/* ── Body ── */}
-        <div className="mt-[54px] flex flex-1 overflow-hidden">
+        <div className={`mt-[54px] flex flex-1 ${isMobile ? 'flex-col overflow-y-auto' : 'overflow-hidden'}`}>
 
           {/* Left sidebar */}
-          <div className="flex w-[260px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-neutral-200 bg-neutral-50 p-5 dark:border-neutral-700 dark:bg-neutral-800">
+          <div className={`flex shrink-0 flex-col gap-4 bg-neutral-50 p-5 dark:bg-neutral-800 ${isMobile ? 'w-full border-b border-neutral-200 dark:border-neutral-700' : 'w-[260px] overflow-y-auto border-r border-neutral-200 dark:border-neutral-700'}`}>
 
             {/* Hydrant pin icon */}
             <div className="flex flex-col items-center gap-2 pt-2">
@@ -219,8 +221,8 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
           </div>
 
           {/* Right: scrollable form */}
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <div className="scroll-fade min-h-0 flex-1 overflow-y-auto px-7 py-5 space-y-6">
+          <div className={`flex flex-col ${isMobile ? '' : 'flex-1 overflow-hidden'}`}>
+            <div className={`space-y-6 px-7 py-5 ${isMobile ? '' : 'scroll-fade min-h-0 flex-1 overflow-y-auto'}`}>
 
               {/* Location */}
               <Section title="Location">

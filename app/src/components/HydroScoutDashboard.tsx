@@ -577,7 +577,7 @@ export default function HydroScoutDashboard() {
 
       {/* OTW banner */}
       {otwHydrant && (
-        <div className="pointer-events-auto absolute left-1/2 top-[68px] z-[2000] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-red-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale">
+        <div className="pointer-events-auto absolute left-1/2 top-[4.25rem] z-[2000] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-red-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale">
           <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" />
           <span className="text-xs font-bold text-white">En Route</span>
           <span className="text-red-400 text-xs">·</span>
@@ -634,7 +634,7 @@ export default function HydroScoutDashboard() {
 
       {/* Geo-error toast */}
       {geoError && (
-        <div className="pointer-events-auto absolute left-1/2 top-[68px] z-[2100] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(420px,90vw)]">
+        <div className="pointer-events-auto absolute left-1/2 top-[4.25rem] z-[2100] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(420px,90vw)]">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
@@ -653,7 +653,7 @@ export default function HydroScoutDashboard() {
 
       {/* Live-data status pill */}
       {(loading || error) && (
-        <div className="pointer-events-none absolute left-1/2 top-[84px] z-[1200] -translate-x-1/2">
+        <div className="pointer-events-none absolute left-1/2 top-[5.25rem] z-[1200] -translate-x-1/2">
           <span className={`rounded-full px-3 py-1 text-xs font-semibold shadow-md ${
             error ? 'bg-[#e0353b] text-white' : 'bg-white/95 text-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-300'
           }`}>

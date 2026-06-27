@@ -10,6 +10,7 @@ import {
   collection,
   collectionGroup,
   doc,
+  deleteDoc,
   onSnapshot,
   updateDoc,
   addDoc,
@@ -270,6 +271,34 @@ export async function updateReportStatus(
 ): Promise<void> {
   const ref = doc(db, 'hydrants', hydrantId, 'reports', firestoreId);
   await updateDoc(ref, { status });
+}
+
+export async function validateHydrant(hydrantId: string, by: string, role: string): Promise<void> {
+  const ref = doc(db, 'hydrants', hydrantId);
+  const dateStr = new Date().toISOString().slice(0, 10);
+  await updateDoc(ref, {
+    validated: true,
+    validatedAt: serverTimestamp(),
+    validatedBy: by,
+    updatedAt: serverTimestamp(),
+    register: arrayUnion({ statusColor: '#2fbf4f', action: 'Record validated', by, role, date: dateStr }),
+  });
+}
+
+export async function flagForReinspection(hydrantId: string, by: string, role: string): Promise<void> {
+  const ref = doc(db, 'hydrants', hydrantId);
+  const dateStr = new Date().toISOString().slice(0, 10);
+  await updateDoc(ref, {
+    flaggedForReinspection: true,
+    flaggedAt: serverTimestamp(),
+    flaggedBy: by,
+    updatedAt: serverTimestamp(),
+    register: arrayUnion({ statusColor: '#f5a623', action: 'Flagged for re-inspection', by, role, date: dateStr }),
+  });
+}
+
+export async function deleteHydrant(hydrantId: string): Promise<void> {
+  await deleteDoc(doc(db, 'hydrants', hydrantId));
 }
 
 // Unused but exported for callers that want an ordered hydrant query later.

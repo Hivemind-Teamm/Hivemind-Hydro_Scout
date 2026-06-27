@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { useIsMobile } from '@/lib/use-media-query';
 import { type Hydrant, type HydrantStatus } from '../data/hydrants';
 import { updateHydrantStatus } from '../data/store';
 
@@ -23,6 +24,7 @@ const STATUS_OPTIONS: { value: HydrantStatus; label: string; color: string; bg: 
 
 export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: EditStatusPanelProps) {
   const { user, role } = useAuth();
+  const isMobile = useIsMobile();
   const [selectedStatus, setSelectedStatus] = useState<HydrantStatus>(hydrant.status);
   const [cleanliness, setCleanliness] = useState('');
   const [hazard, setHazard] = useState('');
@@ -91,7 +93,11 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   }
 
   return (
-    <div className="anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[69px] z-[3000] flex w-[420px] flex-col bg-white dark:bg-neutral-900 shadow-2xl">
+    <div className={
+      isMobile
+        ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[3000] flex max-h-[88vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
+        : 'anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[4.3125rem] z-[3000] flex w-[26.25rem] flex-col bg-white shadow-2xl dark:bg-neutral-900'
+    }>
 
       {/* Header */}
       <div className="flex items-start justify-between bg-[#e0353b] px-5 py-3">

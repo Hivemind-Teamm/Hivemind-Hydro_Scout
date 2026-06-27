@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
+import { useIsMobile } from '@/lib/use-media-query';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 
@@ -32,14 +33,16 @@ function formatEta(s: number) {
 
 export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo, onRoute, isOtw, otwMeta }: HydrantInfoPanelProps) {
   const { role } = useAuth();
+  const isMobile = useIsMobile();
   const meta = STATUS_META[hydrant.status];
   const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
 
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef  = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
-  const dragStartY   = useRef(0);
-  const dragStartH   = useRef(0);
+  const dragStartY = useRef(0);
+  const dragStartH = useRef(0);
 
   // Reset height when a different hydrant is selected
   useEffect(() => { setPanelHeight(null); }, [hydrant.id]);
@@ -49,15 +52,16 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
     dragStartY.current = e.clientY;
     dragStartH.current = panelRef.current?.offsetHeight ?? 0;
 
-    const DEAD_ZONE = 8; // px of intentional movement required before resize kicks in
-    const MIN_H = 120;
+    // MIN: always keep the bottom section + header + drag handle fully visible
+    const bottomH  = bottomRef.current?.offsetHeight ?? 160;
+    const headerH  = (panelRef.current?.children[1] as HTMLElement | undefined)?.offsetHeight ?? 60;
+    const MIN_H    = bottomH + headerH + 12; // 12 = drag handle
+    // MAX: don't let the panel consume more than 65% of the viewport height
+    const MAX_H    = Math.floor(window.innerHeight * 0.65);
 
     const onMove = (ev: MouseEvent) => {
-      const raw = ev.clientY - dragStartY.current;
-      // Ignore tiny movements — only resize after crossing the dead zone downward.
-      if (raw <= DEAD_ZONE) return;
-      const effective = raw - DEAD_ZONE;
-      setPanelHeight(Math.max(MIN_H, dragStartH.current - effective));
+      const delta = ev.clientY - dragStartY.current; // positive = drag down = shrink
+      setPanelHeight(Math.min(MAX_H, Math.max(MIN_H, dragStartH.current - delta)));
     };
 
     const onUp = () => {
@@ -72,11 +76,15 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
   return (
     <div
       ref={panelRef}
-      className="anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] flex flex-col overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl"
+      className={
+        isMobile
+          ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[2000] flex flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
+          : 'anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900'
+      }
       style={{
-        width: 'clamp(13rem, 22vw, 17rem)',
-        maxHeight: 'calc(100vh - 120px)',
-        ...(panelHeight !== null ? { height: panelHeight } : {}),
+        width: isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
+        maxHeight: isMobile ? '80vh' : 'calc(100vh - 120px)',
+        ...(panelHeight !== null && !isMobile ? { height: panelHeight } : {}),
       }}
     >
       {/* Drag handle — top border, drag down to shrink */}
@@ -120,21 +128,19 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         />
       )}
 
-      <div className="shrink-0 px-5 py-4">
-        {/* Status / Pressure / Key row */}
-        <div className="mb-3 grid grid-cols-3 divide-x divide-neutral-100 dark:divide-neutral-700 rounded-lg bg-neutral-50 dark:bg-neutral-800 py-2 text-center">
-          <div className="px-2">
-            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Status</p>
+      <div ref={bottomRef} className="shrink-0 px-5 py-4">
+        {/* Status / Pressure / Key rows */}
+        <div className="mb-3 flex flex-col divide-y divide-neutral-100 dark:divide-neutral-700 rounded-lg bg-neutral-50 dark:bg-neutral-800">
+          <div className="flex items-center justify-between px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Status</p>
             <p className="text-xs font-bold" style={{ color: meta.color }}>{meta.legendLabel}</p>
           </div>
-          <div className="px-2">
-            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Pressure</p>
-            <p className="text-xs font-bold" style={{ color: PRESSURE_COLOR[hydrant.pressure] ?? '#555' }}>
-              {hydrant.pressure}
-            </p>
+          <div className="flex items-center justify-between px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Pressure</p>
+            <p className="text-xs font-bold" style={{ color: PRESSURE_COLOR[hydrant.pressure] ?? '#555' }}>{hydrant.pressure}</p>
           </div>
-          <div className="px-2">
-            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Key</p>
+          <div className="flex items-center justify-between px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Key</p>
             <p className="text-xs font-bold text-neutral-700 dark:text-neutral-200">{hydrant.key}</p>
           </div>
         </div>

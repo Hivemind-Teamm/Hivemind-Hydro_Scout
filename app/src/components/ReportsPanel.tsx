@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { useIsMobile } from '@/lib/use-media-query';
 import { STATUS_COLORS, type ReportStatus, type Report } from '../data/reports';
 import { updateReportStatus } from '../data/store';
 
@@ -15,6 +16,7 @@ interface ReportsPanelProps {
 
 export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPanelProps) {
   const { role } = useAuth();
+  const isMobile = useIsMobile();
   const canResolve = role === 'head' || role === 'admin';
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -37,7 +39,14 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
   ];
 
   return (
-    <div className="anim-slide-left pointer-events-auto absolute bottom-6 left-[76px] top-[124px] z-[2100] flex w-[360px] flex-col overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={
+        isMobile
+          ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[2100] flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
+          : 'anim-slide-left pointer-events-auto absolute bottom-6 left-[4.75rem] top-[7.75rem] z-[2100] flex w-[22.5rem] flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900'
+      }
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* Header */}
       <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-700">
         <p className="text-sm font-extrabold uppercase tracking-wide text-neutral-800 dark:text-neutral-100">Reports Register</p>
