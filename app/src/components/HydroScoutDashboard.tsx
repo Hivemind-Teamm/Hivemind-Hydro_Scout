@@ -14,7 +14,6 @@ import OperationsDashboard from './OperationsDashboard';
 import PinHydrantModal from './PinHydrantModal';
 import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
-import OtwHazardPanel from './OtwHazardPanel';
 import {
   countByStatus,
   type Hydrant,
@@ -556,6 +555,8 @@ export default function HydroScoutDashboard() {
         loading={loading}
         lastSynced={lastSynced}
         isOtw={!!otwHydrant}
+        routeHazards={routeHazards}
+        onSelectHazardHydrant={handleSelectHydrant}
       />
 
       {/* ── Nearest Hydrant Panel — bottom-left, above map, below modals ── */}
@@ -567,13 +568,6 @@ export default function HydroScoutDashboard() {
         />
       </div>
 
-      {/* OTW Hazard Panel — bottom-right, visible during OTW mode when hazards exist */}
-      {otwHydrant && (
-        <OtwHazardPanel
-          hazards={routeHazards}
-          onSelectHydrant={handleSelectHydrant}
-        />
-      )}
 
       {/* OTW banner */}
       {otwHydrant && (

@@ -108,22 +108,6 @@ body {
   animation: stripe-scroll 1.2s linear infinite;
 }
 
-@keyframes hydrant-pulse {
-  0%   { transform: translate(-50%, -50%) scale(0.8); opacity: 0.7; }
-  100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0;   }
-}
-
-.hydrant-pulse-ring {
-  position: absolute;
-  top: 35%;
-  left: 50%;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: rgba(254, 212, 46, 0.55);
-  animation: hydrant-pulse 1.4s ease-out infinite;
-  pointer-events: none;
-}
 
 /* ── User location orb ── */
 @keyframes user-location-pulse {
@@ -241,6 +225,12 @@ body {
   0%   { transform: scale(0.9); opacity: 0.8; }
   70%  { transform: scale(1.6); opacity: 0; }
   100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes emergency-beacon-pulse {
+  0%   { transform: scale(0.85); opacity: 1; }
+  55%  { transform: scale(2.2);  opacity: 0; }
+  100% { transform: scale(2.2);  opacity: 0; }
 }
 
 /* ── Overlay fade scrollbar ──

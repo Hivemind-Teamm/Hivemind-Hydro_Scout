@@ -26,14 +26,11 @@ export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPa
 
   return (
     <div style={{
-      position: 'absolute',
-      bottom: 32,
-      right: 16,
-      zIndex: 1500,
-      width: 272,
+      width: '100%',
+      pointerEvents: 'auto',
       background: 'rgba(17,24,39,0.96)',
       border: '1px solid rgba(245,158,11,0.4)',
-      borderRadius: 16,
+      borderRadius: 12,
       boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(245,158,11,0.1)',
       overflow: 'hidden',
       backdropFilter: 'blur(12px)',

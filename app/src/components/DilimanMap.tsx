@@ -308,7 +308,9 @@ export default function DilimanMap({
 
         {map && hydrants.map((h) => {
           const centroid = layout.placement.get(h.id);
-          const clustered = !!centroid;
+          // OTW target is always shown as individual marker, never absorbed into a cluster
+          const isOtwTarget = otwHydrant?.id === h.id;
+          const clustered = !isOtwTarget && !!centroid;
 
           let dx = 0;
           let dy = 0;
@@ -323,12 +325,9 @@ export default function DilimanMap({
           const meta = STATUS_META[h.status];
 
           // OTW mode visual states
-          const isOtwTarget = otwHydrant?.id === h.id;
           const nearRoute = nearRouteIds?.has(h.id) ?? false;
           const inOtwMode = !!otwRoute;
-          // Dim hydrants that are off-route during OTW mode
           const offRoute = inOtwMode && !nearRoute && !isOtwTarget;
-          const isHazard = nearRoute && (h.status === 'out' || h.status === 'reduced');
 
           return (
             <Marker
@@ -347,15 +346,36 @@ export default function DilimanMap({
                   pointerEvents: clustered ? 'none' : 'auto',
                   cursor: addHydrantMode ? 'crosshair' : 'pointer',
                   willChange: 'transform, opacity',
-                  filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : isHazard ? 'drop-shadow(0 0 5px #f59e0b)' : nearRoute ? 'drop-shadow(0 0 4px #34d399)' : undefined,
+                  filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : nearRoute ? `drop-shadow(0 0 5px ${meta.color})` : undefined,
                 }}
               >
-                {selected && <div className="hydrant-pulse-ring" />}
-                {/* Route-corridor hydrant glow ring */}
-                {nearRoute && !selected && !clustered && (
+                {/* Selected hydrant: yellow single pulse ring */}
+                {selected && !isOtwTarget && !clustered && (
                   <div style={{
                     position: 'absolute', inset: -5, borderRadius: '50%',
-                    border: `2px solid ${isHazard ? '#f59e0b' : '#34d399'}`,
+                    border: '2px solid #FED42E',
+                    animation: 'route-ring-pulse 2s ease-out infinite',
+                    pointerEvents: 'none',
+                  }} />
+                )}
+                {/* OTW target: triple emergency beacon rings */}
+                {isOtwTarget && !clustered && (
+                  <>
+                    {[0, 0.33, 0.66].map((delay) => (
+                      <div key={delay} style={{
+                        position: 'absolute', inset: -5, borderRadius: '50%',
+                        border: '2.5px solid #ef4444',
+                        animation: `emergency-beacon-pulse 1s ease-out ${delay}s infinite`,
+                        pointerEvents: 'none',
+                      }} />
+                    ))}
+                  </>
+                )}
+                {/* Route-corridor hydrant glow ring — color matches hydrant status */}
+                {nearRoute && !selected && !isOtwTarget && !clustered && (
+                  <div style={{
+                    position: 'absolute', inset: -5, borderRadius: '50%',
+                    border: `2px solid ${meta.color}`,
                     animation: 'route-ring-pulse 2s ease-out infinite',
                     pointerEvents: 'none',
                   }} />

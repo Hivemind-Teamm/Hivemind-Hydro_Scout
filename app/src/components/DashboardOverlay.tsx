@@ -9,8 +9,10 @@ import {
   STATUS_META,
   STATUS_ORDER,
   type HydrantStatus,
+  type Hydrant,
 } from '../data/hydrants';
 import { HYDRANT_PIN_FILTER } from './hydrantIcon';
+import OtwHazardPanel from './OtwHazardPanel';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 
 interface DashboardOverlayProps {
@@ -36,6 +38,8 @@ interface DashboardOverlayProps {
   loading?: boolean;
   lastSynced?: Date | null;
   isOtw?: boolean;
+  routeHazards?: Hydrant[];
+  onSelectHazardHydrant?: (h: Hydrant) => void;
 }
 
 export default function DashboardOverlay({
@@ -61,6 +65,8 @@ export default function DashboardOverlay({
   loading = false,
   lastSynced = null,
   isOtw = false,
+  routeHazards = [],
+  onSelectHazardHydrant,
 }: DashboardOverlayProps) {
   const { user, role } = useAuth();
   const { isDark, toggleTheme } = useTheme();
@@ -127,6 +133,13 @@ export default function DashboardOverlay({
             })}
           </div>
         </div>
+
+        {/* OTW hazard panel — bottom-right above FAB, mobile only */}
+        {isOtw && (
+          <div className="pointer-events-auto absolute bottom-6 right-4 z-[1000] w-[17rem]" style={{ bottom: '5.5rem' }}>
+            <OtwHazardPanel hazards={routeHazards} onSelectHydrant={onSelectHazardHydrant ?? (() => {})} />
+          </div>
+        )}
 
         {/* Bottom-right FAB cluster — locate, reports, pin (zoom is pinch on touch) */}
         <div className="pointer-events-auto absolute bottom-6 right-4 z-[1000] flex flex-col items-end gap-3">
@@ -203,21 +216,43 @@ export default function DashboardOverlay({
 
                 <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
 
-                {/* Live status counts */}
-                <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Live Count</p>
-                {STATUS_ORDER.map((status) => {
-                  const meta = STATUS_META[status];
-                  return (
-                    <div key={status} className="flex items-center justify-between px-3 py-1.5">
-                      <span className="flex items-center gap-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={meta.iconUrl} alt="" width={16} height={21} style={{ filter: HYDRANT_PIN_FILTER, objectFit: 'contain' }} />
-                        <span className="text-sm font-semibold" style={{ color: meta.color }}>{meta.legendLabel}</span>
-                      </span>
-                      <span className="text-sm font-bold tabular-nums text-neutral-700 dark:text-neutral-200">{counts[status]}</span>
-                    </div>
-                  );
-                })}
+                {/* Live status counts / Route hazards (swaps during OTW) */}
+                {isOtw ? (
+                  <>
+                    <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-amber-500">Route Hazards</p>
+                    {routeHazards.length === 0 ? (
+                      <p className="px-3 py-1.5 text-xs text-neutral-400 dark:text-neutral-500">No hazards along your route.</p>
+                    ) : routeHazards.map((h) => (
+                      <button
+                        key={h.id}
+                        onClick={() => { setMobileMenuOpen(false); onSelectHazardHydrant?.(h); }}
+                        className="flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg"
+                      >
+                        <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 truncate">{h.name}</span>
+                        <span className="ml-2 shrink-0 text-xs font-bold" style={{ color: h.status === 'reduced' ? '#f59e0b' : '#9aa0a6' }}>
+                          {h.status === 'reduced' ? 'Low Pressure' : 'Out of Service'}
+                        </span>
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Live Count</p>
+                    {STATUS_ORDER.map((status) => {
+                      const meta = STATUS_META[status];
+                      return (
+                        <div key={status} className="flex items-center justify-between px-3 py-1.5">
+                          <span className="flex items-center gap-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={meta.iconUrl} alt="" width={16} height={21} style={{ filter: HYDRANT_PIN_FILTER, objectFit: 'contain' }} />
+                            <span className="text-sm font-semibold" style={{ color: meta.color }}>{meta.legendLabel}</span>
+                          </span>
+                          <span className="text-sm font-bold tabular-nums text-neutral-700 dark:text-neutral-200">{counts[status]}</span>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
 
                 <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
 
@@ -428,7 +463,7 @@ export default function DashboardOverlay({
       </div>
 
       {/* ---------- Bottom-right stack: action buttons + status panel ---------- */}
-      <div className="absolute bottom-6 right-6 z-[1000] flex w-60 flex-col items-end gap-3">
+      <div className={`absolute bottom-6 right-6 z-[1000] flex flex-col items-end gap-3 ${isOtw ? 'w-72' : 'w-60'}`}>
         {/* GPS + 3D + theme buttons row — always visible */}
         <div className="pointer-events-auto flex gap-2">
           <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide="top">
@@ -444,7 +479,9 @@ export default function DashboardOverlay({
           </ToolButton>
         </div>
 
-        {showCounts && (
+        {isOtw ? (
+          <OtwHazardPanel hazards={routeHazards} onSelectHydrant={onSelectHazardHydrant ?? (() => {})} />
+        ) : showCounts && (
           <div className="pointer-events-auto w-full rounded-xl bg-white/95 dark:bg-neutral-900/95 p-4 shadow-[0_6px_24px_rgba(0,0,0,0.4)] backdrop-blur">
             <div className="mb-2 flex items-center justify-between border-b border-neutral-200 dark:border-neutral-700 pb-2">
               <span className="text-sm font-bold text-neutral-800 dark:text-neutral-100">Status</span>
@@ -464,10 +501,7 @@ export default function DashboardOverlay({
                         height={26}
                         style={{ filter: HYDRANT_PIN_FILTER, objectFit: 'contain' }}
                       />
-                      <span
-                        className="text-sm font-semibold"
-                        style={{ color: meta.color }}
-                      >
+                      <span className="text-sm font-semibold" style={{ color: meta.color }}>
                         {meta.legendLabel}
                       </span>
                     </span>
