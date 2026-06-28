@@ -39,19 +39,22 @@ export default function HydrantInfoPanel({
   const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
 
-  // Desktop = ≥ 1024 px — no inner scroll, mouse drag activates resize immediately
-  const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false,
+  // Touch device (phone / tablet) = primary pointer is coarse (finger).
+  // Desktop with a mouse = primary pointer is fine.
+  // This is the right signal for "needs inner scroll" — screen width is unreliable
+  // because iPads can be 1024 px+ wide yet still need touch-friendly scrolling.
+  const [isTouchDevice, setIsTouchDevice] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(pointer: coarse)').matches : false,
   );
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)');
-    const h = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    const mq = window.matchMedia('(pointer: coarse)');
+    const h = (e: MediaQueryListEvent) => setIsTouchDevice(e.matches);
     mq.addEventListener('change', h);
     return () => mq.removeEventListener('change', h);
   }, []);
 
-  // Tablet + mobile get inner scroll; desktop does not
-  const hasInnerScroll = !isDesktop;
+  // Touch devices (mobile + tablet) get inner scroll; desktop mouse does not
+  const hasInnerScroll = isTouchDevice;
 
   const panelRef  = useRef<HTMLDivElement>(null);
   const photoRef  = useRef<HTMLImageElement>(null);
@@ -75,15 +78,15 @@ export default function HydrantInfoPanel({
     lastTapTime.current = 0;
   }, [hydrant.id]);
 
-  // Tablet only: scroll past the photo so the info section shows first.
-  // User can swipe up to reveal the photo above.
+  // Tablet only (touch device that isn't phone-sized): scroll past the photo so
+  // info shows first. User swipes up to reveal the photo above.
   useEffect(() => {
-    if (!scrollRef?.current || isMobile || isDesktop || hydrant.photos.length === 0) return;
+    if (!scrollRef?.current || isMobile || !isTouchDevice || hydrant.photos.length === 0) return;
     requestAnimationFrame(() => {
       if (!scrollRef?.current) return;
       scrollRef.current.scrollTop = photoRef.current?.offsetHeight ?? 0;
     });
-  }, [hydrant.id, scrollRef, isMobile, isDesktop]);
+  }, [hydrant.id, scrollRef, isMobile, isTouchDevice]);
 
   // Flash animation played when scale mode is activated
   const runFlash = useCallback(() => {
