@@ -23,6 +23,7 @@ import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
 import { haversineM, formatDistance, distToRouteM } from '@/lib/haversine';
 import { type RankedHydrant } from '@/lib/nearest-hydrant';
+import { playHazardChime } from '@/lib/chime';
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
 const OTW_ROUTE_KEY    = 'hydroscout_otw_route';
@@ -345,6 +346,14 @@ export default function HydroScoutDashboard() {
     }
     return { nearRouteIds: ids, routeHazards: hazards };
   }, [hydrants, otwRoute]);
+
+  // Chime once when hazards first appear during OTW mode
+  const prevHazardCountRef = useRef(0);
+  useEffect(() => {
+    if (!otwHydrant) { prevHazardCountRef.current = 0; return; }
+    if (routeHazards.length > 0 && prevHazardCountRef.current === 0) playHazardChime();
+    prevHazardCountRef.current = routeHazards.length;
+  }, [routeHazards.length, otwHydrant]);
 
   useEffect(() => {
     if (!selectedHydrant || loading) return;

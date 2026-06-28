@@ -590,7 +590,7 @@ function LocationSearch({ onFlyTo, mobile = false }: { onFlyTo: (lat: number, ln
 
   return (
     <div ref={containerRef} className={mobile ? 'relative flex-1 min-w-0' : 'relative'}>
-      <div className={`flex items-center gap-1.5 rounded-full bg-white dark:bg-neutral-800 shadow-[0_4px_16px_rgba(0,0,0,0.35)] ${mobile ? 'px-2.5 py-1.5' : 'px-4 py-2'}`}>
+      <div className={`flex items-center gap-1.5 rounded-full bg-white dark:bg-neutral-700 shadow-[0_4px_16px_rgba(0,0,0,0.35)] ${mobile ? 'px-2.5 py-1.5' : 'px-4 py-2'}`}>
         {loading ? <SpinnerGlyph mobile={mobile} /> : <SearchGlyph mobile={mobile} />}
         <input
           value={query}
