@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
 import { type Hydrant, type HydrantStatus } from '../data/hydrants';
 import { updateHydrantStatus } from '../data/store';
+import { proxiedPhotoUrl } from '@/lib/photo-url';
 
 const ROLE_LABELS: Record<string, string> = {
   general: 'General', authorized: 'Authorized', head: 'Head', admin: 'Admin',
@@ -191,7 +192,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
             {photos.map((url, i) => (
               <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                <img src={proxiedPhotoUrl(url)} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
                 <button
                   type="button"
                   onClick={() => handlePhotoRemove(i)}

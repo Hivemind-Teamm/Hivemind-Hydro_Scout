@@ -113,8 +113,8 @@ export default function DashboardOverlay({
           <div className="h-1 w-full" style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #e0353b 70px, #e0353b 140px)' }} />
         </header>
 
-        {/* Search + horizontally-scrollable status pills — pushed down when OTW banner is visible */}
-        <div className={`pointer-events-auto absolute inset-x-0 z-[1100] flex flex-row items-center gap-1.5 px-2 pt-2 transition-[top] duration-200 ${isOtw ? 'top-[8.5rem]' : 'top-[3.75rem]'}`}>
+        {/* Search + horizontally-scrollable status pills — stays just below the header, above the OTW pill */}
+        <div className="pointer-events-auto absolute inset-x-0 top-[3.75rem] z-[1100] flex flex-row items-center gap-1.5 px-2 pt-2">
           <LocationSearch onFlyTo={onFlyTo} mobile />
           <div className="shrink-0 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex w-max overflow-hidden rounded-lg">

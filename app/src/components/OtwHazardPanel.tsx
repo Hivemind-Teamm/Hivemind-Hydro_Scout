@@ -45,8 +45,8 @@ export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPa
         </div>
       </div>
 
-      {/* Hazard list */}
-      <ul className="max-h-[220px] overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
+      {/* Hazard list — caps at ~2 rows, the rest scroll */}
+      <ul className="max-h-[8.5rem] overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
         {hazards.map((h) => {
           const m = HAZARD_META[h.status] ?? HAZARD_META.reduced;
           return (

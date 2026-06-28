@@ -590,7 +590,7 @@ export default function HydroScoutDashboard() {
 
       {/* OTW banner */}
       {otwHydrant && (
-        <div className="pointer-events-auto absolute left-1/2 top-[3.85rem] sm:top-[4.75rem] z-[2000] -translate-x-1/2 w-[calc(100vw-1.5rem)] sm:w-auto anim-fade-scale">
+        <div className="pointer-events-auto absolute left-1/2 top-[6.5rem] sm:top-[4.75rem] z-[2000] -translate-x-1/2 w-[calc(100vw-1.5rem)] sm:w-auto anim-fade-scale">
 
           {/* Mobile (< sm): 2-row compact card */}
           <div className="flex flex-col sm:hidden rounded-2xl bg-red-900/90 px-3 py-2 shadow-xl backdrop-blur-sm gap-1.5">

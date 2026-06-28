@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
+import { proxiedPhotoUrl } from '@/lib/photo-url';
 
 interface HydrantInfoPanelProps {
   hydrant: Hydrant;
@@ -115,7 +116,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
       {hydrant.photos.length > 0 && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={hydrant.photos[0]}
+          src={proxiedPhotoUrl(hydrant.photos[0])}
           alt={`${hydrant.name} field photo`}
           className="aspect-square w-full min-h-0 shrink object-cover"
         />

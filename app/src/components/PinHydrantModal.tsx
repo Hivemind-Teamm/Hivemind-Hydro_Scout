@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
 import { type HydrantStatus } from '../data/hydrants';
 import { createHydrant } from '../data/store';
+import { proxiedPhotoUrl } from '@/lib/photo-url';
 
 const MiniMap = dynamic(() => import('./MiniMap'), { ssr: false });
 
@@ -377,7 +378,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                   {photos.map((url, i) => (
                     <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                      <img src={proxiedPhotoUrl(url)} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
                       <button
                         type="button"
                         onClick={() => setPhotos(p => p.filter((_, idx) => idx !== i))}

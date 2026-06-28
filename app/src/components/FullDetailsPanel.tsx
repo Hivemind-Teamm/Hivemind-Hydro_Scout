@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { formatDistance } from '@/lib/haversine';
+import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { deleteHydrantPhoto, setDisplayPhoto, validateHydrant, flagForReinspection, deleteHydrant } from '../data/store';
 
 type Tab = 'quick' | 'details' | 'admin';
@@ -30,6 +31,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab>('quick');
   const [photoMenu, setPhotoMenu] = useState<PhotoMenu>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const [menuBusy, setMenuBusy] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const meta = STATUS_META[hydrant.status];
@@ -84,7 +86,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
         {hydrant.photos.length > 0 ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={hydrant.photos[1] ?? hydrant.photos[0]}
+            src={proxiedPhotoUrl(hydrant.photos[1] ?? hydrant.photos[0])}
             alt={`${hydrant.name} field photo`}
             className="h-14 w-14 shrink-0 rounded-lg object-cover"
           />
@@ -146,7 +148,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
       {/* ── Tab content ── */}
       <div className="scroll-fade min-h-0 flex-1 overflow-y-auto">
         {tab === 'quick'   && <QuickTab   hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
-        {tab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} onPhotoContextMenu={handlePhotoContextMenu} />}
+        {tab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} onPhotoContextMenu={handlePhotoContextMenu} onViewPhoto={setLightbox} />}
         {tab === 'admin'   && <AdminTab   hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} onClose={onClose} />}
       </div>
 
@@ -160,7 +162,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
           {!photoMenu.confirming ? (
             <>
               <button
-                onClick={() => { window.open(photoMenu.url, '_blank'); setPhotoMenu(null); }}
+                onClick={() => { setLightbox(photoMenu.url); setPhotoMenu(null); }}
                 className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-neutral-700 transition-all duration-100 hover:bg-neutral-50 hover:pl-5 active:scale-[0.98] dark:text-neutral-200 dark:hover:bg-neutral-700"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -196,6 +198,33 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
               </div>
             </div>
           )}
+        </div>,
+        document.body
+      )}
+
+      {/* In-app photo lightbox — keeps photos on the site instead of opening the
+          raw Cloudinary URL in an external tab */}
+      {lightbox && createPortal(
+        <div
+          className="anim-fade fixed inset-0 z-[100000] flex items-center justify-center bg-black/80 p-6"
+          onClick={() => setLightbox(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={proxiedPhotoUrl(lightbox)}
+            alt="Hydrant photo"
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+            draggable={false}
+          />
+          <button
+            onClick={() => setLightbox(null)}
+            aria-label="Close"
+            className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/30"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>,
         document.body
       )}
@@ -237,12 +266,13 @@ function QuickTab({ hydrant, meta, distanceM, isOtw }: { hydrant: Hydrant; meta:
 }
 
 /* ──────────────────────── DETAILS ──────────────────────── */
-function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoContextMenu }: {
+function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoContextMenu, onViewPhoto }: {
   hydrant: Hydrant;
   onViewUser: (name: string, role: string) => void;
   canAnnotate: boolean;
   isHeadOrAdmin: boolean;
   onPhotoContextMenu: (e: React.MouseEvent, url: string) => void;
+  onViewPhoto: (url: string) => void;
 }) {
   return (
     <div className="px-4 py-4">
@@ -266,12 +296,12 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
               <div
                 key={url}
                 className="relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-neutral-200 transition-all duration-150 ease-out hover:scale-[1.04] hover:shadow-md hover:z-10 active:scale-[0.97] active:duration-75 dark:border-neutral-700"
-                onClick={() => window.open(url, '_blank')}
+                onClick={() => onViewPhoto(url)}
                 onContextMenu={isHeadOrAdmin ? (e) => onPhotoContextMenu(e, url) : undefined}
                 title={isHeadOrAdmin ? 'Click to view · Right-click for options' : 'Click to view'}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={`${hydrant.name} photo ${i + 1}`} className="h-full w-full object-cover" />
+                <img src={proxiedPhotoUrl(url)} alt={`${hydrant.name} photo ${i + 1}`} className="h-full w-full object-cover" />
                 {hydrant.photos[0] === url && (
                   <span className="absolute bottom-0 left-0 right-0 bg-black/50 py-0.5 text-center text-[8px] font-bold uppercase tracking-wide text-white">Display</span>
                 )}
