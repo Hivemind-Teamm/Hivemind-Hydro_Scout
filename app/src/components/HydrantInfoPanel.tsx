@@ -16,7 +16,7 @@ interface HydrantInfoPanelProps {
   onRoute: () => void;
   onRouteDismiss: () => void;
   isOtw: boolean;
-  /** Ref forwarded to the inner scrollable content area (used by map scroll mode). */
+  /** Ref forwarded to the scrollable content area — used by map scroll mode. */
   scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -40,17 +40,34 @@ export default function HydrantInfoPanel({
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
 
   const panelRef        = useRef<HTMLDivElement>(null);
+  const photoRef        = useRef<HTMLImageElement>(null);
+  const infoRef         = useRef<HTMLDivElement>(null);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
   const dragStartY      = useRef(0);
   const dragStartH      = useRef(0);
   const resizeActiveRef = useRef(false);
-  const longPressTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTapTime     = useRef<number>(0);
   const [flash, setFlash] = useState<FlashState>('idle');
 
-  useEffect(() => { setPanelHeight(null); setFlash('idle'); }, [hydrant.id]);
+  // Reset state when a different hydrant is selected
+  useEffect(() => {
+    setPanelHeight(null);
+    setFlash('idle');
+    resizeActiveRef.current = false;
+    lastTapTime.current = 0;
+  }, [hydrant.id]);
+
+  // On tablet/desktop with a photo: scroll past the photo so info shows first.
+  // User can then scroll UP to reveal the photo above.
+  useEffect(() => {
+    if (!scrollRef?.current || isMobile || hydrant.photos.length === 0) return;
+    requestAnimationFrame(() => {
+      if (!scrollRef?.current) return;
+      scrollRef.current.scrollTop = photoRef.current?.offsetHeight ?? 0;
+    });
+  }, [hydrant.id, scrollRef, isMobile]);
 
   const runFlash = useCallback(() => {
-    // red → off → red → settle into "active" tint
     setFlash('red1');
     setTimeout(() => setFlash('off1'),  220);
     setTimeout(() => setFlash('red2'),  440);
@@ -59,26 +76,43 @@ export default function HydrantInfoPanel({
 
   const onDragHandlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const el  = e.currentTarget;
-    const pid = e.pointerId;
+    const el      = e.currentTarget;
+    const pid     = e.pointerId;
+    const isTouch = e.pointerType !== 'mouse';
+    const now     = Date.now();
+
+    if (isTouch) {
+      const elapsed = now - lastTapTime.current;
+      lastTapTime.current = now;
+      if (elapsed > 1000) {
+        // First tap (or too slow): record time, don't activate yet
+        return;
+      }
+      // Second tap within 1 s → fall through and activate resize
+    }
+
+    // Activate resize (always for mouse, double-tap for touch)
+    el.setPointerCapture(pid);
+    resizeActiveRef.current = true;
+    runFlash();
 
     dragStartY.current = e.clientY;
     dragStartH.current = panelRef.current?.offsetHeight ?? 0;
 
-    const headerEl = panelRef.current?.children[1] as HTMLElement | undefined;
-    const headerH  = headerEl?.offsetHeight ?? 60;
-    const MIN_H    = headerH + 20;
-    const MAX_H    = Math.floor(window.innerHeight * 0.72);
+    // MIN: keep the info section (status rows + buttons + open full details) always visible
+    const headerH = (panelRef.current?.children[1] as HTMLElement | undefined)?.offsetHeight ?? 60;
+    const infoH   = infoRef.current?.offsetHeight ?? 200;
+    const MIN_H   = 20 + headerH + infoH; // drag handle + header + info section
+    const MAX_H   = Math.floor(window.innerHeight * 0.72);
 
     const onMove = (ev: PointerEvent) => {
-      if (ev.pointerId !== pid || !resizeActiveRef.current) return;
-      const delta = ev.clientY - dragStartY.current;
+      if (ev.pointerId !== pid) return;
+      const delta = ev.clientY - dragStartY.current; // positive = drag down = shrink
       setPanelHeight(Math.min(MAX_H, Math.max(MIN_H, dragStartH.current - delta)));
     };
 
     const onUp = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
-      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       resizeActiveRef.current = false;
       setFlash('idle');
       document.removeEventListener('pointermove', onMove);
@@ -87,29 +121,14 @@ export default function HydrantInfoPanel({
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
-
-    if (e.pointerType === 'mouse') {
-      // Desktop mouse: activate immediately, no long-press needed
-      el.setPointerCapture(pid);
-      resizeActiveRef.current = true;
-      setFlash('active');
-    } else {
-      // Touch / pen: require a 2-second hold to activate resize
-      longPressTimer.current = setTimeout(() => {
-        el.setPointerCapture(pid);
-        resizeActiveRef.current = true;
-        dragStartY.current = e.clientY;
-        dragStartH.current = panelRef.current?.offsetHeight ?? 0;
-        runFlash();
-      }, 2000);
-    }
   }, [runFlash]);
 
-  const pillColor = flash === 'red1' || flash === 'red2'
-    ? '#e0353b'
+  // Derive handle visual from flash state
+  const pillBg = flash === 'red1' || flash === 'red2'
+    ? 'bg-[#e0353b]'
     : flash === 'active'
-      ? '#e0353b99'
-      : undefined;
+      ? 'bg-[#e0353b]/60'
+      : 'bg-neutral-300 dark:bg-neutral-600';
 
   const handleBg = flash === 'red1' || flash === 'red2'
     ? 'bg-[#e0353b]/20 dark:bg-[#e0353b]/25'
@@ -131,17 +150,14 @@ export default function HydrantInfoPanel({
         ...(panelHeight !== null ? { height: panelHeight } : {}),
       }}
     >
-      {/* Drag handle — hold 2 s on touch to activate resize */}
+      {/* Drag handle — double-tap on touch to activate resize */}
       <div
         onPointerDown={onDragHandlePointerDown}
         style={{ touchAction: 'none' }}
         className={`shrink-0 flex items-center justify-center h-5 cursor-s-resize select-none transition-colors ${handleBg}`}
-        title="Hold 2 s to resize"
+        title="Double-tap to resize"
       >
-        <span
-          className={`w-8 h-0.5 rounded-full transition-colors duration-150 ${!pillColor ? 'bg-neutral-300 dark:bg-neutral-600' : ''}`}
-          style={pillColor ? { background: pillColor } : undefined}
-        />
+        <span className={`w-10 h-1 rounded-full transition-colors duration-150 ${pillBg}`} />
       </div>
 
       {/* Header */}
@@ -166,7 +182,12 @@ export default function HydrantInfoPanel({
         </button>
       </div>
 
-      {/* Scrollable content area — photo + info rows + action buttons */}
+      {/*
+        Scrollable content area.
+        DOM order: photo (top) → info section (below photo).
+        On tablet/desktop the effect above scrolls past the photo so info
+        shows first; the user scrolls UP to reveal the photo.
+      */}
       <div
         ref={scrollRef as React.RefObject<HTMLDivElement>}
         className="flex-1 min-h-0 overflow-y-auto"
@@ -174,13 +195,15 @@ export default function HydrantInfoPanel({
         {hydrant.photos.length > 0 && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
+            ref={photoRef}
             src={proxiedPhotoUrl(hydrant.photos[0])}
             alt={`${hydrant.name} field photo`}
             className={`w-full object-cover ${isMobile ? 'max-h-36' : 'aspect-square'}`}
           />
         )}
 
-        <div className="px-5 py-4">
+        {/* Info section — MIN_H keeps this always visible */}
+        <div ref={infoRef} className="px-5 py-4">
           <div className="mb-3 flex flex-col divide-y divide-neutral-100 dark:divide-neutral-700 rounded-lg bg-neutral-50 dark:bg-neutral-800">
             <div className="flex items-center justify-between px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Status</p>

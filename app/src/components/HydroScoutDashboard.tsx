@@ -558,9 +558,20 @@ export default function HydroScoutDashboard() {
     const cancelTimer = () => {
       if (mapLongPressTimer.current) { clearTimeout(mapLongPressTimer.current); mapLongPressTimer.current = null; }
     };
-    el.addEventListener('pointerup',     cancelTimer, { once: true });
-    el.addEventListener('pointermove',   cancelTimer, { once: true });
-    el.addEventListener('pointercancel', cancelTimer, { once: true });
+    // Cancel on pointer up / cancel. For move: only cancel if the finger drifted
+    // more than 10 px (small jitter is normal on touch — don't break the hold).
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const onMoveCancel = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return;
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 10) {
+        cancelTimer();
+        el.removeEventListener('pointermove', onMoveCancel);
+      }
+    };
+    el.addEventListener('pointerup',     cancelTimer,    { once: true });
+    el.addEventListener('pointercancel', cancelTimer,    { once: true });
+    el.addEventListener('pointermove',   onMoveCancel);
   }, []);
 
   return (
