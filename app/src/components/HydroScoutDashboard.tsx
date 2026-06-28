@@ -21,6 +21,7 @@ import {
 } from '../data/hydrants';
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
+import { useIsMobile } from '@/lib/use-media-query';
 import { haversineM, formatDistance, distToRouteM } from '@/lib/haversine';
 import { type RankedHydrant } from '@/lib/nearest-hydrant';
 import { playHazardChime } from '@/lib/chime';
@@ -76,6 +77,7 @@ export default function HydroScoutDashboard() {
   const ROUTE_FETCH_INTERVAL_MS = 10_000;
 
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [otwEdgePos, setOtwEdgePos] = useState<{ x: number; y: number; angle: number } | null>(null);
   const [deletedHydrant, setDeletedHydrant] = useState<{ id: string; name: string } | null>(null);
   const deletedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -86,6 +88,7 @@ export default function HydroScoutDashboard() {
   const splashStartedRef = useRef(false);
 
   const { role } = useAuth();
+  const isMobile = useIsMobile();
   const { hydrants, loading, error } = useHydrants();
   const { reports, loading: reportsLoading } = useReports();
   const hasPendingReports = reports.some((r) => r.status === 'pending');
@@ -415,6 +418,7 @@ export default function HydroScoutDashboard() {
     // Already have a fix — enter route mode immediately.
     if (userLocation) {
       setOtwHydrant(selectedHydrant);
+      if (isMobile) setSelectedHydrant(null);
       return;
     }
 
@@ -434,6 +438,7 @@ export default function HydroScoutDashboard() {
       setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       // Only enter route mode once we actually have a position.
       setOtwHydrant(selectedHydrant);
+      if (isMobile) setSelectedHydrant(null);
     };
     const onFinalError = (err: GeolocationPositionError) => {
       geoErrorRef.current = err;
@@ -459,7 +464,7 @@ export default function HydroScoutDashboard() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
     );
-  }, [selectedHydrant, userLocation, showGeoError]);
+  }, [selectedHydrant, userLocation, showGeoError, isMobile]);
 
   const handleCancelOtw = useCallback(() => {
     const ctrl = controllerRef.current;
@@ -574,6 +579,36 @@ export default function HydroScoutDashboard() {
     el.addEventListener('pointermove',   onMoveCancel);
   }, []);
 
+  // Compute the off-screen edge indicator for the OTW hydrant
+  const handleMapMove = useCallback(() => {
+    if (!otwHydrant || !controllerRef.current) { setOtwEdgePos(null); return; }
+    const pos = controllerRef.current.project(otwHydrant.lat, otwHydrant.lng);
+    if (!pos) { setOtwEdgePos(null); return; }
+
+    const { innerWidth: w, innerHeight: h } = window;
+    const isOnScreen = pos.x >= 0 && pos.x <= w && pos.y >= 0 && pos.y <= h;
+    if (isOnScreen) { setOtwEdgePos(null); return; }
+
+    const cx = w / 2;
+    const cy = h / 2;
+    const dx = pos.x - cx;
+    const dy = pos.y - cy;
+    const angle = Math.atan2(dy, dx);
+    const sideMargin = 56;
+    // Keep indicator below the header: desktop header = 68px, mobile header+search ≈ 108px
+    // Add circle radius (20px) so the circle doesn't overlap the header bar
+    const topMin = (isMobile ? 108 : 68) + 20;
+    const scaleX = Math.abs(dx) > 0 ? (cx - sideMargin) / Math.abs(dx) : Infinity;
+    const scaleY = Math.abs(dy) > 0 ? (cy - sideMargin) / Math.abs(dy) : Infinity;
+    const scale = Math.min(scaleX, scaleY);
+    const ex = cx + dx * scale;
+    const ey = Math.max(topMin, cy + dy * scale);
+    setOtwEdgePos({ x: ex, y: ey, angle });
+  }, [otwHydrant, isMobile]);
+
+  // Recompute when OTW hydrant changes (handleMapMove is recreated when otwHydrant changes)
+  useEffect(() => { handleMapMove(); }, [handleMapMove]);
+
   return (
     <div className="relative h-dvh w-screen overflow-hidden">
 
@@ -620,6 +655,7 @@ export default function HydroScoutDashboard() {
           nearRouteIds={nearRouteIds}
           initialCenter={mapViewport?.center}
           initialZoom={mapViewport?.zoom}
+          onMapMove={handleMapMove}
         />
       </div>
 
@@ -637,6 +673,35 @@ export default function HydroScoutDashboard() {
           </div>
         </div>
       )}
+      {/* OTW off-screen hydrant indicator — pulsing edge arrow when hydrant is off viewport */}
+      {otwHydrant && otwEdgePos && (
+        <button
+          className="pointer-events-auto absolute z-[1999] focus:outline-none"
+          style={{ left: otwEdgePos.x, top: otwEdgePos.y, transform: 'translate(-50%, -50%)' }}
+          onClick={() => controllerRef.current?.flyTo(otwHydrant.lat, otwHydrant.lng, 16)}
+          title={`Go to ${otwHydrant.name}`}
+        >
+          <div className="flex flex-col items-center gap-1">
+            <div className="relative flex items-center justify-center">
+              <span className="absolute h-10 w-10 animate-ping rounded-full bg-red-500 opacity-60" />
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-full border-2 border-red-400 bg-red-700/90 shadow-xl backdrop-blur-sm">
+                <svg
+                  width="16" height="16" viewBox="0 0 24 24"
+                  fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transform: `rotate(${otwEdgePos.angle * 180 / Math.PI}deg)` }}
+                >
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <polyline points="12 5 19 12 12 19"/>
+                </svg>
+              </div>
+            </div>
+            <span className="rounded-full bg-red-900/85 px-2 py-0.5 text-[9px] font-bold text-white shadow backdrop-blur-sm">
+              {otwHydrant.id}
+            </span>
+          </div>
+        </button>
+      )}
+
       <DashboardOverlay
         activeStatus={activeStatus}
         onSelectStatus={handleSelectStatus}
@@ -679,7 +744,10 @@ export default function HydroScoutDashboard() {
 
       {/* OTW banner */}
       {otwHydrant && (
-        <div className="pointer-events-auto absolute left-1/2 sm:top-[4.75rem] z-[2000] -translate-x-1/2 w-[calc(100vw-1.5rem)] sm:w-auto anim-fade-scale" style={{ top: 'calc(6.5rem + env(safe-area-inset-top, 0px))' }}>
+        <div
+          className="pointer-events-auto absolute left-1/2 top-[4.75rem] z-[2000] -translate-x-1/2 w-[calc(100vw-1.5rem)] sm:w-auto anim-fade-scale"
+          style={isMobile ? { top: 'calc(6.5rem + env(safe-area-inset-top, 0px))' } : undefined}
+        >
 
           {/* Mobile (< sm): 2-row compact card */}
           <div className="flex flex-col sm:hidden rounded-2xl bg-red-900/90 px-3 py-2 shadow-xl backdrop-blur-sm gap-1.5">

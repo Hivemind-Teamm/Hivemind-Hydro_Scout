@@ -50,6 +50,7 @@ interface DilimanMapProps {
   initialCenter?: { lat: number; lng: number };
   initialZoom?: number;
   isDark?: boolean;
+  onMapMove?: () => void;
 }
 
 const MAP_STYLE_LIGHT = 'mapbox://styles/mapbox/streets-v12';
@@ -68,7 +69,7 @@ const DASH_SEQUENCE = [
 
 export default function DilimanMap({
   hydrants, selectedHydrantId, onLoad, onError, onMapReady,
-  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false,
+  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
 }: DilimanMapProps) {
   const mapRef = useRef<MapRef>(null);
   const otwAnimRef = useRef<number | null>(null);
@@ -251,10 +252,27 @@ export default function DilimanMap({
       },
       getCenter: () => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; },
       getZoom: () => map.getZoom(),
+      project: (lat, lng) => {
+        try {
+          const p = map.project([lng, lat]);
+          return { x: p.x, y: p.y };
+        } catch { return null; }
+      },
     });
     setMapInstance(map);
     onLoad?.();
   }, [onLoad, onMapReady]);
+
+  // Keep onMapMove in a ref so we don't re-register the listener on every render
+  const onMapMoveRef = useRef(onMapMove);
+  useEffect(() => { onMapMoveRef.current = onMapMove; }, [onMapMove]);
+
+  useEffect(() => {
+    if (!mapInstance) return;
+    const handler = () => onMapMoveRef.current?.();
+    mapInstance.on('move', handler);
+    return () => { if (mapInstance.loaded()) mapInstance.off('move', handler); };
+  }, [mapInstance]);
 
   const handleClusterClick = useCallback((cluster: ClusterMarker) => {
     if (addHydrantMode || !mapInstance) return;

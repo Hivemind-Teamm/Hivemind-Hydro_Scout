@@ -76,6 +76,12 @@ export default function DashboardOverlay({
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   const [showCounts] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hazardPanelMinimized, setHazardPanelMinimized] = useState(false);
+
+  // Reset minimized state when OTW mode changes
+  useEffect(() => {
+    if (!isOtw) setHazardPanelMinimized(false);
+  }, [isOtw]);
 
   const displayName = user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest';
   const roleLabel: Record<string, string> = { admin: 'Admin', head: 'Head Inspector', authorized: 'Authorized', general: 'General' };
@@ -140,10 +146,40 @@ export default function DashboardOverlay({
         </div>
 
         {/* OTW hazard panel — bottom-left above nearest hydrant button, mobile only */}
-        {isOtw && (
+        {isOtw && !hazardPanelMinimized && (
           <div className="pointer-events-auto absolute left-4 z-[1000] w-[17rem]" style={{ bottom: '5.5rem' }}>
-            <OtwHazardPanel hazards={routeHazards} onSelectHydrant={onSelectHazardHydrant ?? (() => {})} />
+            <div className="relative">
+              <OtwHazardPanel hazards={routeHazards} onSelectHydrant={onSelectHazardHydrant ?? (() => {})} />
+              <button
+                onClick={() => setHazardPanelMinimized(true)}
+                className="absolute -top-2.5 -right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-800/90 text-white shadow-lg backdrop-blur-sm border border-white/20"
+                aria-label="Minimize hazards panel"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
           </div>
+        )}
+        {/* Minimized hazard tab — left edge pill that re-expands the panel */}
+        {isOtw && hazardPanelMinimized && (
+          <button
+            onClick={() => setHazardPanelMinimized(false)}
+            className="pointer-events-auto absolute left-0 z-[1000] flex flex-col items-center rounded-r-xl bg-amber-500/90 px-2 py-3 shadow-xl backdrop-blur-sm"
+            style={{ bottom: '5.5rem' }}
+            aria-label="Show hazards panel"
+          >
+            <span className="text-sm leading-none mb-1.5">⚠️</span>
+            {routeHazards.length > 0 && (
+              <span className="mb-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white/25 text-[9px] font-bold text-white">
+                {routeHazards.length}
+              </span>
+            )}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
         )}
 
         {/* Bottom-right FAB cluster — locate, reports, pin (zoom is pinch on touch) */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
@@ -104,8 +104,26 @@ function ZoomBridge({ onMapReady }: { onMapReady?: (controller: MapController) =
       },
       getCenter: () => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; },
       getZoom: () => map.getZoom(),
+      project: (lat, lng) => {
+        try {
+          const p = map.latLngToContainerPoint(L.latLng(lat, lng));
+          return { x: p.x, y: p.y };
+        } catch { return null; }
+      },
     });
   }, [map, onMapReady]);
+  return null;
+}
+
+function MapMoveHandler({ onMapMove }: { onMapMove?: () => void }) {
+  const cbRef = useRef(onMapMove);
+  useEffect(() => { cbRef.current = onMapMove; }, [onMapMove]);
+  const map = useMap();
+  useEffect(() => {
+    const handler = () => cbRef.current?.();
+    map.on('move', handler);
+    return () => { map.off('move', handler); };
+  }, [map]);
   return null;
 }
 
@@ -131,9 +149,10 @@ interface LeafletMapProps {
   initialCenter?: { lat: number; lng: number };
   initialZoom?: number;
   isDark?: boolean;
+  onMapMove?: () => void;
 }
 
-export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom, isDark }: LeafletMapProps) {
+export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom, isDark, onMapMove }: LeafletMapProps) {
   // Cluster click → slow, eased zoom-in that emulates the Mapbox side's
   // flyTo(expansionZoom, speed 1.4). markercluster's built-in zoomToBoundsOnClick
   // uses an instant setView, which reads as a hard snap; we replace it.
@@ -231,6 +250,7 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
       )}
       <MapClickHandler addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} />
       <ZoomBridge onMapReady={onMapReady} />
+      <MapMoveHandler onMapMove={onMapMove} />
     </MapContainer>
   );
 }
