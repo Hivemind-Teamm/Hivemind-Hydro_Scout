@@ -78,15 +78,15 @@ export default function HydrantInfoPanel({
     lastTapTime.current = 0;
   }, [hydrant.id]);
 
-  // Tablet only (touch device that isn't phone-sized): scroll past the photo so
-  // info shows first. User swipes up to reveal the photo above.
+  // Touch devices (mobile + tablet): scroll past the photo so info shows first.
+  // User swipes up to reveal the full photo above.
   useEffect(() => {
-    if (!scrollRef?.current || isMobile || !isTouchDevice || hydrant.photos.length === 0) return;
+    if (!scrollRef?.current || !isTouchDevice || hydrant.photos.length === 0) return;
     requestAnimationFrame(() => {
       if (!scrollRef?.current) return;
       scrollRef.current.scrollTop = photoRef.current?.offsetHeight ?? 0;
     });
-  }, [hydrant.id, scrollRef, isMobile, isTouchDevice]);
+  }, [hydrant.id, scrollRef, isTouchDevice]);
 
   // Flash animation played when scale mode is activated
   const runFlash = useCallback(() => {
