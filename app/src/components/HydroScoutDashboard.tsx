@@ -60,8 +60,15 @@ export default function HydroScoutDashboard() {
   const [nearestPanelOpen, setNearestPanelOpen] = useState(false);
   const [otwMeta, setOtwMeta] = useState<{ distanceM: number; durationS: number } | null>(null);
 
-  const geoErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const controllerRef = useRef<MapController | null>(null);
+  const geoErrorTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const controllerRef         = useRef<MapController | null>(null);
+  const panelScrollRef        = useRef<HTMLDivElement | null>(null);
+  const mapLongPressTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapScrollDragStartY   = useRef(0);
+  const mapScrollDragStartTop = useRef(0);
+  const mapScrollCaptureEl    = useRef<HTMLDivElement | null>(null);
+  const mapScrollCaptureId    = useRef<number>(-1);
+  const [mapScrollMode, setMapScrollMode] = useState(false);
   const otwFetchedForRef = useRef<string | null>(null);
   const otwRestoredRef  = useRef(false);
   const otwRouteRef     = useRef<[number, number][] | null>(null);
@@ -516,6 +523,46 @@ export default function HydroScoutDashboard() {
     }
   }, []);
 
+  const handleMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // Only intercept touch/pen on the map layer; ignore mouse (map pans fine with mouse)
+    if (e.pointerType === 'mouse') return;
+    const el  = e.currentTarget;
+    const pid = e.pointerId;
+    mapScrollDragStartY.current = e.clientY;
+
+    mapLongPressTimer.current = setTimeout(() => {
+      if (!panelScrollRef.current) return;
+      el.setPointerCapture(pid);
+      mapScrollCaptureEl.current  = el;
+      mapScrollCaptureId.current  = pid;
+      mapScrollDragStartTop.current = panelScrollRef.current.scrollTop;
+      setMapScrollMode(true);
+
+      const onMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pid || !panelScrollRef.current) return;
+        const delta = mapScrollDragStartY.current - ev.clientY; // drag up → scroll down
+        panelScrollRef.current.scrollTop = mapScrollDragStartTop.current + delta;
+      };
+      const onUp = (ev: PointerEvent) => {
+        if (ev.pointerId !== pid) return;
+        setMapScrollMode(false);
+        mapScrollCaptureEl.current  = null;
+        mapScrollCaptureId.current  = -1;
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+      };
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    }, 2000);
+
+    const cancelTimer = () => {
+      if (mapLongPressTimer.current) { clearTimeout(mapLongPressTimer.current); mapLongPressTimer.current = null; }
+    };
+    el.addEventListener('pointerup',     cancelTimer, { once: true });
+    el.addEventListener('pointermove',   cancelTimer, { once: true });
+    el.addEventListener('pointercancel', cancelTimer, { once: true });
+  }, []);
+
   return (
     <div className="relative h-dvh w-screen overflow-hidden">
 
@@ -538,25 +585,47 @@ export default function HydroScoutDashboard() {
         </div>
       )}
 
-      <MapView
-        provider={provider}
-        hydrants={visibleHydrants}
-        selectedHydrantId={selectedHydrant?.id ?? null}
-        onMapboxError={handleMapboxError}
-        onMapReady={handleMapReady}
-        onSelectHydrant={handleSelectHydrant}
-        addHydrantMode={addHydrantMode}
-        onMapClick={handleMapClick}
-        onMapBackgroundClick={handleCloseAll}
-        pendingPin={pendingLocation}
-        is3D={is3D}
-        userLocation={userLocation}
-        otwHydrant={otwHydrant}
-        otwRoute={otwRoute}
-        nearRouteIds={nearRouteIds}
-        initialCenter={mapViewport?.center}
-        initialZoom={mapViewport?.zoom}
-      />
+      {/* Map wrapper — detects 2-second touch hold to activate panel scroll mode */}
+      <div
+        className="absolute inset-0"
+        onPointerDown={handleMapPointerDown}
+        style={{ touchAction: mapScrollMode ? 'none' : undefined }}
+      >
+        <MapView
+          provider={provider}
+          hydrants={visibleHydrants}
+          selectedHydrantId={selectedHydrant?.id ?? null}
+          onMapboxError={handleMapboxError}
+          onMapReady={handleMapReady}
+          onSelectHydrant={handleSelectHydrant}
+          addHydrantMode={addHydrantMode}
+          onMapClick={handleMapClick}
+          onMapBackgroundClick={handleCloseAll}
+          pendingPin={pendingLocation}
+          is3D={is3D}
+          userLocation={userLocation}
+          otwHydrant={otwHydrant}
+          otwRoute={otwRoute}
+          nearRouteIds={nearRouteIds}
+          initialCenter={mapViewport?.center}
+          initialZoom={mapViewport?.zoom}
+        />
+      </div>
+
+      {/* Scroll-mode toast */}
+      {mapScrollMode && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[2500] flex -translate-y-1/2 justify-center">
+          <div className="flex items-center gap-2 rounded-full bg-black/65 px-4 py-2 shadow-xl backdrop-blur-sm">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+              <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+            </svg>
+            <span className="text-[11px] font-bold text-white">Drag to scroll panel</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-180 text-white">
+              <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+            </svg>
+          </div>
+        </div>
+      )}
       <DashboardOverlay
         activeStatus={activeStatus}
         onSelectStatus={handleSelectStatus}
@@ -765,6 +834,7 @@ export default function HydroScoutDashboard() {
           onRoute={handleRoute}
           onRouteDismiss={handleRouteDismiss}
           isOtw={otwHydrant?.id === selectedHydrant?.id}
+          scrollRef={panelScrollRef}
         />
       )}
 

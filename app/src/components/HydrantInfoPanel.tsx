@@ -16,6 +16,8 @@ interface HydrantInfoPanelProps {
   onRoute: () => void;
   onRouteDismiss: () => void;
   isOtw: boolean;
+  /** Ref forwarded to the inner scrollable content area (used by map scroll mode). */
+  scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const PRESSURE_COLOR: Record<string, string> = {
@@ -25,53 +27,95 @@ const PRESSURE_COLOR: Record<string, string> = {
   None:     '#9aa0a6',
 };
 
-export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo, onRoute, onRouteDismiss, isOtw }: HydrantInfoPanelProps) {
+type FlashState = 'idle' | 'red1' | 'off1' | 'red2' | 'active';
+
+export default function HydrantInfoPanel({
+  hydrant, onClose, onOpenFullDetails, onEdit, onReport,
+  onFlyTo, onRoute, onRouteDismiss, isOtw, scrollRef,
+}: HydrantInfoPanelProps) {
   const { role } = useAuth();
   const isMobile = useIsMobile();
   const meta = STATUS_META[hydrant.status];
   const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
 
-  const panelRef  = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const panelRef        = useRef<HTMLDivElement>(null);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
-  const dragStartY = useRef(0);
-  const dragStartH = useRef(0);
+  const dragStartY      = useRef(0);
+  const dragStartH      = useRef(0);
+  const resizeActiveRef = useRef(false);
+  const longPressTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [flash, setFlash] = useState<FlashState>('idle');
 
-  // Reset height when a different hydrant is selected
-  useEffect(() => { setPanelHeight(null); }, [hydrant.id]);
+  useEffect(() => { setPanelHeight(null); setFlash('idle'); }, [hydrant.id]);
+
+  const runFlash = useCallback(() => {
+    // red → off → red → settle into "active" tint
+    setFlash('red1');
+    setTimeout(() => setFlash('off1'),  220);
+    setTimeout(() => setFlash('red2'),  440);
+    setTimeout(() => setFlash('active'), 660);
+  }, []);
 
   const onDragHandlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const el = e.currentTarget;
+    const el  = e.currentTarget;
     const pid = e.pointerId;
-    el.setPointerCapture(pid);
 
     dragStartY.current = e.clientY;
     dragStartH.current = panelRef.current?.offsetHeight ?? 0;
 
-    // MIN: always keep the bottom section + header + drag handle fully visible
-    const bottomH = bottomRef.current?.offsetHeight ?? 160;
-    const headerH = (panelRef.current?.children[1] as HTMLElement | undefined)?.offsetHeight ?? 60;
-    const MIN_H   = bottomH + headerH + 12;
-    // MAX: 72% on mobile so there's always map visible; 65% on desktop
-    const MAX_H   = Math.floor(window.innerHeight * (isMobile ? 0.72 : 0.65));
+    const headerEl = panelRef.current?.children[1] as HTMLElement | undefined;
+    const headerH  = headerEl?.offsetHeight ?? 60;
+    const MIN_H    = headerH + 20;
+    const MAX_H    = Math.floor(window.innerHeight * 0.72);
 
     const onMove = (ev: PointerEvent) => {
-      if (ev.pointerId !== pid) return;
-      const delta = ev.clientY - dragStartY.current; // positive = drag down = shrink
+      if (ev.pointerId !== pid || !resizeActiveRef.current) return;
+      const delta = ev.clientY - dragStartY.current;
       setPanelHeight(Math.min(MAX_H, Math.max(MIN_H, dragStartH.current - delta)));
     };
 
     const onUp = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      resizeActiveRef.current = false;
+      setFlash('idle');
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
     };
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
-  }, [isMobile]);
+
+    if (e.pointerType === 'mouse') {
+      // Desktop mouse: activate immediately, no long-press needed
+      el.setPointerCapture(pid);
+      resizeActiveRef.current = true;
+      setFlash('active');
+    } else {
+      // Touch / pen: require a 2-second hold to activate resize
+      longPressTimer.current = setTimeout(() => {
+        el.setPointerCapture(pid);
+        resizeActiveRef.current = true;
+        dragStartY.current = e.clientY;
+        dragStartH.current = panelRef.current?.offsetHeight ?? 0;
+        runFlash();
+      }, 2000);
+    }
+  }, [runFlash]);
+
+  const pillColor = flash === 'red1' || flash === 'red2'
+    ? '#e0353b'
+    : flash === 'active'
+      ? '#e0353b99'
+      : undefined;
+
+  const handleBg = flash === 'red1' || flash === 'red2'
+    ? 'bg-[#e0353b]/20 dark:bg-[#e0353b]/25'
+    : flash === 'active'
+      ? 'bg-[#e0353b]/10 dark:bg-[#e0353b]/15'
+      : 'bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700';
 
   return (
     <div
@@ -83,18 +127,21 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
       }
       style={{
         width: isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
-        maxHeight: isMobile ? '72dvh' : 'calc(100dvh - 28rem)',
+        maxHeight: isMobile ? '72dvh' : 'calc(100dvh - 16rem)',
         ...(panelHeight !== null ? { height: panelHeight } : {}),
       }}
     >
-      {/* Drag handle — top bar, drag down to shrink */}
+      {/* Drag handle — hold 2 s on touch to activate resize */}
       <div
         onPointerDown={onDragHandlePointerDown}
         style={{ touchAction: 'none' }}
-        className="shrink-0 flex items-center justify-center h-5 cursor-s-resize select-none bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
-        title="Drag to resize"
+        className={`shrink-0 flex items-center justify-center h-5 cursor-s-resize select-none transition-colors ${handleBg}`}
+        title="Hold 2 s to resize"
       >
-        <span className="w-8 h-0.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
+        <span
+          className={`w-8 h-0.5 rounded-full transition-colors duration-150 ${!pillColor ? 'bg-neutral-300 dark:bg-neutral-600' : ''}`}
+          style={pillColor ? { background: pillColor } : undefined}
+        />
       </div>
 
       {/* Header */}
@@ -119,68 +166,71 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         </button>
       </div>
 
-      {/* Lead photo — 1:1, scales with card width */}
-      {hydrant.photos.length > 0 && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={proxiedPhotoUrl(hydrant.photos[0])}
-          alt={`${hydrant.name} field photo`}
-          className={`w-full min-h-0 shrink object-cover ${isMobile ? 'max-h-36' : 'aspect-square'}`}
-        />
-      )}
+      {/* Scrollable content area — photo + info rows + action buttons */}
+      <div
+        ref={scrollRef as React.RefObject<HTMLDivElement>}
+        className="flex-1 min-h-0 overflow-y-auto"
+      >
+        {hydrant.photos.length > 0 && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={proxiedPhotoUrl(hydrant.photos[0])}
+            alt={`${hydrant.name} field photo`}
+            className={`w-full object-cover ${isMobile ? 'max-h-36' : 'aspect-square'}`}
+          />
+        )}
 
-      <div ref={bottomRef} className="shrink-0 px-5 py-4">
-        {/* Status / Pressure / Key rows */}
-        <div className="mb-3 flex flex-col divide-y divide-neutral-100 dark:divide-neutral-700 rounded-lg bg-neutral-50 dark:bg-neutral-800">
-          <div className="flex items-center justify-between px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Status</p>
-            <p className="text-xs font-bold" style={{ color: meta.color }}>{meta.legendLabel}</p>
+        <div className="px-5 py-4">
+          <div className="mb-3 flex flex-col divide-y divide-neutral-100 dark:divide-neutral-700 rounded-lg bg-neutral-50 dark:bg-neutral-800">
+            <div className="flex items-center justify-between px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Status</p>
+              <p className="text-xs font-bold" style={{ color: meta.color }}>{meta.legendLabel}</p>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Pressure</p>
+              <p className="text-xs font-bold" style={{ color: PRESSURE_COLOR[hydrant.pressure] ?? '#555' }}>{hydrant.pressure}</p>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Key</p>
+              <p className="text-xs font-bold text-neutral-700 dark:text-neutral-200">{hydrant.key}</p>
+            </div>
           </div>
-          <div className="flex items-center justify-between px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Pressure</p>
-            <p className="text-xs font-bold" style={{ color: PRESSURE_COLOR[hydrant.pressure] ?? '#555' }}>{hydrant.pressure}</p>
-          </div>
-          <div className="flex items-center justify-between px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Key</p>
-            <p className="text-xs font-bold text-neutral-700 dark:text-neutral-200">{hydrant.key}</p>
-          </div>
-        </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { if (isOtw) { onRouteDismiss(); } else { onRoute(); } }}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-colors ${isOtw ? 'bg-red-700 hover:bg-red-800 active:bg-red-900' : 'bg-[#e0353b] hover:bg-[#c42d32] active:bg-[#9e2428]'}`}
+            >
+              <RouteIcon />
+              {isOtw ? 'Routing…' : 'Route'}
+            </button>
+            {canEdit && (
+              <button
+                title="Edit hydrant"
+                onClick={onEdit}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                <EditIcon />
+              </button>
+            )}
+            {canReport && (
+              <button
+                title="Report issue"
+                onClick={onReport}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 dark:border-neutral-700 text-[#f5a623] hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                <WarnIcon />
+              </button>
+            )}
+          </div>
+
           <button
-            onClick={() => { if (isOtw) { onRouteDismiss(); } else { onRoute(); } }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-colors ${isOtw ? 'bg-red-700 hover:bg-red-800 active:bg-red-900' : 'bg-[#e0353b] hover:bg-[#c42d32] active:bg-[#9e2428]'}`}
+            className="mt-2 w-full text-center text-xs text-[#e0353b] hover:underline"
+            onClick={onOpenFullDetails}
           >
-            <RouteIcon />
-            {isOtw ? 'Routing…' : 'Route'}
+            Open full details →
           </button>
-          {canEdit && (
-            <button
-              title="Edit hydrant"
-              onClick={onEdit}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            >
-              <EditIcon />
-            </button>
-          )}
-          {canReport && (
-            <button
-              title="Report issue"
-              onClick={onReport}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 dark:border-neutral-700 text-[#f5a623] hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            >
-              <WarnIcon />
-            </button>
-          )}
         </div>
-
-        <button
-          className="mt-2 w-full text-center text-xs text-[#e0353b] dark:text-[#e0353b] hover:underline"
-          onClick={onOpenFullDetails}
-        >
-          Open full details →
-        </button>
       </div>
     </div>
   );
