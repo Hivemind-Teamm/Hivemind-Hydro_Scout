@@ -16,7 +16,7 @@ interface HydrantInfoPanelProps {
   onRoute: () => void;
   onRouteDismiss: () => void;
   isOtw: boolean;
-  /** Ref forwarded to the scrollable content area — used by map scroll mode. */
+  /** Forwarded to the inner scrollable div — used by the map scroll-mode gesture. */
   scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -39,39 +39,58 @@ export default function HydrantInfoPanel({
   const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
 
-  const panelRef        = useRef<HTMLDivElement>(null);
-  const photoRef        = useRef<HTMLImageElement>(null);
-  const infoRef         = useRef<HTMLDivElement>(null);
+  // Desktop = ≥ 1024 px — no inner scroll, mouse drag activates resize immediately
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const h = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+
+  // Tablet + mobile get inner scroll; desktop does not
+  const hasInnerScroll = !isDesktop;
+
+  const panelRef  = useRef<HTMLDivElement>(null);
+  const photoRef  = useRef<HTMLImageElement>(null);
+  const infoRef   = useRef<HTMLDivElement>(null);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
-  const dragStartY      = useRef(0);
-  const dragStartH      = useRef(0);
-  const resizeActiveRef = useRef(false);
-  const lastTapTime     = useRef<number>(0);
+  const dragStartY  = useRef(0);
+  const dragStartH  = useRef(0);
+  const lastTapTime = useRef(0);
+
+  // Scale mode — persists until the user double-taps again to turn it off
+  const scaleModeRef = useRef(false);
+  const [scaleMode, setScaleMode] = useState(false);
   const [flash, setFlash] = useState<FlashState>('idle');
 
-  // Reset state when a different hydrant is selected
+  // Reset everything when a new hydrant is selected
   useEffect(() => {
     setPanelHeight(null);
+    scaleModeRef.current = false;
+    setScaleMode(false);
     setFlash('idle');
-    resizeActiveRef.current = false;
     lastTapTime.current = 0;
   }, [hydrant.id]);
 
-  // On tablet/desktop with a photo: scroll past the photo so info shows first.
-  // User can then scroll UP to reveal the photo above.
+  // Tablet only: scroll past the photo so the info section shows first.
+  // User can swipe up to reveal the photo above.
   useEffect(() => {
-    if (!scrollRef?.current || isMobile || hydrant.photos.length === 0) return;
+    if (!scrollRef?.current || isMobile || isDesktop || hydrant.photos.length === 0) return;
     requestAnimationFrame(() => {
       if (!scrollRef?.current) return;
       scrollRef.current.scrollTop = photoRef.current?.offsetHeight ?? 0;
     });
-  }, [hydrant.id, scrollRef, isMobile]);
+  }, [hydrant.id, scrollRef, isMobile, isDesktop]);
 
+  // Flash animation played when scale mode is activated
   const runFlash = useCallback(() => {
     setFlash('red1');
     setTimeout(() => setFlash('off1'),  220);
     setTimeout(() => setFlash('red2'),  440);
-    setTimeout(() => setFlash('active'), 660);
+    setTimeout(() => setFlash('active'), 660); // stays red until deactivated
   }, []);
 
   const onDragHandlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -82,27 +101,37 @@ export default function HydrantInfoPanel({
     const now     = Date.now();
 
     if (isTouch) {
-      const elapsed = now - lastTapTime.current;
+      const elapsed    = now - lastTapTime.current;
       lastTapTime.current = now;
-      if (elapsed > 1000) {
-        // First tap (or too slow): record time, don't activate yet
-        return;
+      const isDoubleTap = elapsed <= 1000;
+
+      if (isDoubleTap) {
+        if (scaleModeRef.current) {
+          // Second double-tap → deactivate
+          scaleModeRef.current = false;
+          setScaleMode(false);
+          setFlash('idle');
+          return; // no drag on deactivation tap
+        }
+        // First double-tap → activate and fall through to start drag
+        scaleModeRef.current = true;
+        setScaleMode(true);
+        runFlash();
+      } else {
+        // Single tap: only allow drag if scale mode is already on
+        if (!scaleModeRef.current) return;
       }
-      // Second tap within 1 s → fall through and activate resize
     }
 
-    // Activate resize (always for mouse, double-tap for touch)
+    // ── Start resize drag (mouse: always; touch: when scale mode is active) ──
     el.setPointerCapture(pid);
-    resizeActiveRef.current = true;
-    runFlash();
-
     dragStartY.current = e.clientY;
     dragStartH.current = panelRef.current?.offsetHeight ?? 0;
 
-    // MIN: keep the info section (status rows + buttons + open full details) always visible
+    // MIN keeps the info section (rows + buttons + "Open full details") always visible
     const headerH = (panelRef.current?.children[1] as HTMLElement | undefined)?.offsetHeight ?? 60;
     const infoH   = infoRef.current?.offsetHeight ?? 200;
-    const MIN_H   = 20 + headerH + infoH; // drag handle + header + info section
+    const MIN_H   = 20 + headerH + infoH; // drag handle + header + info
     const MAX_H   = Math.floor(window.innerHeight * 0.72);
 
     const onMove = (ev: PointerEvent) => {
@@ -113,21 +142,20 @@ export default function HydrantInfoPanel({
 
     const onUp = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
-      resizeActiveRef.current = false;
-      setFlash('idle');
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
+      // Scale mode intentionally stays ON — user double-taps again to turn it off
     };
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
   }, [runFlash]);
 
-  // Derive handle visual from flash state
+  // ── Visual state ──
   const pillBg = flash === 'red1' || flash === 'red2'
     ? 'bg-[#e0353b]'
     : flash === 'active'
-      ? 'bg-[#e0353b]/60'
+      ? 'bg-[#e0353b]/70'
       : 'bg-neutral-300 dark:bg-neutral-600';
 
   const handleBg = flash === 'red1' || flash === 'red2'
@@ -145,22 +173,27 @@ export default function HydrantInfoPanel({
           : 'anim-slide-up pointer-events-auto absolute bottom-0 left-4 z-[2000] flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900'
       }
       style={{
-        width: isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
+        width:     isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
         maxHeight: isMobile ? '72dvh' : 'calc(100dvh - 16rem)',
         ...(panelHeight !== null ? { height: panelHeight } : {}),
       }}
     >
-      {/* Drag handle — double-tap on touch to activate resize */}
+      {/* ── Drag handle ──
+          Touch: double-tap (within 1 s) to activate scale mode (stays red).
+                 Double-tap again to deactivate.
+                 While active, any single drag resizes the panel.
+          Mouse: drag activates resize immediately, no double-tap needed.
+      */}
       <div
         onPointerDown={onDragHandlePointerDown}
         style={{ touchAction: 'none' }}
-        className={`shrink-0 flex items-center justify-center h-5 cursor-s-resize select-none transition-colors ${handleBg}`}
-        title="Double-tap to resize"
+        className={`shrink-0 flex items-center justify-center h-5 select-none transition-colors cursor-s-resize ${handleBg}`}
+        title={scaleMode ? 'Scale mode ON — double-tap to exit' : 'Double-tap to resize'}
       >
         <span className={`w-10 h-1 rounded-full transition-colors duration-150 ${pillBg}`} />
       </div>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex shrink-0 items-start justify-between bg-neutral-50 dark:bg-neutral-800 px-5 pb-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{hydrant.id}</p>
@@ -183,14 +216,16 @@ export default function HydrantInfoPanel({
       </div>
 
       {/*
-        Scrollable content area.
-        DOM order: photo (top) → info section (below photo).
-        On tablet/desktop the effect above scrolls past the photo so info
-        shows first; the user scrolls UP to reveal the photo.
+        ── Scrollable content (tablet + mobile only) ──
+        DOM order: photo first (top), info section below.
+        On tablet the effect above sets scrollTop = photo height so info
+        is visible first; swiping UP reveals the photo.
+        overscroll-contain prevents rubber-band past the last element.
+        Desktop uses overflow-hidden (no inner scroll — resize instead).
       */}
       <div
         ref={scrollRef as React.RefObject<HTMLDivElement>}
-        className="flex-1 min-h-0 overflow-y-auto"
+        className={`flex-1 min-h-0 ${hasInnerScroll ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'}`}
       >
         {hydrant.photos.length > 0 && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -202,8 +237,8 @@ export default function HydrantInfoPanel({
           />
         )}
 
-        {/* Info section — MIN_H keeps this always visible */}
-        <div ref={infoRef} className="px-5 py-4">
+        {/* Info section — MIN_H anchors to this so it's always visible */}
+        <div ref={infoRef} className="px-5 pt-4 pb-3">
           <div className="mb-3 flex flex-col divide-y divide-neutral-100 dark:divide-neutral-700 rounded-lg bg-neutral-50 dark:bg-neutral-800">
             <div className="flex items-center justify-between px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Status</p>
