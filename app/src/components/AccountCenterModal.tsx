@@ -30,22 +30,21 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
   const { user, role } = useAuth();
   const router = useRouter();
 
-  const [changingPassword, setChangingPassword]       = useState(false);
-  const [newPassword, setNewPassword]                 = useState('');
-  const [retypePassword, setRetypePassword]           = useState('');
-  const [saving, setSaving]                           = useState(false);
-  const [saveError, setSaveError]                     = useState('');
+  const [changingPassword, setChangingPassword]         = useState(false);
+  const [newPassword, setNewPassword]                   = useState('');
+  const [retypePassword, setRetypePassword]             = useState('');
+  const [saving, setSaving]                             = useState(false);
+  const [saveError, setSaveError]                       = useState('');
   const [showNoChangesConfirm, setShowNoChangesConfirm] = useState(false);
 
-  const isSignedIn = !!user;
-  const roleLabel  = role ? (ROLE_LABELS[role] ?? role) : 'General User';
-  const access     = ROLE_ACCESS[role ?? 'general'];
-  const email      = user?.email ?? '';
-  const displayName = email
-    ? email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-    : 'Guest';
-  const initials = displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-  const isGeneral = !role || role === 'general';
+  const isSignedIn  = !!user;
+  const roleLabel   = role ? (ROLE_LABELS[role] ?? role) : 'General User';
+  const access      = ROLE_ACCESS[role ?? 'general'];
+  const email       = user?.email ?? '';
+  const displayName = user?.displayName
+    || (email ? email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
+  const initials    = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+  const isGeneral   = !role || role === 'general';
 
   function handleSignIn() { onClose(); router.push('/login');  }
   function handleSignUp() { onClose(); router.push('/signup'); }
@@ -178,7 +177,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
                 <ReadonlyField label="Personal Name" value={displayName} />
                 <ReadonlyField label="Email Address" value={email} />
 
-                {/* Password field — editable in change-password mode */}
                 {changingPassword ? (
                   <EditableField
                     label="New Password"
@@ -191,7 +189,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
                   <ReadonlyField label="Password" value="••••••••••" />
                 )}
 
-                {/* Retype password — only shown in change-password mode */}
                 {changingPassword && (
                   <div className="col-span-2 flex flex-col gap-1">
                     <EditableField
@@ -219,7 +216,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
               </div>
             </section>
 
-            {/* Upgrade banner */}
             {isGeneral && (
               <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-500/30 dark:bg-red-950/30">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-white">
@@ -253,7 +249,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             <div className="mt-auto flex flex-col gap-2 pt-1">
               {isSignedIn ? (
                 <>
-                  {/* Change Password / Save Changes toggle */}
                   {changingPassword ? (
                     <button
                       onClick={handleSavePassword}

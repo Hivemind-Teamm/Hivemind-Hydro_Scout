@@ -142,7 +142,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { onRoute(); onRouteDismiss(); }}
+            onClick={() => { if (isOtw) { onRouteDismiss(); } else { onRoute(); } }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-colors ${isOtw ? 'bg-red-700 hover:bg-red-800 active:bg-red-900' : 'bg-[#e0353b] hover:bg-[#c42d32] active:bg-[#9e2428]'}`}
           >
             <RouteIcon />

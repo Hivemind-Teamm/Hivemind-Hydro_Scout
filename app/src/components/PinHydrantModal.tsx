@@ -9,6 +9,8 @@ import { useIsMobile } from '@/lib/use-media-query';
 import { type HydrantStatus } from '../data/hydrants';
 import { createHydrant } from '../data/store';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
+import { useStorageConsent } from '@/lib/use-storage-consent';
+import StorageConsentModal from './StorageConsentModal';
 
 const MiniMap = dynamic(() => import('./MiniMap'), { ssr: false });
 
@@ -71,6 +73,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
   const [photos,    setPhotos]    = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { requestConsent, modalOpen: consentOpen, handleAllow, handleDecline } = useStorageConsent();
 
   // Submit state
   const [saving, setSaving] = useState(false);
@@ -143,6 +146,8 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
   }
 
   return (
+    <>
+    {consentOpen && <StorageConsentModal onAllow={handleAllow} onDecline={handleDecline} />}
     <div className="anim-fade pointer-events-auto absolute inset-0 z-[5000] flex items-center justify-center bg-black/50">
       <div className="anim-fade-scale relative flex h-[95vh] w-[95vw] max-w-[1100px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
 
@@ -391,7 +396,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                   ))}
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={async () => { if (await requestConsent()) fileInputRef.current?.click(); }}
                     disabled={uploading}
                     className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700 disabled:opacity-50"
                   >
@@ -448,6 +453,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
         </div>
       </div>
     </div>
+    </>
   );
 }
 

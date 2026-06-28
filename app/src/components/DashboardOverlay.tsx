@@ -272,7 +272,7 @@ export default function DashboardOverlay({
                   />
                 )}
                 <MobileMenuRow label={provider === 'mapbox' ? 'Map: Satellite (Mapbox)' : 'Map: Streets (OSM)'} onClick={onToggleProvider}
-                  icon={<LayersGlyph />}
+                  icon={<MapGlyph />}
                 />
                 <MobileMenuRow label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'} onClick={toggleTheme}
                   icon={isDark ? <SunGlyph /> : <MoonGlyph />}
@@ -426,7 +426,7 @@ export default function DashboardOverlay({
           onClick={onToggleProvider}
           rounded
         >
-          <LayersGlyph />
+          <MapGlyph />
         </ToolButton>
 
         {role !== 'general' && role !== null && (
@@ -751,11 +751,15 @@ function MinusGlyph() {
   );
 }
 
-function LayersGlyph() {
+function MapGlyph() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" {...stroke}>
-      <polygon points="12 2 22 8 12 14 2 8 12 2" />
-      <polyline points="2 16 12 22 22 16" />
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {/* Left panel */}
+      <path d="M3 5 L9 3 L9 21 L3 19 Z" />
+      {/* Center panel */}
+      <path d="M9 3 L15 5 L15 19 L9 21 Z" />
+      {/* Right panel */}
+      <path d="M15 5 L21 3 L21 19 L15 21 Z" />
     </svg>
   );
 }

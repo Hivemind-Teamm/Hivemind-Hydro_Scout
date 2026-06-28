@@ -6,6 +6,8 @@ import { useIsMobile } from '@/lib/use-media-query';
 import { type Hydrant, type HydrantStatus } from '../data/hydrants';
 import { updateHydrantStatus } from '../data/store';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
+import { useStorageConsent } from '@/lib/use-storage-consent';
+import StorageConsentModal from './StorageConsentModal';
 
 const ROLE_LABELS: Record<string, string> = {
   general: 'General', authorized: 'Authorized', head: 'Head', admin: 'Admin',
@@ -35,6 +37,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { requestConsent, modalOpen: consentOpen, handleAllow, handleDecline } = useStorageConsent();
 
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
   const roleLabel = role ? (ROLE_LABELS[role] ?? role) : 'Authorized';
@@ -94,6 +97,8 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   }
 
   return (
+    <>
+    {consentOpen && <StorageConsentModal onAllow={handleAllow} onDecline={handleDecline} />}
     <div className={
       isMobile
         ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[3000] flex max-h-[88vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
@@ -205,7 +210,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
             ))}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={async () => { if (await requestConsent()) fileInputRef.current?.click(); }}
               disabled={uploading}
               className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700 disabled:opacity-50"
             >
@@ -263,5 +268,6 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
         </div>
       </div>
     </div>
+    </>
   );
 }
