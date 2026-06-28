@@ -92,7 +92,7 @@ export default function DashboardOverlay({
     return (
       <div className="pointer-events-none absolute inset-0 select-none">
         {/* Slim top bar */}
-        <header className="pointer-events-auto absolute inset-x-0 top-0 z-[1000]">
+        <header className="pointer-events-auto absolute inset-x-0 top-0 z-[1000]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex h-14 items-center justify-between bg-neutral-600/60 px-3 [backdrop-filter:blur(4px)] dark:bg-black/55">
             <div className="flex items-center gap-1.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -114,7 +114,7 @@ export default function DashboardOverlay({
         </header>
 
         {/* Search + horizontally-scrollable status pills — stays just below the header, above the OTW pill */}
-        <div className="pointer-events-auto absolute inset-x-0 top-[3.75rem] z-[1100] flex flex-row items-center gap-1.5 px-2 pt-2">
+        <div className="pointer-events-auto absolute inset-x-0 z-[1100] flex flex-row items-center gap-1.5 px-2 pt-2" style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}>
           <LocationSearch onFlyTo={onFlyTo} mobile />
           <div className="shrink-0 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex w-max overflow-hidden rounded-lg">

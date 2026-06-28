@@ -70,7 +70,7 @@ export default function SignUpPage() {
   );
 
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100dvh", width: "100vw", overflow: "hidden" }}>
       {/* Left yellow panel */}
       <div style={{ flex: "0 0 42%", background: "#FED42E", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ position: "relative", width: "55%", aspectRatio: "3 / 4" }}>

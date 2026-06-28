@@ -27,7 +27,7 @@ export default function AdminPage() {
     return (
       <div
         style={{
-          height: "100vh",
+          height: "100dvh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

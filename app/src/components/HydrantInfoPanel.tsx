@@ -77,7 +77,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
       }
       style={{
         width: isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
-        maxHeight: isMobile ? '80vh' : 'calc(100vh - 28rem)',
+        maxHeight: isMobile ? '80dvh' : 'calc(100dvh - 28rem)',
         ...(panelHeight !== null && !isMobile ? { height: panelHeight } : {}),
       }}
     >

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, ABeeZee } from "next/font/google";
 import "./globals.css";
 import 'leaflet/dist/leaflet.css';
@@ -25,6 +25,12 @@ const abeezee = ABeeZee({
   variable: "--font-abeezee",
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
+
 export const metadata: Metadata = {
   title: "Hydro-Scout",
   description: "Hydro-Scout hydrant monitoring platform",
@@ -47,7 +53,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-     <body className="h-screen w-screen flex flex-col bg-white text-neutral-900 dark:bg-[#0b0f14] dark:text-neutral-100" style={{ margin: 0 }}>
+     <body className="h-dvh w-screen flex flex-col bg-white text-neutral-900 dark:bg-[#0b0f14] dark:text-neutral-100" style={{ margin: 0 }}>
   <ThemeProvider>
     <ScrollBehavior />
     <AuthProvider>{children}</AuthProvider>
