@@ -76,8 +76,8 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
   return (
     <div className={
       isMobile
-        ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[3000] flex h-[80vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
-        : 'anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[4.3125rem] z-[3000] flex w-[26.25rem] flex-col bg-white shadow-2xl dark:bg-neutral-900'
+        ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[3000] flex h-[80vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-800'
+        : 'anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[4.3125rem] z-[3000] flex w-[26.25rem] flex-col bg-white shadow-2xl dark:bg-neutral-800'
     }>
 
       {/* ── Header ── */}
@@ -91,7 +91,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
             className="h-14 w-14 shrink-0 rounded-lg object-cover"
           />
         ) : (
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-neutral-400 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-neutral-400 dark:border-neutral-600 dark:bg-neutral-700 dark:text-neutral-400">
             <UploadIcon />
           </div>
         )}
@@ -122,7 +122,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 
         <button
           onClick={onClose}
-          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-neutral-700 hover:scale-110 active:scale-90 active:duration-75 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-neutral-700 hover:scale-110 active:scale-90 active:duration-75 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
         >
           ✕
         </button>
@@ -257,7 +257,7 @@ function QuickTab({ hydrant, meta, distanceM, isOtw }: { hydrant: Hydrant; meta:
           <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Visible to all roles</span>
           <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-700" />
         </div>
-        <p className="rounded-lg bg-neutral-100 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+        <p className="rounded-lg bg-neutral-100 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300">
           General users see station, distance, route, landmark and the lead photo — enough to act, without exposing unverified internal flags.
         </p>
       </div>
@@ -328,7 +328,7 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
               >
                 {n.initials}
               </button>
-              <div className="flex-1 rounded-lg bg-neutral-100 px-2.5 py-2 dark:bg-neutral-800">
+              <div className="flex-1 rounded-lg bg-neutral-100 px-2.5 py-2 dark:bg-neutral-700">
                 <button
                   onClick={() => onViewUser(n.user, 'Authorized User')}
                   className="text-[10px] font-semibold text-[#e0353b] hover:underline mb-0.5 block dark:text-[#e0353b]"
@@ -446,7 +446,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
                 { label: 'Required Fields', value: '✓ Complete', green: true },
                 { label: 'Validation',      value: 'No follow-up needed' },
               ].map((r, i) => (
-                <tr key={i} className={i % 2 === 0 ? 'bg-neutral-50 dark:bg-neutral-800/60' : ''}>
+                <tr key={i} className={i % 2 === 0 ? 'bg-neutral-50 dark:bg-neutral-700/60' : ''}>
                   <td className="w-36 py-1.5 pl-2 font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{r.label}</td>
                   <td className={`py-1.5 pr-2 font-medium ${r.green ? 'text-[#2fbf4f]' : 'text-neutral-700 dark:text-neutral-200'}`}>{r.value}</td>
                 </tr>
@@ -465,7 +465,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
             <button
               onClick={handleValidate}
               disabled={validating || validated}
-              className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] hover:bg-neutral-50 active:scale-[0.98] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] hover:bg-neutral-50 active:scale-[0.98] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
             >
               {validating ? 'Validating…' : validated ? '✓ Record Validated' : 'Validate Hydrant Record'}
             </button>
@@ -474,7 +474,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
             <button
               onClick={handleFlag}
               disabled={flagging || flagged}
-              className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] hover:bg-neutral-50 active:scale-[0.98] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] hover:bg-neutral-50 active:scale-[0.98] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
             >
               {flagging ? 'Flagging…' : flagged ? '✓ Flagged for Re-inspection' : 'Flag for Re-inspection'}
             </button>
@@ -502,7 +502,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
                   </button>
                   <button
                     onClick={() => setDecommConfirm(false)}
-                    className="flex-1 rounded-lg border border-neutral-200 py-2 text-xs font-semibold text-neutral-600 transition-all duration-150 ease-out hover:bg-neutral-50 hover:scale-[1.02] active:scale-[0.97] active:duration-75 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                    className="flex-1 rounded-lg border border-neutral-200 py-2 text-xs font-semibold text-neutral-600 transition-all duration-150 ease-out hover:bg-neutral-50 hover:scale-[1.02] active:scale-[0.97] active:duration-75 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
                   >
                     Cancel
                   </button>
@@ -537,7 +537,7 @@ function InfoTable({ rows }: { rows: { label: string; value: React.ReactNode }[]
     <table className="w-full text-xs">
       <tbody>
         {rows.map((r, i) => (
-          <tr key={i} className={i % 2 === 0 ? 'bg-neutral-50 dark:bg-neutral-800/60' : ''}>
+          <tr key={i} className={i % 2 === 0 ? 'bg-neutral-50 dark:bg-neutral-700/60' : ''}>
             <td className="w-32 py-1.5 pl-2 font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{r.label}</td>
             <td className="py-1.5 pr-2 text-neutral-700 dark:text-neutral-200">{r.value}</td>
           </tr>

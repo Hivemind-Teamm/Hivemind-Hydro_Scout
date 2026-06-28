@@ -172,8 +172,8 @@ export default function HydrantInfoPanel({
       ref={panelRef}
       className={
         isMobile
-          ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[2000] flex flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
-          : 'anim-slide-up pointer-events-auto absolute bottom-0 left-4 z-[2000] flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900'
+          ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[2000] flex flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-800'
+          : 'anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-800'
       }
       style={{
         width:     isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
@@ -197,7 +197,7 @@ export default function HydrantInfoPanel({
       </div>
 
       {/* ── Header ── */}
-      <div className="flex shrink-0 items-start justify-between bg-neutral-50 dark:bg-neutral-800 px-5 pb-4">
+      <div className="flex shrink-0 items-start justify-between bg-neutral-50 dark:bg-neutral-700 px-5 pb-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{hydrant.id}</p>
           <button
@@ -242,7 +242,7 @@ export default function HydrantInfoPanel({
 
         {/* Info section — MIN_H anchors to this so it's always visible */}
         <div ref={infoRef} className="px-5 pt-4 pb-3">
-          <div className="mb-3 flex flex-col divide-y divide-neutral-100 dark:divide-neutral-700 rounded-lg bg-neutral-50 dark:bg-neutral-800">
+          <div className="mb-3 flex flex-col divide-y divide-neutral-100 dark:divide-neutral-600 rounded-lg bg-neutral-50 dark:bg-neutral-700">
             <div className="flex items-center justify-between px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Status</p>
               <p className="text-xs font-bold" style={{ color: meta.color }}>{meta.legendLabel}</p>
