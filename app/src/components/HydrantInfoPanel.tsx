@@ -41,31 +41,37 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
   // Reset height when a different hydrant is selected
   useEffect(() => { setPanelHeight(null); }, [hydrant.id]);
 
-  const onDragHandleDown = useCallback((e: React.MouseEvent) => {
+  const onDragHandlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    const el = e.currentTarget;
+    const pid = e.pointerId;
+    el.setPointerCapture(pid);
+
     dragStartY.current = e.clientY;
     dragStartH.current = panelRef.current?.offsetHeight ?? 0;
 
     // MIN: always keep the bottom section + header + drag handle fully visible
-    const bottomH  = bottomRef.current?.offsetHeight ?? 160;
-    const headerH  = (panelRef.current?.children[1] as HTMLElement | undefined)?.offsetHeight ?? 60;
-    const MIN_H    = bottomH + headerH + 12; // 12 = drag handle
-    // MAX: don't let the panel consume more than 65% of the viewport height
-    const MAX_H    = Math.floor(window.innerHeight * 0.65);
+    const bottomH = bottomRef.current?.offsetHeight ?? 160;
+    const headerH = (panelRef.current?.children[1] as HTMLElement | undefined)?.offsetHeight ?? 60;
+    const MIN_H   = bottomH + headerH + 12;
+    // MAX: 72% on mobile so there's always map visible; 65% on desktop
+    const MAX_H   = Math.floor(window.innerHeight * (isMobile ? 0.72 : 0.65));
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return;
       const delta = ev.clientY - dragStartY.current; // positive = drag down = shrink
       setPanelHeight(Math.min(MAX_H, Math.max(MIN_H, dragStartH.current - delta)));
     };
 
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
     };
 
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, []);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }, [isMobile]);
 
   return (
     <div
@@ -77,15 +83,16 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
       }
       style={{
         width: isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
-        maxHeight: isMobile ? '80dvh' : 'calc(100dvh - 28rem)',
-        ...(panelHeight !== null && !isMobile ? { height: panelHeight } : {}),
+        maxHeight: isMobile ? '72dvh' : 'calc(100dvh - 28rem)',
+        ...(panelHeight !== null ? { height: panelHeight } : {}),
       }}
     >
-      {/* Drag handle — top border, drag down to shrink */}
+      {/* Drag handle — top bar, drag down to shrink */}
       <div
-        onMouseDown={onDragHandleDown}
-        className="shrink-0 flex items-center justify-center h-3 cursor-s-resize select-none bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
-        title="Drag down to resize"
+        onPointerDown={onDragHandlePointerDown}
+        style={{ touchAction: 'none' }}
+        className="shrink-0 flex items-center justify-center h-5 cursor-s-resize select-none bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+        title="Drag to resize"
       >
         <span className="w-8 h-0.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
       </div>
@@ -118,7 +125,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         <img
           src={proxiedPhotoUrl(hydrant.photos[0])}
           alt={`${hydrant.name} field photo`}
-          className="aspect-square w-full min-h-0 shrink object-cover"
+          className={`w-full min-h-0 shrink object-cover ${isMobile ? 'max-h-36' : 'aspect-square'}`}
         />
       )}
 
