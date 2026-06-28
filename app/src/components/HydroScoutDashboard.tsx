@@ -56,6 +56,7 @@ export default function HydroScoutDashboard() {
 
   // Nearest hydrant state
   const [nearestHydrant, setNearestHydrant] = useState<RankedHydrant | null>(null);
+  const [nearestPanelOpen, setNearestPanelOpen] = useState(false);
   const [otwMeta, setOtwMeta] = useState<{ distanceM: number; durationS: number } | null>(null);
 
   const geoErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -375,12 +376,14 @@ export default function HydroScoutDashboard() {
   }, []);
 
   const handleCloseAll = useCallback(() => {
-    if (selectedHydrant) controllerRef.current?.zoomOut();
+    if (selectedHydrant || nearestHydrant) controllerRef.current?.zoomOut();
     setSelectedHydrant(null);
     setShowFullDetails(false);
     setShowEdit(false);
     setShowReport(false);
-  }, [selectedHydrant]);
+    setNearestPanelOpen(false);
+    setNearestHydrant(null);
+  }, [selectedHydrant, nearestHydrant]);
 
   const handleCloseFullDetails = useCallback(() => setShowFullDetails(false), []);
   const handleCloseEdit        = useCallback(() => setShowEdit(false), []);
@@ -443,11 +446,24 @@ export default function HydroScoutDashboard() {
   }, [selectedHydrant, userLocation, showGeoError]);
 
   const handleCancelOtw = useCallback(() => {
+    const ctrl = controllerRef.current;
+    if (ctrl) {
+      ctrl.setZoomLimits(null, null);
+      const center = ctrl.getCenter();
+      ctrl.flyTo(center.lat, center.lng, Math.max(ctrl.getZoom() - 3, 12));
+    }
     setOtwHydrant(null);
     setOtwRoute(null);
     setOtwMeta(null);
     otwFetchedForRef.current = null;
     lastRouteFetchRef.current = 0;
+  }, []);
+
+  const handleRouteDismiss = useCallback(() => {
+    setSelectedHydrant(null);
+    setShowFullDetails(false);
+    setShowEdit(false);
+    setShowReport(false);
   }, []);
 
   const handleOpenAccount = useCallback(() => {
@@ -565,64 +581,130 @@ export default function HydroScoutDashboard() {
           userPosition={userLocation}
           onHydrantSelect={handleNearestHydrantSelect}
           selectedHydrantId={nearestHydrant?.id ?? null}
+          isOpen={nearestPanelOpen}
+          onOpen={() => setNearestPanelOpen(true)}
+          onClose={() => { controllerRef.current?.zoomOut(); setNearestPanelOpen(false); setNearestHydrant(null); }}
         />
       </div>
 
 
       {/* OTW banner */}
       {otwHydrant && (
-        <div className="pointer-events-auto absolute left-1/2 top-[4.25rem] z-[2000] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-red-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" />
-          <span className="text-xs font-bold text-white">En Route</span>
-          <span className="text-red-400 text-xs">·</span>
-          <span className="text-xs font-mono text-red-200">{otwHydrant.id}</span>
-          <span className="max-w-[120px] truncate text-xs text-red-300">{otwHydrant.name}</span>
-          {otwMeta ? (
-            <>
-              <span className="text-red-400 text-xs">·</span>
-              <span className="text-xs font-bold text-white">{formatDistance(otwMeta.distanceM)}</span>
-              <span className="text-red-400 text-xs">·</span>
-              <span className="text-xs font-bold text-emerald-300">
-                {otwMeta.durationS < 60
-                  ? `${otwMeta.durationS}s`
-                  : `${Math.round(otwMeta.durationS / 60)} min`}
-              </span>
-            </>
-          ) : userLocation ? (
-            <>
-              <span className="text-red-400 text-xs">·</span>
-              <span className="text-xs font-bold text-white">
-                {formatDistance(haversineM(userLocation.lat, userLocation.lng, otwHydrant.lat, otwHydrant.lng))}
-              </span>
-            </>
-          ) : null}
-          <span className="mx-1 h-3 w-px bg-white/20" />
-          <button
-            title="Recenter to my location"
-            onClick={() => userLocation && controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 16)}
-            className="rounded-full bg-white/15 p-1.5 hover:bg-white/30"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
-              <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
-            </svg>
-          </button>
-          <button
-            title="Show full route"
-            onClick={() => otwRoute && controllerRef.current?.fitRoute(otwRoute)}
-            className="rounded-full bg-white/15 p-1.5 hover:bg-white/30"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="5 9 2 12 5 15"/><polyline points="19 9 22 12 19 15"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-            </svg>
-          </button>
-          <button
-            onClick={handleCancelOtw}
-            className="ml-0.5 rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold text-white hover:bg-white/30"
-          >
-            Cancel
-          </button>
+        <div className="pointer-events-auto absolute left-1/2 top-[3.85rem] sm:top-[4.75rem] z-[2000] -translate-x-1/2 w-[calc(100vw-1.5rem)] sm:w-auto anim-fade-scale">
+
+          {/* Mobile (< sm): 2-row compact card */}
+          <div className="flex flex-col sm:hidden rounded-2xl bg-red-900/90 px-3 py-2 shadow-xl backdrop-blur-sm gap-1.5">
+            {/* Row 1: pulse · En Route · ID · name */}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-400" />
+              <span className="shrink-0 text-xs font-bold text-white">En Route</span>
+              <span className="shrink-0 text-red-400 text-xs">·</span>
+              <span className="shrink-0 text-xs font-mono text-red-200">{otwHydrant.id}</span>
+              <span className="min-w-0 truncate text-xs text-red-300">{otwHydrant.name}</span>
+            </div>
+            {/* Row 2: distance / duration + action buttons */}
+            <div className="flex items-center gap-2">
+              {otwMeta ? (
+                <>
+                  <span className="text-xs font-bold text-white">{formatDistance(otwMeta.distanceM)}</span>
+                  <span className="text-red-400 text-xs">·</span>
+                  <span className="text-xs font-bold text-emerald-300">
+                    {otwMeta.durationS < 60
+                      ? `${otwMeta.durationS}s`
+                      : `${Math.round(otwMeta.durationS / 60)} min`}
+                  </span>
+                </>
+              ) : userLocation ? (
+                <span className="text-xs font-bold text-white">
+                  {formatDistance(haversineM(userLocation.lat, userLocation.lng, otwHydrant.lat, otwHydrant.lng))}
+                </span>
+              ) : null}
+              <div className="ml-auto flex items-center gap-1.5">
+                <span className="h-3 w-px bg-white/20" />
+                <button
+                  title="Recenter to my location"
+                  onClick={() => userLocation && controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 16)}
+                  className="rounded-full bg-white/15 p-1.5 hover:bg-white/30"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
+                    <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+                  </svg>
+                </button>
+                <button
+                  title="Show full route"
+                  onClick={() => otwRoute && controllerRef.current?.fitRoute(otwRoute)}
+                  className="rounded-full bg-white/15 p-1.5 hover:bg-white/30"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="5 9 2 12 5 15"/><polyline points="19 9 22 12 19 15"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                  </svg>
+                </button>
+                <button
+                  onClick={handleCancelOtw}
+                  className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white hover:bg-white/30"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Tablet / Desktop (≥ sm): original single-row pill */}
+          <div className="hidden sm:flex items-center gap-2.5 rounded-full bg-red-900/90 px-4 py-2 shadow-xl backdrop-blur-sm">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" />
+            <span className="text-xs font-bold text-white">En Route</span>
+            <span className="text-red-400 text-xs">·</span>
+            <span className="text-xs font-mono text-red-200">{otwHydrant.id}</span>
+            <span className="max-w-[120px] truncate text-xs text-red-300">{otwHydrant.name}</span>
+            {otwMeta ? (
+              <>
+                <span className="text-red-400 text-xs">·</span>
+                <span className="text-xs font-bold text-white">{formatDistance(otwMeta.distanceM)}</span>
+                <span className="text-red-400 text-xs">·</span>
+                <span className="text-xs font-bold text-emerald-300">
+                  {otwMeta.durationS < 60
+                    ? `${otwMeta.durationS}s`
+                    : `${Math.round(otwMeta.durationS / 60)} min`}
+                </span>
+              </>
+            ) : userLocation ? (
+              <>
+                <span className="text-red-400 text-xs">·</span>
+                <span className="text-xs font-bold text-white">
+                  {formatDistance(haversineM(userLocation.lat, userLocation.lng, otwHydrant.lat, otwHydrant.lng))}
+                </span>
+              </>
+            ) : null}
+            <span className="mx-1 h-3 w-px bg-white/20" />
+            <button
+              title="Recenter to my location"
+              onClick={() => userLocation && controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 16)}
+              className="rounded-full bg-white/15 p-1.5 hover:bg-white/30"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
+                <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+              </svg>
+            </button>
+            <button
+              title="Show full route"
+              onClick={() => otwRoute && controllerRef.current?.fitRoute(otwRoute)}
+              className="rounded-full bg-white/15 p-1.5 hover:bg-white/30"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="5 9 2 12 5 15"/><polyline points="19 9 22 12 19 15"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+              </svg>
+            </button>
+            <button
+              onClick={handleCancelOtw}
+              className="ml-0.5 rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold text-white hover:bg-white/30"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -672,8 +754,8 @@ export default function HydroScoutDashboard() {
           onReport={() => setShowReport(true)}
           onFlyTo={(lat, lng) => controllerRef.current?.flyTo(lat, lng, 17)}
           onRoute={handleRoute}
+          onRouteDismiss={handleRouteDismiss}
           isOtw={otwHydrant?.id === selectedHydrant?.id}
-          otwMeta={otwHydrant?.id === selectedHydrant?.id ? otwMeta : null}
         />
       )}
 

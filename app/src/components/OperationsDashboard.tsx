@@ -216,11 +216,11 @@ function ZoneRow({ name, total, operational, rating }: ZoneData) {
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="border-b border-neutral-100 px-5 py-3 dark:border-neutral-800">
+      <div className="border-b border-neutral-100 px-4 py-3 dark:border-neutral-800 md:px-5">
         <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">{title}</p>
         {subtitle && <p className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
       </div>
-      <div className="flex-1 px-5 py-4">{children}</div>
+      <div className="flex-1 px-4 py-3.5 md:px-5 md:py-4">{children}</div>
     </div>
   );
 }
@@ -262,11 +262,11 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-[6000] flex flex-col overflow-hidden">
       {/* Top header */}
-      <header className="flex shrink-0 items-center justify-between bg-white px-6 py-3 shadow-sm dark:bg-neutral-900">
+      <header className="flex shrink-0 items-center justify-between gap-2 bg-white px-4 py-2.5 shadow-sm dark:bg-neutral-900 md:px-6 md:py-3">
         <Logo />
-        <div className="flex items-center gap-3">
-          <span className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Welcome, {displayName}</span>
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e0353b] text-white ring-2 ring-[#FED42E]">
+        <div className="flex min-w-0 items-center gap-2 md:gap-3">
+          <span className="truncate text-sm font-extrabold text-neutral-800 dark:text-neutral-100 md:text-base">Welcome, {displayName}</span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-white ring-2 ring-[#FED42E] md:h-9 md:w-9">
             <UserGlyph />
           </span>
         </div>
@@ -279,22 +279,22 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
       />
 
       {/* Sub-header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="flex items-center gap-3">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-neutral-200 bg-white px-4 py-2.5 dark:border-neutral-800 dark:bg-neutral-900 md:flex-row md:items-center md:justify-between md:px-6 md:py-3">
+        <div className="flex items-center gap-2 md:gap-3">
           <button
             onClick={onClose}
             title="Back to map"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-[#e0353b] hover:scale-[1.04] active:scale-[0.96] active:duration-75 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-[#e0353b] hover:scale-[1.04] active:scale-[0.96] active:duration-75 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
           >
             <BackGlyph /> Map
           </button>
-          <span className="h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
-          <h1 className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">Operations Dashboard</h1>
-          <span className="flex items-center gap-1.5 rounded-full bg-[#e0353b] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+          <span className="hidden h-5 w-px bg-neutral-200 dark:bg-neutral-700 md:block" />
+          <h1 className="min-w-0 flex-1 truncate text-base font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100 md:flex-none md:text-lg">Operations Dashboard</h1>
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#e0353b] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white md:px-3">
             <LockGlyph /> {roleLabel}
           </span>
         </div>
-        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+        <p className="text-[11px] font-medium text-neutral-400 dark:text-neutral-500 md:text-xs">
           <span className="font-bold text-neutral-600 dark:text-neutral-300">{total}</span> Hydrants
           <span className="mx-1.5">·</span>
           <span className="font-bold text-neutral-600 dark:text-neutral-300">{openReports}</span> Open Reports
@@ -304,7 +304,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
       </div>
 
       {/* Grid body */}
-      <div className="scroll-fade grid min-h-0 flex-1 grid-cols-3 gap-4 overflow-y-auto bg-neutral-100 p-6 dark:bg-neutral-950">
+      <div className="scroll-fade grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto bg-neutral-100 p-3 dark:bg-neutral-950 md:grid-cols-3 md:gap-4 md:p-6">
 
         {/* Status Breakdown */}
         <Card title="Status Breakdown" subtitle={`LIVE · ${total} HYDRANTS IN AOR`}>
@@ -342,7 +342,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
         </Card>
 
         {/* Condition Trend */}
-        <div className="col-span-3">
+        <div className="md:col-span-3">
           <Card title="Condition Trend" subtitle="OPERATIONAL % OVER TIME">
             <TrendChart points={trend.points} labels={trend.labels} />
           </Card>
@@ -363,10 +363,10 @@ const stroke = {
 
 function Logo() {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex shrink-0 items-center gap-1">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/Hydro-Scout%20Logo.png" alt="Hydro-Scout" width={44} height={44} className="h-11 w-11 object-contain" />
-      <span className="text-xl font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">
+      <img src="/Hydro-Scout%20Logo.png" alt="Hydro-Scout" width={44} height={44} className="h-9 w-9 object-contain md:h-11 md:w-11" />
+      <span className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100 md:text-xl">
         Hydro-<span className="text-[#e0353b]">Scout</span>
       </span>
     </div>

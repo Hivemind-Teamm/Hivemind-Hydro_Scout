@@ -113,30 +113,35 @@ export default function DashboardOverlay({
           <div className="h-1 w-full" style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #e0353b 70px, #e0353b 140px)' }} />
         </header>
 
-        {/* Search + horizontally-scrollable status pills */}
-        <div className="pointer-events-auto absolute inset-x-0 top-[3.75rem] z-[1100] flex flex-col gap-2 px-3 pt-2">
+        {/* Search + horizontally-scrollable status pills — pushed down when OTW banner is visible */}
+        <div className={`pointer-events-auto absolute inset-x-0 z-[1100] flex flex-row items-center gap-1.5 px-2 pt-2 transition-[top] duration-200 ${isOtw ? 'top-[8.5rem]' : 'top-[3.75rem]'}`}>
           <LocationSearch onFlyTo={onFlyTo} mobile />
-          <div className="flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {STATUS_ORDER.map((status) => {
-              const meta = STATUS_META[status];
-              const active = activeStatus === status;
-              return (
-                <button
-                  key={status}
-                  onClick={() => onSelectStatus(status)}
-                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-all duration-150 ease-out active:scale-95 ${!active ? 'bg-white text-neutral-600 dark:bg-neutral-700 dark:text-neutral-100' : ''}`}
-                  style={{ background: active ? meta.color : undefined, color: active ? '#ffffff' : undefined }}
-                >
-                  {meta.pillLabel}
-                </button>
-              );
-            })}
+          <div className="shrink-0 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-max overflow-hidden rounded-lg">
+              {STATUS_ORDER.map((status) => {
+                const meta = STATUS_META[status];
+                const active = activeStatus === status;
+                return (
+                  <button
+                    key={status}
+                    onClick={() => onSelectStatus(status)}
+                    className={`shrink-0 px-2 py-1 text-[10px] font-bold transition-all duration-150 ease-out active:scale-95 ${!active ? 'bg-white text-neutral-600 dark:bg-neutral-700 dark:text-neutral-100' : ''}`}
+                    style={{
+                      background: active ? meta.color : (!isDark ? '#ffffff' : undefined),
+                      color:      active ? '#ffffff'  : (!isDark ? '#4b5563' : undefined),
+                    }}
+                  >
+                    {meta.pillLabel}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* OTW hazard panel — bottom-right above FAB, mobile only */}
+        {/* OTW hazard panel — bottom-left above nearest hydrant button, mobile only */}
         {isOtw && (
-          <div className="pointer-events-auto absolute bottom-6 right-4 z-[1000] w-[17rem]" style={{ bottom: '5.5rem' }}>
+          <div className="pointer-events-auto absolute left-4 z-[1000] w-[17rem]" style={{ bottom: '5.5rem' }}>
             <OtwHazardPanel hazards={routeHazards} onSelectHydrant={onSelectHazardHydrant ?? (() => {})} />
           </div>
         )}
@@ -329,6 +334,7 @@ export default function DashboardOverlay({
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
                   </svg>
+                  Operations Dashboard
                 </button>
               </div>
             )}
@@ -583,16 +589,16 @@ function LocationSearch({ onFlyTo, mobile = false }: { onFlyTo: (lat: number, ln
   };
 
   return (
-    <div ref={containerRef} className={mobile ? 'relative w-full' : 'relative'}>
-      <div className="flex items-center gap-2 rounded-full bg-white dark:bg-neutral-800 px-4 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
-        {loading ? <SpinnerGlyph /> : <SearchGlyph />}
+    <div ref={containerRef} className={mobile ? 'relative flex-1 min-w-0' : 'relative'}>
+      <div className={`flex items-center gap-1.5 rounded-full bg-white dark:bg-neutral-800 shadow-[0_4px_16px_rgba(0,0,0,0.35)] ${mobile ? 'px-2.5 py-1.5' : 'px-4 py-2'}`}>
+        {loading ? <SpinnerGlyph mobile={mobile} /> : <SearchGlyph mobile={mobile} />}
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); setQuery(''); } }}
-          placeholder="Search Location"
-          className={`${mobile ? 'w-full flex-1' : 'w-44'} bg-transparent text-sm text-neutral-700 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none`}
+          placeholder={mobile ? 'Search' : 'Search Location'}
+          className={`${mobile ? 'w-full flex-1 min-w-0 text-xs' : 'w-44 text-sm'} bg-transparent text-neutral-700 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none`}
         />
         {query && (
           <button onClick={() => { setQuery(''); setResults([]); setOpen(false); }} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200">
@@ -709,18 +715,20 @@ const stroke = {
   strokeLinejoin: 'round' as const,
 };
 
-function SearchGlyph() {
+function SearchGlyph({ mobile = false }: { mobile?: boolean }) {
+  const s = mobile ? 13 : 16;
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0 text-neutral-400" {...stroke}>
+    <svg width={s} height={s} viewBox="0 0 24 24" className="shrink-0 text-neutral-400" {...stroke}>
       <circle cx="11" cy="11" r="7" />
       <line x1="21" y1="21" x2="16.5" y2="16.5" />
     </svg>
   );
 }
 
-function SpinnerGlyph() {
+function SpinnerGlyph({ mobile = false }: { mobile?: boolean }) {
+  const s = mobile ? 13 : 16;
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0 animate-spin text-neutral-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <svg width={s} height={s} viewBox="0 0 24 24" className="shrink-0 animate-spin text-neutral-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <path d="M12 2a10 10 0 0 1 10 10" />
     </svg>
   );

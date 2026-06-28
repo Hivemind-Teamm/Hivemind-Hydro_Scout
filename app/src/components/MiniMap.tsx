@@ -30,9 +30,9 @@ export default function MiniMap({ lat, lng, status = 'operational' }: { lat: num
       style={{ height: '100%', width: '100%' }}
     >
       {isDark ? (
-        <TileLayer key="dark" url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" subdomains="abcd" />
+        <TileLayer key="dark" url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" subdomains="abcd" className="leaflet-tiles-dark" />
       ) : (
-        <TileLayer key="light" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <TileLayer key="light" url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" subdomains="abcd" />
       )}
       <Marker position={[lat, lng]} icon={makeIcon(status)} />
     </MapContainer>

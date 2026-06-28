@@ -168,13 +168,15 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
           subdomains="abcd"
           maxNativeZoom={20}
           maxZoom={22}
+          className="leaflet-tiles-dark"
         />
       ) : (
         <TileLayer
           key="light"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
-          maxNativeZoom={19}
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+          subdomains="abcd"
+          maxNativeZoom={20}
           maxZoom={22}
         />
       )}
@@ -207,14 +209,19 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
         zoomToBoundsOnClick={false}
         onClick={handleClusterClick}
       >
-        {hydrants.map((h) => (
-          <Marker
-            key={h.id}
-            position={[h.lat, h.lng]}
-            icon={hydrantIcon(STATUS_META[h.status].iconUrl, selectedHydrantId === h.id)}
-            eventHandlers={{ click: () => { if (!addHydrantMode) onSelectHydrant(h); } }}
-          />
-        ))}
+        {hydrants.map((h) => {
+          const shouldPulse = otwHydrant
+            ? h.id === otwHydrant.id
+            : selectedHydrantId === h.id;
+          return (
+            <Marker
+              key={h.id}
+              position={[h.lat, h.lng]}
+              icon={hydrantIcon(STATUS_META[h.status].iconUrl, shouldPulse)}
+              eventHandlers={{ click: () => { if (!addHydrantMode) onSelectHydrant(h); } }}
+            />
+          );
+        })}
       </MarkerClusterGroup>
       {pendingPin && (
         <Marker position={[pendingPin.lat, pendingPin.lng]} icon={pendingPinIcon} />

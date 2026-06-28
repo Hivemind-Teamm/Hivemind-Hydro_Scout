@@ -13,8 +13,8 @@ interface HydrantInfoPanelProps {
   onReport: () => void;
   onFlyTo: (lat: number, lng: number) => void;
   onRoute: () => void;
+  onRouteDismiss: () => void;
   isOtw: boolean;
-  otwMeta?: { distanceM: number; durationS: number } | null;
 }
 
 const PRESSURE_COLOR: Record<string, string> = {
@@ -24,14 +24,7 @@ const PRESSURE_COLOR: Record<string, string> = {
   None:     '#9aa0a6',
 };
 
-function formatDist(m: number) {
-  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`;
-}
-function formatEta(s: number) {
-  return s < 60 ? `${s}s` : `${Math.round(s / 60)} min ETA`;
-}
-
-export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo, onRoute, isOtw, otwMeta }: HydrantInfoPanelProps) {
+export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, onEdit, onReport, onFlyTo, onRoute, onRouteDismiss, isOtw }: HydrantInfoPanelProps) {
   const { role } = useAuth();
   const isMobile = useIsMobile();
   const meta = STATUS_META[hydrant.status];
@@ -79,11 +72,11 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
       className={
         isMobile
           ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[2000] flex flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
-          : 'anim-slide-up pointer-events-auto absolute bottom-6 left-4 z-[2000] flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900'
+          : 'anim-slide-up pointer-events-auto absolute bottom-0 left-4 z-[2000] flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900'
       }
       style={{
         width: isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
-        maxHeight: isMobile ? '80vh' : 'calc(100vh - 120px)',
+        maxHeight: isMobile ? '80vh' : 'calc(100vh - 28rem)',
         ...(panelHeight !== null && !isMobile ? { height: panelHeight } : {}),
       }}
     >
@@ -112,7 +105,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         <button
           onClick={onClose}
           aria-label="Close"
-          className="ml-2 mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+          className="ml-2 mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-lg text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
         >
           ✕
         </button>
@@ -148,7 +141,7 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           <button
-            onClick={onRoute}
+            onClick={() => { onRoute(); onRouteDismiss(); }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-colors ${isOtw ? 'bg-red-700 hover:bg-red-800 active:bg-red-900' : 'bg-[#e0353b] hover:bg-[#c42d32] active:bg-[#9e2428]'}`}
           >
             <RouteIcon />
@@ -173,34 +166,6 @@ export default function HydrantInfoPanel({ hydrant, onClose, onOpenFullDetails, 
             </button>
           )}
         </div>
-
-        {/* ETA / road distance strip — visible while routing is active */}
-        {isOtw && otwMeta && (
-          <div className="mt-2 flex items-center justify-center gap-3 rounded-lg bg-red-50 dark:bg-red-950/30 px-3 py-2">
-            <span className="flex items-center gap-1.5 text-xs font-bold text-red-700 dark:text-red-400">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-              </svg>
-              {formatDist(otwMeta.distanceM)}
-            </span>
-            <span className="h-3 w-px bg-red-200 dark:bg-red-800" />
-            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-              </svg>
-              {formatEta(otwMeta.durationS)}
-            </span>
-            <span className="text-[10px] text-neutral-400 dark:text-neutral-500">via road</span>
-          </div>
-        )}
-
-        {/* Loading ETA indicator */}
-        {isOtw && !otwMeta && (
-          <div className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-neutral-50 dark:bg-neutral-800 px-3 py-2">
-            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-neutral-300 border-t-red-500" />
-            <span className="text-xs text-neutral-400">Calculating route…</span>
-          </div>
-        )}
 
         <button
           className="mt-2 w-full text-center text-xs text-[#e0353b] dark:text-[#e0353b] hover:underline"

@@ -74,7 +74,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
   return (
     <div className={
       isMobile
-        ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[3000] flex max-h-[88vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
+        ? 'anim-slide-up pointer-events-auto absolute inset-x-0 bottom-0 z-[3000] flex h-[80vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900'
         : 'anim-slide-right pointer-events-auto absolute bottom-0 right-0 top-[4.3125rem] z-[3000] flex w-[26.25rem] flex-col bg-white shadow-2xl dark:bg-neutral-900'
     }>
 
@@ -120,7 +120,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 
         <button
           onClick={onClose}
-          className="mt-0.5 shrink-0 rounded-full p-1 text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-neutral-700 hover:scale-110 active:scale-90 active:duration-75 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-neutral-700 hover:scale-110 active:scale-90 active:duration-75 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
         >
           ✕
         </button>

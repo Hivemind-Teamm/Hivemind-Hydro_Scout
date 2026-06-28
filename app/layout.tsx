@@ -8,7 +8,7 @@ import ScrollBehavior from "./src/components/ScrollBehavior";
 
 // Runs before first paint to set the `.dark` class from the stored choice (or
 // the OS preference), preventing a flash of the wrong theme on load/reload.
-const themeScript = `(function(){try{var t=localStorage.getItem('hydroscout_theme');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}var r=document.documentElement;if(t==='dark'){r.classList.add('dark');}r.style.colorScheme=t;}catch(e){}})();`;
+const themeScript = `(function(){try{var t=localStorage.getItem('hydroscout_theme');if(t!=='dark'&&t!=='light'){t='light';}var r=document.documentElement;if(t==='dark'){r.classList.add('dark');}r.style.colorScheme=t;}catch(e){}})();`;
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

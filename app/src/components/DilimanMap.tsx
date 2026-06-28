@@ -349,8 +349,8 @@ export default function DilimanMap({
                   filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : nearRoute ? `drop-shadow(0 0 5px ${meta.color})` : undefined,
                 }}
               >
-                {/* Selected hydrant: yellow single pulse ring */}
-                {selected && !isOtwTarget && !clustered && (
+                {/* Selected hydrant: yellow single pulse ring (only outside OTW mode) */}
+                {selected && !isOtwTarget && !clustered && !inOtwMode && (
                   <div style={{
                     position: 'absolute', inset: -5, borderRadius: '50%',
                     border: '2px solid #FED42E',
@@ -370,15 +370,6 @@ export default function DilimanMap({
                       }} />
                     ))}
                   </>
-                )}
-                {/* Route-corridor hydrant glow ring — color matches hydrant status */}
-                {nearRoute && !selected && !isOtwTarget && !clustered && (
-                  <div style={{
-                    position: 'absolute', inset: -5, borderRadius: '50%',
-                    border: `2px solid ${meta.color}`,
-                    animation: 'route-ring-pulse 2s ease-out infinite',
-                    pointerEvents: 'none',
-                  }} />
                 )}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img

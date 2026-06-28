@@ -1,11 +1,5 @@
 'use client';
 
-/**
- * OtwHazardPanel.tsx
- * Shows hazard warnings for non-operational hydrants along the active route corridor.
- * Appears automatically when OTW mode is active and hazards are detected.
- */
-
 import { type Hydrant } from '../data/hydrants';
 
 interface OtwHazardPanelProps {
@@ -13,41 +7,36 @@ interface OtwHazardPanelProps {
   onSelectHydrant: (hydrant: Hydrant) => void;
 }
 
-const HAZARD_META: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  out:     { label: 'Out of Service', color: '#9aa0a6', bg: 'rgba(154,160,166,0.12)', icon: '🚫' },
-  reduced: { label: 'Reduced Pressure', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', icon: '⚠️' },
+const HAZARD_META: Record<string, { label: string; color: string; icon: string }> = {
+  out:     { label: 'Out of Service',   color: '#9aa0a6', icon: '🚫' },
+  reduced: { label: 'Reduced Pressure', color: '#f59e0b', icon: '⚠️' },
 };
 
 export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPanelProps) {
-  if (hazards.length === 0) return null;
-
   const outCount     = hazards.filter((h) => h.status === 'out').length;
   const reducedCount = hazards.filter((h) => h.status === 'reduced').length;
 
+  if (hazards.length === 0) {
+    return (
+      <div className="w-full pointer-events-auto overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.18)] backdrop-blur dark:border-neutral-700/60 dark:bg-neutral-900 dark:shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+        <div className="flex items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-3.5 py-2.5 dark:border-neutral-800 dark:bg-neutral-800/50">
+          <span className="text-sm leading-none">🚒</span>
+          <p className="text-xs font-bold text-neutral-700 dark:text-neutral-200 leading-none">En Route</p>
+        </div>
+        <p className="px-3.5 py-3 text-xs text-neutral-400 dark:text-neutral-500">No hazards along your route.</p>
+      </div>
+    );
+  }
+
   return (
-    <div style={{
-      width: '100%',
-      pointerEvents: 'auto',
-      background: 'rgba(17,24,39,0.96)',
-      border: '1px solid rgba(245,158,11,0.4)',
-      borderRadius: 12,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(245,158,11,0.1)',
-      overflow: 'hidden',
-      backdropFilter: 'blur(12px)',
-    }}>
+    <div className="w-full pointer-events-auto overflow-hidden rounded-xl border border-[#FED42E]/40 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.18)] backdrop-blur dark:bg-neutral-900 dark:shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+
       {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '10px 14px',
-        borderBottom: '1px solid rgba(75,85,99,0.4)',
-        background: 'rgba(245,158,11,0.08)',
-      }}>
-        <span style={{ fontSize: 14 }}>⚠️</span>
-        <div style={{ flex: 1 }}>
-          <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: 12, margin: 0 }}>
-            Route Hazards Detected
-          </p>
-          <p style={{ color: '#6b7280', fontSize: 10, margin: '1px 0 0' }}>
+      <div className="flex items-center gap-2 border-b border-neutral-200 bg-[#FED42E]/10 px-3.5 py-2.5 dark:border-neutral-700">
+        <span className="text-sm leading-none">⚠️</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-[#FED42E] leading-none">Route Hazards Detected</p>
+          <p className="mt-0.5 text-[10px] leading-none text-neutral-500 dark:text-neutral-400">
             {outCount > 0 && `${outCount} out of service`}
             {outCount > 0 && reducedCount > 0 && ' · '}
             {reducedCount > 0 && `${reducedCount} reduced pressure`}
@@ -57,44 +46,33 @@ export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPa
       </div>
 
       {/* Hazard list */}
-      <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: 220, overflowY: 'auto' }}>
+      <ul className="max-h-[220px] overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
         {hazards.map((h) => {
           const m = HAZARD_META[h.status] ?? HAZARD_META.reduced;
           return (
-            <li key={h.id} style={{ borderBottom: '1px solid rgba(55,65,81,0.4)' }}>
+            <li key={h.id}>
               <button
                 onClick={() => onSelectHydrant(h)}
-                style={{
-                  width: '100%', textAlign: 'left', padding: '9px 14px',
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  display: 'flex', alignItems: 'flex-start', gap: 10,
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(55,65,81,0.4)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                className="flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-neutral-50 active:bg-neutral-100 dark:hover:bg-neutral-800 dark:active:bg-neutral-700"
               >
-                {/* Status dot */}
-                <div style={{
-                  flexShrink: 0, marginTop: 2,
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: m.color,
-                  boxShadow: `0 0 6px ${m.color}`,
-                }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ color: '#fff', fontSize: 12, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span
+                  className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: m.color, boxShadow: `0 0 5px ${m.color}` }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-neutral-800 dark:text-neutral-100">
                     {h.name}
                   </p>
-                  <p style={{ color: m.color, fontSize: 10, margin: '2px 0 0', fontWeight: 600 }}>
+                  <p className="mt-0.5 text-[10px] font-semibold" style={{ color: m.color }}>
                     {m.icon} {m.label}
                   </p>
-                  {/* Hazard details from notes/hazard field */}
                   {h.hazard && h.hazard !== 'None' && (
-                    <p style={{ color: '#6b7280', fontSize: 10, margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p className="mt-0.5 truncate text-[10px] text-neutral-400 dark:text-neutral-500">
                       {h.hazard}
                     </p>
                   )}
                 </div>
-                <span style={{ flexShrink: 0, fontSize: 10, color: '#4b5563', marginTop: 2 }}>
+                <span className="mt-0.5 shrink-0 text-[10px] font-mono text-neutral-400 dark:text-neutral-500">
                   {h.id}
                 </span>
               </button>
@@ -103,8 +81,8 @@ export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPa
         })}
       </ul>
 
-      {/* Footer tip */}
-      <div style={{ padding: '7px 14px', background: 'rgba(31,41,55,0.5)', color: '#4b5563', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+      {/* Footer */}
+      <div className="flex items-center gap-1 border-t border-neutral-100 bg-neutral-50 px-3.5 py-2 text-[10px] text-neutral-400 dark:border-neutral-800 dark:bg-neutral-800/50 dark:text-neutral-500">
         🚒 Tap a hydrant to view details and find an alternative
       </div>
     </div>

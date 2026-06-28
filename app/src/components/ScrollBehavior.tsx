@@ -8,7 +8,7 @@ export default function ScrollBehavior() {
   useEffect(() => {
     const handler = (e: Event) => {
       const el = e.target as TimedEl;
-      if (!el || el === document.documentElement || el === document.body) return;
+      if (!(el instanceof HTMLElement) || el === document.documentElement || el === document.body) return;
 
       el.classList.add('is-scrolling');
       clearTimeout(el.__scrollTimer);

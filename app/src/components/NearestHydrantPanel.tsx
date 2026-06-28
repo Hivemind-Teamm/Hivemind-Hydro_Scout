@@ -25,6 +25,9 @@ interface NearestHydrantPanelProps {
   userPosition: { lat: number; lng: number } | null;
   onHydrantSelect: (hydrant: RankedHydrant | null) => void;
   selectedHydrantId?: string | null;
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
 }
 
 function formatDistance(metres: number): string {
@@ -36,21 +39,23 @@ export default function NearestHydrantPanel({
   userPosition,
   onHydrantSelect,
   selectedHydrantId,
+  isOpen,
+  onOpen,
+  onClose,
 }: NearestHydrantPanelProps) {
   const [result, setResult] = useState<NearestHydrantResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
 
   const handleSearch = useCallback(async () => {
     if (!userPosition) {
       setError('Enable GPS location first — click the locate button on the map.');
-      setIsOpen(true);
+      onOpen();
       return;
     }
     setLoading(true);
     setError(null);
-    setIsOpen(true);
+    onOpen();
     onHydrantSelect(null);
     try {
       const data = await findNearestHydrants(userPosition.lat, userPosition.lng);
@@ -64,99 +69,76 @@ export default function NearestHydrantPanel({
     } finally {
       setLoading(false);
     }
-  }, [userPosition, onHydrantSelect]);
+  }, [userPosition, onHydrantSelect, onOpen]);
 
   const handleClose = () => {
-    setIsOpen(false);
     setResult(null);
     setError(null);
     onHydrantSelect(null);
+    onClose();
   };
 
   return (
-    // Outer wrapper — pointer-events-none so it doesn't block map clicks
-    // The button and panel inside opt back in with pointer-events-auto
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, width: 280 }}>
+    <div className="flex flex-col items-start gap-2" style={{ width: 280 }}>
 
-      {/* ── Button ── */}
-      <button
-        onClick={handleSearch}
-        disabled={loading}
-        style={{
-          pointerEvents: 'auto',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '10px 18px',
-          borderRadius: 14,
-          border: 'none',
-          cursor: loading ? 'wait' : 'pointer',
-          fontWeight: 700,
-          fontSize: 14,
-          color: '#fff',
-          background: loading ? '#1d4ed8' : '#2563eb',
-          boxShadow: '0 4px 16px rgba(37,99,235,0.5), 0 2px 6px rgba(0,0,0,0.4)',
-          transition: 'background 0.15s, transform 0.1s',
-          whiteSpace: 'nowrap',
-        }}
-        onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#1d4ed8'; }}
-        onMouseLeave={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#2563eb'; }}
-      >
-        {loading ? (
-          <>
-            <span style={{
-              display: 'inline-block', width: 16, height: 16,
-              border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff',
-              borderRadius: '50%', animation: 'spin 0.7s linear infinite',
-            }} />
-            Searching…
-          </>
-        ) : (
-          <>
-            <IconSearch />
-            Find Nearest Hydrant
-          </>
-        )}
-      </button>
+      {/* ── Button — hidden while panel is open ── */}
+      {!isOpen && (
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          className="pointer-events-auto flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition-all duration-150 ease-out hover:scale-[1.04] hover:shadow-[0_4px_14px_rgba(224,53,59,0.5)] active:scale-[0.96] active:duration-75 disabled:cursor-wait disabled:opacity-80"
+          style={{ background: '#e0353b', whiteSpace: 'nowrap' }}
+        >
+          {loading ? (
+            <>
+              <span className="inline-block h-4 w-4 rounded-full border-2 border-white/30 border-t-white anim-spin" />
+              Searching…
+            </>
+          ) : (
+            <>
+              <IconSearch />
+              Find Nearest Hydrant
+            </>
+          )}
+        </button>
+      )}
 
       {/* ── Result / Error panel ── */}
       {isOpen && (
-        <div style={{
-          pointerEvents: 'auto',
-          background: 'rgba(17,24,39,0.97)',
-          border: '1px solid rgba(75,85,99,0.8)',
-          borderRadius: 16,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-          overflow: 'hidden',
-          width: 280,
-          backdropFilter: 'blur(12px)',
-        }}>
+        <div className="pointer-events-auto w-full overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
+
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid rgba(75,85,99,0.5)' }}>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-              🔍 Nearest Hydrants
-              {result && <span style={{ color: '#6b7280', fontWeight: 400 }}>within 2 km</span>}
+          <div className="flex items-center justify-between border-b border-neutral-100 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-800">
+            <span className="flex items-center gap-1.5 text-[13px] font-bold text-neutral-800 dark:text-neutral-100">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e0353b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              Nearest Hydrants
+              {result && <span className="font-normal text-neutral-400 dark:text-neutral-500">within 2 km</span>}
             </span>
-            <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: 4, borderRadius: 6, display: 'flex' }}>
+            <button
+              onClick={handleClose}
+              className="flex items-center justify-center rounded-full p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+            >
               <IconClose />
             </button>
           </div>
 
           {/* Error */}
           {error && (
-            <div style={{ padding: '12px 16px', color: '#fbbf24', fontSize: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <div className="flex items-start gap-2 px-4 py-3 text-xs text-amber-600 dark:text-amber-400">
               <span>⚠️</span><span>{error}</span>
             </div>
           )}
 
           {/* No hydrants */}
           {result?.noHydrantsFound && !error && (
-            <div style={{ padding: '20px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>🚫</div>
-              <p style={{ color: '#fff', fontWeight: 600, fontSize: 13, margin: 0 }}>No operational hydrants nearby</p>
-              <p style={{ color: '#6b7280', fontSize: 11, marginTop: 4 }}>Nothing within 2 km of your location.</p>
+            <div className="px-4 py-5 text-center">
+              <div className="mb-2 text-3xl">🚫</div>
+              <p className="text-[13px] font-semibold text-neutral-800 dark:text-neutral-100">No operational hydrants nearby</p>
+              <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">Nothing within 2 km of your location.</p>
               {result.ranked.length > 0 && (
-                <p style={{ color: '#4b5563', fontSize: 11, marginTop: 4 }}>
+                <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
                   Nearest is {formatDistance(result.ranked[0].sortDistance)} away.
                 </p>
               )}
@@ -165,51 +147,47 @@ export default function NearestHydrantPanel({
 
           {/* Hydrant list */}
           {result && result.withinRadius.length > 0 && (
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: 280, overflowY: 'auto' }}>
+            <ul className="m-0 list-none p-0" style={{ maxHeight: 280, overflowY: 'auto' }}>
               {result.withinRadius.map((hydrant, index) => {
                 const isSelected = selectedHydrantId === hydrant.id;
                 return (
-                  <li key={hydrant.id} style={{ borderBottom: '1px solid rgba(55,65,81,0.5)' }}>
+                  <li key={hydrant.id} className="border-b border-neutral-100 dark:border-neutral-700/50 last:border-b-0">
                     <button
                       onClick={() => onHydrantSelect(hydrant)}
-                      style={{
-                        width: '100%', textAlign: 'left', padding: '12px 16px',
-                        background: isSelected ? 'rgba(30,58,138,0.4)' : 'transparent',
-                        border: 'none', borderLeft: isSelected ? '2px solid #60a5fa' : '2px solid transparent',
-                        cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10,
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(55,65,81,0.5)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = isSelected ? 'rgba(30,58,138,0.4)' : 'transparent'; }}
+                      className={`flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors duration-100 hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                        isSelected ? 'border-l-2 border-[#e0353b] bg-red-50/50 dark:bg-red-950/20' : 'border-l-2 border-transparent'
+                      }`}
                     >
-                      {/* Rank */}
-                      <div style={{
-                        flexShrink: 0, width: 24, height: 24, borderRadius: '50%',
-                        background: index === 0 ? 'rgba(52,211,153,0.15)' : 'rgba(75,85,99,0.4)',
-                        color: index === 0 ? '#34d399' : '#9ca3af',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 800,
-                      }}>
+                      {/* Rank bubble */}
+                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold ${
+                        index === 0
+                          ? 'bg-[#FED42E]/20 text-[#b89800]'
+                          : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-700 dark:text-neutral-400'
+                      }`}>
                         {index + 1}
                       </div>
+
                       {/* Info */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold text-neutral-800 dark:text-neutral-100">
                           {hydrant.name}
                         </p>
-                        {hydrant.area && <p style={{ color: '#6b7280', fontSize: 11, margin: '2px 0 0' }}>{hydrant.area}</p>}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                          <span style={{ color: index === 0 ? '#34d399' : '#60a5fa', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        {hydrant.area && (
+                          <p className="mt-0.5 text-[11px] text-neutral-400 dark:text-neutral-500">{hydrant.area}</p>
+                        )}
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className={`flex items-center gap-1 text-[11px] font-semibold ${index === 0 ? 'text-[#e0353b]' : 'text-neutral-500 dark:text-neutral-400'}`}>
                             <IconLocation />{formatDistance(hydrant.sortDistance)}
                           </span>
                           {hydrant.travelMetres !== null && (
-                            <span style={{ color: '#4b5563', fontSize: 11 }}>walking est.</span>
+                            <span className="text-[11px] text-neutral-400 dark:text-neutral-500">walking est.</span>
                           )}
                         </div>
                       </div>
+
                       {/* Nearest badge */}
                       {index === 0 && (
-                        <span style={{ flexShrink: 0, fontSize: 10, background: 'rgba(52,211,153,0.15)', color: '#34d399', padding: '2px 8px', borderRadius: 20, fontWeight: 700 }}>
+                        <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: '#FED42E', color: '#7a5c00' }}>
                           Nearest
                         </span>
                       )}
@@ -222,14 +200,12 @@ export default function NearestHydrantPanel({
 
           {/* Footer */}
           {result && !result.noHydrantsFound && (
-            <div style={{ padding: '8px 16px', background: 'rgba(31,41,55,0.5)', color: '#4b5563', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div className="flex items-center gap-1 border-t border-neutral-100 bg-neutral-50 px-4 py-2 text-[11px] text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500">
               🗺 Distances via Mapbox walking isochrone
             </div>
           )}
         </div>
       )}
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -273,3 +273,6 @@ body {
   to { transform: rotate(360deg); }
 }
 .anim-spin { animation: spin 0.75s linear infinite; }
+
+/* ── Leaflet dark tiles — soften from pure black to charcoal gray ── */
+.leaflet-tiles-dark { filter: brightness(1.45) contrast(0.82); }

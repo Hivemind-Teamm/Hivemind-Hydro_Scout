@@ -42,11 +42,11 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
     <div className="min-h-screen w-screen bg-neutral-100 dark:bg-neutral-950">
       {/* ── Sticky top bar (header + brand line + sub-header) ── */}
       <div className="sticky top-0 z-10 flex flex-col shadow-sm">
-        <header className="flex items-center justify-between bg-white px-6 py-3 dark:bg-neutral-900">
+        <header className="flex items-center justify-between gap-2 bg-white px-4 py-2.5 dark:bg-neutral-900 md:px-6 md:py-3">
           <Logo />
-          <div className="flex items-center gap-3">
-            <span className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Welcome, {adminName}</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e0353b] text-white ring-2 ring-[#FED42E]">
+          <div className="flex min-w-0 items-center gap-2 md:gap-3">
+            <span className="truncate text-sm font-extrabold text-neutral-800 dark:text-neutral-100 md:text-base">Welcome, {adminName}</span>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-white ring-2 ring-[#FED42E] md:h-9 md:w-9">
               <UserGlyph />
             </span>
           </div>
@@ -59,22 +59,22 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
         />
 
         {/* Sub-header */}
-        <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-2 border-b border-neutral-200 bg-white px-4 py-2.5 dark:border-neutral-800 dark:bg-neutral-900 md:flex-row md:items-center md:justify-between md:px-6 md:py-3">
+          <div className="flex items-center gap-2 md:gap-3">
             <button
               onClick={onBack}
               title="Back to map"
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-[#e0353b] hover:scale-[1.04] active:scale-[0.96] active:duration-75 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-[#e0353b] hover:scale-[1.04] active:scale-[0.96] active:duration-75 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-[#e0353b]"
             >
               <BackGlyph /> Map
             </button>
-            <span className="h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
-            <h1 className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">System Administration</h1>
-            <span className="flex items-center gap-1.5 rounded-full bg-[#e0353b] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+            <span className="hidden h-5 w-px bg-neutral-200 dark:bg-neutral-700 md:block" />
+            <h1 className="min-w-0 flex-1 truncate text-base font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100 md:flex-none md:text-lg">System Administration</h1>
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#e0353b] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white md:px-3">
               <LockGlyph /> Admin Only
             </span>
           </div>
-          <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+          <p className="text-[11px] font-medium text-neutral-400 dark:text-neutral-500 md:text-xs">
             <span className="font-bold text-neutral-600 dark:text-neutral-300">{stationCount}</span> Stations
             <span className="mx-1.5">·</span>
             <span className="font-bold text-neutral-600 dark:text-neutral-300">{hydrants.length}</span> Hydrants
@@ -85,7 +85,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* ── Body — grows naturally, window scrolls ── */}
-      <div className="flex flex-col gap-5 p-6">
+      <div className="flex flex-col gap-4 p-3 md:gap-5 md:p-6">
         <ManageUsersCard
           users={users}
           loading={loading}
@@ -131,22 +131,22 @@ function ManageUsersCard({
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
       {/* Card header */}
-      <div className="flex items-center justify-between gap-4 px-6 pt-5">
-        <div className="flex items-baseline gap-3">
-          <h2 className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Manage Users &amp; Roles</h2>
+      <div className="flex items-center justify-between gap-3 px-4 pt-4 md:gap-4 md:px-6 md:pt-5">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h2 className="truncate text-base font-extrabold text-neutral-800 dark:text-neutral-100">Manage Users &amp; Roles</h2>
           <p className="hidden text-xs text-neutral-400 sm:block dark:text-neutral-500">Create, promote, demote, or remove accounts</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#e0353b] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.04] hover:shadow-[0_4px_12px_rgba(224,53,59,0.4)] active:scale-[0.96] active:duration-75"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#e0353b] px-3 py-2 text-xs font-bold text-white shadow-sm transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.04] hover:shadow-[0_4px_12px_rgba(224,53,59,0.4)] active:scale-[0.96] active:duration-75 md:px-4"
         >
-          <PlusGlyph /> Create Account
+          <PlusGlyph /> <span className="hidden sm:inline">Create Account</span><span className="sm:hidden">Create</span>
         </button>
       </div>
 
       {/* Toolbar: search + role filter pills */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-        <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 focus-within:border-[#e0353b] focus-within:bg-white dark:border-neutral-700 dark:bg-neutral-800 dark:focus-within:bg-neutral-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
+        <div className="flex min-w-[200px] flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 focus-within:border-[#e0353b] focus-within:bg-white dark:border-neutral-700 dark:bg-neutral-800 dark:focus-within:bg-neutral-800 md:min-w-[240px]">
           <SearchGlyph />
           <input
             value={search}
@@ -155,7 +155,7 @@ function ManageUsersCard({
             className="w-full bg-transparent text-sm text-neutral-700 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
           />
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map((f) => {
             const active = roleFilter === f.key;
             return (
@@ -218,7 +218,7 @@ function ManageUsersCard({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-neutral-100 px-6 py-3 text-[11px] text-neutral-400 dark:border-neutral-800 dark:text-neutral-500">
+      <div className="border-t border-neutral-100 px-4 py-3 text-[11px] text-neutral-400 dark:border-neutral-800 dark:text-neutral-500 md:px-6">
         Showing <span className="font-bold text-neutral-600 dark:text-neutral-300">{visible.length}</span> of{' '}
         <span className="font-bold text-neutral-600 dark:text-neutral-300">{users.length}</span> Accounts
       </div>
@@ -376,7 +376,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
             className="admin-input"
           />
         </Field>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Temporary Password">
             <input
               type="text"
@@ -640,14 +640,14 @@ function BulkImportCard({ adminName }: { adminName: string }) {
 
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="px-6 pt-5">
-        <div className="flex items-baseline gap-3">
-          <h2 className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Bulk Hydrant Data Import</h2>
+      <div className="px-4 pt-4 md:px-6 md:pt-5">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h2 className="truncate text-base font-extrabold text-neutral-800 dark:text-neutral-100">Bulk Hydrant Data Import</h2>
           <p className="hidden text-xs text-neutral-400 sm:block dark:text-neutral-500">Update hydrant records from a spreadsheet</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 p-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 p-3 md:gap-5 md:p-6 lg:grid-cols-[1.4fr_1fr]">
         {/* Drop zone */}
         <div>
           <div
@@ -891,10 +891,10 @@ const stroke = {
 
 function Logo() {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex shrink-0 items-center gap-1">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/Hydro-Scout%20Logo.png" alt="Hydro-Scout" width={44} height={44} className="h-11 w-11 object-contain" />
-      <span className="text-xl font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100">
+      <img src="/Hydro-Scout%20Logo.png" alt="Hydro-Scout" width={44} height={44} className="h-9 w-9 object-contain md:h-11 md:w-11" />
+      <span className="text-lg font-extrabold tracking-tight text-neutral-800 dark:text-neutral-100 md:text-xl">
         Hydro-<span className="text-[#e0353b]">Scout</span>
       </span>
     </div>

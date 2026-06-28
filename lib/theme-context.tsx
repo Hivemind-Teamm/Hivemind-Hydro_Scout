@@ -36,7 +36,7 @@ function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored === "light" || stored === "dark") return stored;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "light";
 }
 
 function applyTheme(theme: Theme) {
@@ -58,19 +58,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [theme]);
 
-  // Follow the OS theme only while the user hasn't made an explicit choice.
-  useEffect(() => {
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => {
-      if (!window.localStorage.getItem(STORAGE_KEY)) {
-        setThemeState(e.matches ? "dark" : "light");
-      }
-    };
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
-
-  const setTheme = useCallback((next: Theme) => setThemeState(next), []);
+const setTheme = useCallback((next: Theme) => setThemeState(next), []);
   const toggleTheme = useCallback(
     () => setThemeState((t) => (t === "dark" ? "light" : "dark")),
     [],
