@@ -236,7 +236,7 @@ export default function HydrantInfoPanel({
             ref={photoRef}
             src={proxiedPhotoUrl(hydrant.photos[0])}
             alt={`${hydrant.name} field photo`}
-            className={`w-full object-cover ${isMobile ? 'max-h-36' : 'aspect-square'}`}
+            className="aspect-square w-full object-cover"
           />
         )}
 
