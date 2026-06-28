@@ -676,7 +676,7 @@ export default function HydroScoutDashboard() {
       {/* OTW off-screen hydrant indicator — pulsing edge arrow when hydrant is off viewport */}
       {otwHydrant && otwEdgePos && (
         <button
-          className="pointer-events-auto absolute z-[1999] focus:outline-none"
+          className="pointer-events-auto absolute z-[2001] focus:outline-none"
           style={{ left: otwEdgePos.x, top: otwEdgePos.y, transform: 'translate(-50%, -50%)' }}
           onClick={() => controllerRef.current?.flyTo(otwHydrant.lat, otwHydrant.lng, 16)}
           title={`Go to ${otwHydrant.name}`}
