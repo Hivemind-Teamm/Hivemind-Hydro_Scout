@@ -50,6 +50,11 @@ export interface Hydrant {
   register: HydrantRegisterEntry[];
   // Cloudinary secure URLs of field photos, oldest → newest.
   photos: string[];
+  // Maintenance log (Level 3): accountability & scheduling.
+  inspector: string;        // who last signed off
+  inspectionDate: string;   // YYYY-MM-DD ('' when unknown)
+  lastMaintenance: string;  // YYYY-MM-DD ('' when unknown)
+  nextMaintenance: string;  // YYYY-MM-DD ('' when none scheduled)
 }
 
 export interface StatusMeta {
@@ -141,6 +146,16 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
+// Adds `months` to a "YYYY-MM-DD" date string, returning the same format.
+// Used to estimate the next maintenance date when Firestore has none stored.
+function addMonths(dateStr: string, months: number): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 // Firestore Timestamp | string | Date → "YYYY-MM-DD" (or '' when absent)
 function toDateString(value: unknown): string {
   if (!value) return '';
@@ -226,6 +241,11 @@ export function hydrantFromDoc(id: string, d: DocumentData): Hydrant {
     }];
   }
 
+  // Maintenance scheduling: prefer stored dates, otherwise derive a sensible
+  // last (most recent register entry) and an annual next-inspection estimate.
+  const lastMaintenance = toDateString(d.lastMaintenance) || register[register.length - 1]?.date || inspectionDate;
+  const nextMaintenance = toDateString(d.nextMaintenance) || addMonths(lastMaintenance, 12);
+
   return {
     id,
     name: deriveName(d.address, id),
@@ -248,5 +268,9 @@ export function hydrantFromDoc(id: string, d: DocumentData): Hydrant {
     notes,
     register,
     photos,
+    inspector,
+    inspectionDate,
+    lastMaintenance,
+    nextMaintenance,
   };
 }

@@ -86,8 +86,8 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
   }
 
   return (
-    <div className="anim-fade pointer-events-auto absolute inset-0 z-[5000] flex items-center justify-center bg-black/40 p-4">
-      <div className="anim-fade-scale relative flex w-full max-w-[700px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900" style={{ maxHeight: '90vh' }}>
+    <div className="anim-fade pointer-events-auto absolute inset-0 z-[5000] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="anim-fade-scale relative flex w-full max-w-[700px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900" style={{ maxHeight: '90vh' }} onClick={(e) => e.stopPropagation()}>
 
         {/* Panel loading overlay */}
         {saving && (

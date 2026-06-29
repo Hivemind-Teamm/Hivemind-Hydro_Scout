@@ -22,8 +22,8 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
   const badgeColor = ROLE_COLORS[user.role] ?? '#6b7280';
 
   return (
-    <div className="pointer-events-auto absolute inset-0 z-[5100] flex items-center justify-center bg-black/40">
-      <div className="relative w-[90vw] max-w-[340px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl">
+    <div className="pointer-events-auto absolute inset-0 z-[5100] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="relative w-[90vw] max-w-[340px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex flex-col items-center gap-2 bg-[#e0353b] px-6 py-6">
