@@ -582,12 +582,33 @@ function BulkImportCard({ adminName }: { adminName: string }) {
 
   async function ingest(file: File) {
     setCommitMsg(null);
-    if (!/\.csv$/i.test(file.name)) {
-      setResult({ fileName: file.name, rows: [], errors: [{ line: 0, reason: 'Only .csv files are supported in this build.' }] });
+    if (/\.csv$/i.test(file.name)) {
+      const text = await file.text();
+      setResult(parseHydrantCsv(file.name, text, adminName));
       return;
     }
-    const text = await file.text();
-    setResult(parseHydrantCsv(file.name, text, adminName));
+    if (/\.xlsx?$/i.test(file.name)) {
+      try {
+        // Dynamic import keeps the ~1MB SheetJS lib out of the main bundle —
+        // it's only fetched when an admin actually drops a spreadsheet.
+        const XLSX = await import('xlsx');
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        if (!sheet) {
+          setResult({ fileName: file.name, rows: [], errors: [{ line: 0, reason: 'The workbook has no sheets.' }] });
+          return;
+        }
+        // header:1 → array-of-arrays; blank cells become '' so column indices stay aligned.
+        const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, defval: '' });
+        const matrix = grid.map((row) => row.map((cell) => String(cell ?? '').trim()));
+        setResult(parseHydrantMatrix(file.name, matrix, adminName));
+      } catch {
+        setResult({ fileName: file.name, rows: [], errors: [{ line: 0, reason: 'Could not read the spreadsheet. Make sure it is a valid .xlsx file.' }] });
+      }
+      return;
+    }
+    setResult({ fileName: file.name, rows: [], errors: [{ line: 0, reason: 'Unsupported file type. Upload a .csv or .xlsx file.' }] });
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
@@ -667,7 +688,7 @@ function BulkImportCard({ adminName }: { adminName: string }) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) void ingest(f); e.target.value = ''; }}
             />
@@ -782,11 +803,21 @@ function normStatus(v: string): HydrantStatus | null {
   return null;
 }
 
+// CSV entry point: split into a string matrix, then share the validation core
+// with the XLSX path so both formats behave identically.
 function parseHydrantCsv(fileName: string, text: string, adminName: string): ParseResult {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return { fileName, rows: [], errors: [{ line: 0, reason: 'The file is empty.' }] };
+  const matrix = lines.map((l) => splitCsvLine(l));
+  return parseHydrantMatrix(fileName, matrix, adminName);
+}
 
-  const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
+// Shared validation core: row 0 is the header, remaining rows are records.
+// Used by both the CSV and XLSX importers.
+function parseHydrantMatrix(fileName: string, matrix: string[][], adminName: string): ParseResult {
+  const nonEmpty = matrix.filter((cells) => cells.some((c) => (c ?? '').trim().length > 0));
+  if (nonEmpty.length === 0) return { fileName, rows: [], errors: [{ line: 0, reason: 'The file is empty.' }] };
+
+  const header = (nonEmpty[0] ?? []).map((h) => (h ?? '').toLowerCase().trim());
   const idx = (name: string) => header.indexOf(name);
   const col = { address: idx('address'), lat: idx('lat'), lng: idx('lng'), status: idx('status') };
 
@@ -798,8 +829,8 @@ function parseHydrantCsv(fileName: string, text: string, adminName: string): Par
   const rows: ParsedRow[] = [];
   const errors: RowError[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const cells = splitCsvLine(lines[i]);
+  for (let i = 1; i < nonEmpty.length; i++) {
+    const cells = nonEmpty[i];
     const lineNo = i + 1;
     const address = cells[col.address] ?? '';
     const lat = Number(cells[col.lat]);

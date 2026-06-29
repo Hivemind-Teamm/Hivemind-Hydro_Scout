@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-import { countByStatus, type Hydrant } from '../data/hydrants';
+import { useMemo, useState } from 'react';
+import { countByStatus, STATUS_META, type Hydrant } from '../data/hydrants';
 import { type Report } from '../data/reports';
 import { useAuth, type Role } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
@@ -37,8 +37,7 @@ function computeZones(hydrants: Hydrant[]): ZoneData[] {
         pct >= 0.75 ? 'good' : pct >= 0.5 ? 'moderate' : 'poor';
       return { name, total, operational, rating };
     })
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 4);
+    .sort((a, b) => b.total - a.total);
 }
 
 /* ── Trend computation ────────────────────────────────────────────────────── */
@@ -191,14 +190,19 @@ const RATING_META = {
   poor:     { color: '#e0353b', bg: '#fce8e9', label: 'POOR'     },
 };
 
-function ZoneRow({ name, total, operational, rating }: ZoneData) {
+function ZoneRow({ name, total, operational, rating, selected, onClick }: ZoneData & { selected: boolean; onClick: () => void }) {
   const meta = RATING_META[rating];
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 py-2.5 last:border-0 dark:border-neutral-800">
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center justify-between gap-3 border-b border-neutral-100 px-2 py-2.5 text-left transition-colors last:border-0 dark:border-neutral-800 ${
+        selected ? 'bg-red-50 dark:bg-red-950/30' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+      }`}
+    >
       <div className="flex items-center gap-2.5">
         <span className="h-5 w-1 shrink-0 rounded-full" style={{ background: meta.color }} />
         <div>
-          <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100">{name}</p>
+          <p className={`text-xs font-bold ${selected ? 'text-[#e0353b]' : 'text-neutral-800 dark:text-neutral-100'}`}>{name}</p>
           <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{total} hyd · {operational} op</p>
         </div>
       </div>
@@ -208,6 +212,136 @@ function ZoneRow({ name, total, operational, rating }: ZoneData) {
       >
         {meta.label}
       </span>
+    </button>
+  );
+}
+
+/* ── Geographic performance map ───────────────────────────────────────────────
+   Lightweight SVG scatter of every hydrant positioned by lat/lng (no Mapbox
+   needed inside the dashboard). Dots are coloured by operational status; the
+   selected zone is highlighted while the rest dim, giving a geographic
+   drill-down that stays in sync with the zone list. */
+function GeoPerformanceMap({
+  hydrants, selectedZone, onSelectZone,
+}: { hydrants: Hydrant[]; selectedZone: string | null; onSelectZone: (zone: string) => void }) {
+  const { isDark } = useTheme();
+  // Hydrant tapped on the map — drives the mini-detail card below it.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const W = 800;
+  const H = 300;
+  const PAD = 24;
+
+  const pts = useMemo(() => {
+    const valid = hydrants.filter((h) => h.lat !== 0 || h.lng !== 0);
+    if (valid.length === 0) return [];
+    const lats = valid.map((h) => h.lat);
+    const lngs = valid.map((h) => h.lng);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    const latRange = maxLat - minLat || 1;
+    const lngRange = maxLng - minLng || 1;
+    return valid.map((h) => ({
+      id: h.id,
+      hydrant: h,
+      area: h.area || 'Unknown',
+      color: STATUS_META[h.status].color,
+      // lng → x (east-right); lat → y (north-up, so invert)
+      x: PAD + ((h.lng - minLng) / lngRange) * (W - PAD * 2),
+      y: PAD + (1 - (h.lat - minLat) / latRange) * (H - PAD * 2),
+    }));
+  }, [hydrants]);
+
+  const active = activeId ? pts.find((p) => p.id === activeId)?.hydrant ?? null : null;
+
+  if (pts.length === 0) {
+    return <p className="text-xs text-neutral-400 dark:text-neutral-500">No geographic data available.</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="rounded-lg" style={{ background: isDark ? '#0b0f14' : '#f8fafc' }}>
+        {/* subtle grid */}
+        {[0.25, 0.5, 0.75].map((f) => (
+          <g key={f}>
+            <line x1={PAD + f * (W - PAD * 2)} y1={PAD} x2={PAD + f * (W - PAD * 2)} y2={H - PAD} stroke={isDark ? '#1f2937' : '#e5e7eb'} strokeWidth="1" />
+            <line x1={PAD} y1={PAD + f * (H - PAD * 2)} x2={W - PAD} y2={PAD + f * (H - PAD * 2)} stroke={isDark ? '#1f2937' : '#e5e7eb'} strokeWidth="1" />
+          </g>
+        ))}
+        {pts.map((p, i) => {
+          const dim = selectedZone !== null && p.area !== selectedZone;
+          const isActive = p.id === activeId;
+          const zoneHot = selectedZone !== null && p.area === selectedZone;
+          return (
+            <circle
+              key={`${p.id}-${i}`}
+              cx={p.x} cy={p.y}
+              r={isActive ? 7 : zoneHot ? 6 : 4}
+              fill={p.color}
+              fillOpacity={dim && !isActive ? 0.15 : 0.9}
+              stroke={isActive ? '#e0353b' : zoneHot ? (isDark ? '#fff' : '#111827') : 'none'}
+              strokeWidth={isActive ? 2.5 : zoneHot ? 1.5 : 0}
+              style={{ cursor: 'pointer', transition: 'r 0.15s, fill-opacity 0.15s' }}
+              onClick={() => setActiveId(p.id)}
+            >
+              <title>{`${p.id} · ${p.hydrant.name}`}</title>
+            </circle>
+          );
+        })}
+      </svg>
+
+      {/* Mini detail card for the tapped hydrant */}
+      {active && (
+        <div className="anim-fade-scale flex items-start gap-3 rounded-lg border border-neutral-200 bg-neutral-50/70 p-3 dark:border-neutral-700 dark:bg-neutral-800/50">
+          <span className="mt-0.5 h-8 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_META[active.status].color }} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-bold text-neutral-400 dark:text-neutral-500">{active.id}</span>
+              <span className="truncate text-sm font-bold text-neutral-800 dark:text-neutral-100">{active.name}</span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+              <span className="font-bold" style={{ color: STATUS_META[active.status].color }}>{STATUS_META[active.status].legendLabel}</span>
+              <span className="text-neutral-400 dark:text-neutral-500">·</span>
+              <span className="text-neutral-600 dark:text-neutral-300">Pressure: <span className="font-semibold">{active.pressure}</span></span>
+              <span className="text-neutral-400 dark:text-neutral-500">·</span>
+              <span className="text-neutral-600 dark:text-neutral-300">{active.area}</span>
+              {active.hazard && active.hazard !== 'None' && (
+                <>
+                  <span className="text-neutral-400 dark:text-neutral-500">·</span>
+                  <span className="font-semibold text-[#f5a623]">⚠ {active.hazard}</span>
+                </>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveId(null)}
+            aria-label="Close"
+            className="shrink-0 rounded-full p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        {[
+          { color: '#2fbf4f', label: 'Operational' },
+          { color: '#f5a623', label: 'Reduced PSI' },
+          { color: '#9aa0a6', label: 'Out of service' },
+        ].map((item) => (
+          <span key={item.label} className="flex items-center gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+            <span className="h-2 w-2 rounded-full" style={{ background: item.color }} />
+            {item.label}
+          </span>
+        ))}
+        {selectedZone && (
+          <button
+            onClick={() => { onSelectZone(selectedZone); setActiveId(null); }}
+            className="ml-auto rounded-full bg-neutral-100 px-2.5 py-0.5 text-[11px] font-bold text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+          >
+            {selectedZone} · clear ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -248,6 +382,10 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
   const zones   = useMemo(() => computeZones(hydrants), [hydrants]);
   const trend   = useMemo(() => computeTrendData(hydrants), [hydrants]);
   const roleLabel = role === 'admin' ? 'Admin' : 'Head';
+
+  // Selected zone drives the geographic drill-down (toggles off when re-tapped).
+  const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const toggleZone = (zone: string) => setSelectedZone((prev) => (prev === zone ? null : zone));
 
   const displayName = user?.displayName
     || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User');
@@ -333,13 +471,31 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
         {/* Coverage by Zone */}
         <Card title="Coverage by Zone" subtitle="TAP ZONE · OPERATIONAL COUNT">
           {zones.length > 0 ? (
-            <div className="flex flex-col">
-              {zones.map(z => <ZoneRow key={z.name} {...z} />)}
+            <div className="flex max-h-64 flex-col overflow-y-auto">
+              {zones.map(z => (
+                <ZoneRow
+                  key={z.name}
+                  {...z}
+                  selected={selectedZone === z.name}
+                  onClick={() => toggleZone(z.name)}
+                />
+              ))}
             </div>
           ) : (
             <p className="text-xs text-neutral-400 dark:text-neutral-500">No zone data available.</p>
           )}
         </Card>
+
+        {/* Geographic Performance Map */}
+        <div className="md:col-span-3">
+          <Card title="Geographic Performance Map" subtitle="TAP A HYDRANT FOR DETAILS · STATUS BY LOCATION">
+            <GeoPerformanceMap
+              hydrants={hydrants}
+              selectedZone={selectedZone}
+              onSelectZone={toggleZone}
+            />
+          </Card>
+        </div>
 
         {/* Condition Trend */}
         <div className="md:col-span-3">
