@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
+import { useIsMobile, useIsShort } from "@/lib/use-media-query";
 
 export default function LoginPage() {
   // useSearchParams() needs a Suspense boundary to prerender (Next.js 16).
@@ -18,8 +19,22 @@ export default function LoginPage() {
 function LoginContent() {
   const { login, user, loading, refreshSession } = useAuth();
   const { isDark } = useTheme();
+  const isMobile = useIsMobile();
+  const isShort = useIsShort();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // iPhone-SE-class screens: phone width AND short height. We compress spacing
+  // here so the whole form fits the viewport without feeling cramped.
+  const tight = isMobile && isShort;
+  // Mobile input vertical padding (kept at 16px font min to avoid iOS focus-zoom).
+  const padY = tight ? 9 : 11;
+  const headingSize = isMobile ? (tight ? 28 : 34) : 56;
+  const subSize = isMobile ? (tight ? 16 : 18) : 26;
+  const subMargin = isMobile ? (tight ? "4px 0 14px" : "6px 0 20px") : "8px 0 36px";
+  const labelSize = isMobile ? (tight ? 13 : 15) : 18;
+  const formGap = isMobile ? (tight ? 10 : 14) : 18;
+  const btnFont = isMobile ? (tight ? 16 : 17) : 20;
 
   // Theme-derived colours (the page uses inline styles, so `dark:` utilities
   // don't apply — we branch on isDark instead). The yellow brand panel stays.
@@ -29,10 +44,10 @@ function LoginContent() {
   const inputBorder = isDark ? "#374151" : "#ccc";
   const errorColor = isDark ? "#e0353b" : "#e0353b";
   const baseInputStyle: React.CSSProperties = {
-    padding: "13px 20px",
+    padding: isMobile ? `${padY}px 16px` : "13px 20px",
     borderRadius: 24,
     border: `1.5px solid ${inputBorder}`,
-    fontSize: 18,
+    fontSize: isMobile ? 16 : 18,
     outline: "none",
     width: "100%",
     boxSizing: "border-box",
@@ -40,7 +55,7 @@ function LoginContent() {
     background: inputBg,
     fontFamily: "inherit",
   };
-  const passwordInputStyle: React.CSSProperties = { ...baseInputStyle, padding: "13px 48px 13px 20px" };
+  const passwordInputStyle: React.CSSProperties = { ...baseInputStyle, padding: isMobile ? `${padY}px 44px ${padY}px 16px` : "13px 48px 13px 20px" };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -90,18 +105,19 @@ function LoginContent() {
   );
 
   return (
-    <div style={{ display: "flex", height: "100dvh", width: "100vw", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", width: "100%", overflowX: "hidden", ...(isMobile ? { height: "100dvh", overflowY: "hidden" } : { minHeight: "100dvh" }) }}>
       {/* Left Panel */}
       <div
         style={{
-          flex: "0 0 42%",
+          flex: isMobile ? "0 0 auto" : "0 0 42%",
           background: "#FED42E",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          padding: isMobile ? (tight ? "10px 0" : "16px 0") : 0,
         }}
       >
-        <div style={{ position: "relative", width: "55%", aspectRatio: "3 / 4" }}>
+        <div style={{ position: "relative", width: isMobile ? (tight ? 64 : 84) : "55%", aspectRatio: "3 / 4" }}>
           <Image
             src="/Login Hydrant Logo.png"
             alt="Hydro-Scout Hydrant"
@@ -116,26 +132,29 @@ function LoginContent() {
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           background: panelBg,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          padding: "40px 48px",
+          justifyContent: isMobile ? "flex-start" : "center",
+          overflowY: isMobile ? "auto" : "visible",
+          padding: isMobile ? (tight ? "16px 22px 18px" : "24px 22px 30px") : "40px 48px",
         }}
       >
-        <div style={{ width: "100%", maxWidth: 420 }}>
-          <h1 style={{ fontSize: 56, fontWeight: 700, margin: 0, lineHeight: 1.1, color: textColor }}>
+        {/* margin auto centres the form when it fits, yet stays scrollable when it doesn't */}
+        <div style={{ width: "100%", maxWidth: 420, margin: isMobile ? "auto 0" : undefined }}>
+          <h1 style={{ fontSize: headingSize, fontWeight: 700, margin: 0, lineHeight: 1.1, color: textColor }}>
             Hello Po!
           </h1>
-          <p style={{ fontSize: 26, color: textColor, margin: "8px 0 36px" }}>
+          <p style={{ fontSize: subSize, color: textColor, margin: subMargin }}>
             Login Please
           </p>
 
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: formGap }}>
             {/* Email */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 18, fontWeight: 500, color: textColor }}>Email</label>
+              <label style={{ fontSize: labelSize, fontWeight: 500, color: textColor }}>Email</label>
               <input
                 type="email"
                 value={email}
@@ -148,7 +167,7 @@ function LoginContent() {
 
             {/* Password */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 18, fontWeight: 500, color: textColor }}>Password</label>
+              <label style={{ fontSize: labelSize, fontWeight: 500, color: textColor }}>Password</label>
               <div style={{ position: "relative" }}>
                 <input
                   type={showPassword ? "text" : "password"}
@@ -191,14 +210,14 @@ function LoginContent() {
               disabled={submitting}
               className="active:scale-[0.97]"
               style={{
-                marginTop: 8,
-                padding: "16px 20px",
+                marginTop: tight ? 4 : 8,
+                padding: isMobile ? (tight ? "11px 20px" : "13px 20px") : "16px 20px",
                 borderRadius: 24,
                 border: "2px solid #000",
                 background: submitting ? "#e8b800" : "#FED42E",
                 color: "#000",
                 fontWeight: 700,
-                fontSize: 20,
+                fontSize: btnFont,
                 cursor: submitting ? "default" : "pointer",
                 width: "100%",
                 fontFamily: "inherit",
@@ -223,13 +242,13 @@ function LoginContent() {
               onClick={() => router.push("/signup")}
               className="active:scale-[0.97]"
               style={{
-                padding: "15px 20px",
+                padding: isMobile ? (tight ? "10px 20px" : "12px 20px") : "15px 20px",
                 borderRadius: 24,
                 border: `1.5px solid ${textColor}`,
                 background: "transparent",
                 color: textColor,
                 fontWeight: 600,
-                fontSize: 20,
+                fontSize: btnFont,
                 cursor: "pointer",
                 width: "100%",
                 fontFamily: "inherit",
@@ -240,7 +259,7 @@ function LoginContent() {
             </button>
 
             {/* Forgot password */}
-            <p style={{ textAlign: "center", margin: "8px 0 0" }}>
+            <p style={{ textAlign: "center", margin: tight ? "4px 0 0" : "8px 0 0" }}>
               <a
                 href="/forgot-password"
                 style={{ color: "#FFA500", fontSize: 16, fontWeight: 500, textDecoration: "none" }}

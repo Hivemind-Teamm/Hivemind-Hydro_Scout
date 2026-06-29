@@ -60,6 +60,8 @@ export default function HydroScoutDashboard() {
   const [nearestHydrant, setNearestHydrant] = useState<RankedHydrant | null>(null);
   const [nearestPanelOpen, setNearestPanelOpen] = useState(false);
   const [otwMeta, setOtwMeta] = useState<{ distanceM: number; durationS: number } | null>(null);
+  // OTW hazard panel minimized state — lifted here so tapping the map can collapse it.
+  const [hazardPanelMinimized, setHazardPanelMinimized] = useState(false);
 
   const geoErrorTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controllerRef         = useRef<MapController | null>(null);
@@ -404,6 +406,18 @@ export default function HydroScoutDashboard() {
     setNearestHydrant(null);
   }, [selectedHydrant, nearestHydrant]);
 
+  // Reset the hazard panel back to expanded whenever OTW mode ends.
+  useEffect(() => {
+    if (!otwHydrant) setHazardPanelMinimized(false);
+  }, [otwHydrant]);
+
+  // Tapping empty map closes any open panels and, during OTW, collapses the
+  // route-hazard window so it's out of the way while navigating.
+  const handleMapBackgroundClick = useCallback(() => {
+    handleCloseAll();
+    if (otwHydrant) setHazardPanelMinimized(true);
+  }, [handleCloseAll, otwHydrant]);
+
   const handleCloseFullDetails = useCallback(() => setShowFullDetails(false), []);
   const handleCloseEdit        = useCallback(() => setShowEdit(false), []);
   const handleCloseReport      = useCallback(() => setShowReport(false), []);
@@ -646,7 +660,7 @@ export default function HydroScoutDashboard() {
           onSelectHydrant={handleSelectHydrant}
           addHydrantMode={addHydrantMode}
           onMapClick={handleMapClick}
-          onMapBackgroundClick={handleCloseAll}
+          onMapBackgroundClick={handleMapBackgroundClick}
           pendingPin={pendingLocation}
           is3D={is3D}
           userLocation={userLocation}
@@ -727,6 +741,8 @@ export default function HydroScoutDashboard() {
         isOtw={!!otwHydrant}
         routeHazards={routeHazards}
         onSelectHazardHydrant={handleSelectHydrant}
+        hazardPanelMinimized={hazardPanelMinimized}
+        onHazardPanelMinimizedChange={setHazardPanelMinimized}
       />
 
       {/* ── Nearest Hydrant Panel — bottom-left, above map, below modals ── */}

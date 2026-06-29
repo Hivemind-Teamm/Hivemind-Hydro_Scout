@@ -44,7 +44,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
   const displayName = user?.displayName
     || (email ? email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
   const initials    = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-  const isGeneral   = !role || role === 'general';
 
   function handleSignIn() { onClose(); router.push('/login');  }
   function handleSignUp() { onClose(); router.push('/signup'); }
@@ -216,22 +215,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
               </div>
             </section>
 
-            {isGeneral && (
-              <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-500/30 dark:bg-red-950/30">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-white">
-                  <HydrantGlyph size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-[#e0353b]">Become an Authorized User</p>
-                  <p className="text-[11px] leading-relaxed text-neutral-500 dark:text-neutral-400">
-                    Sign up to gain access to hydrant management, inspection notes, and damage reporting.
-                  </p>
-                </div>
-                <button className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#e0353b] px-3 py-1.5 text-[11px] font-bold text-white transition-all duration-150 ease-out hover:scale-[1.04] hover:bg-[#c42d32] hover:shadow-[0_4px_12px_rgba(224,53,59,0.4)] active:scale-[0.96] active:duration-75">
-                  <HydrantGlyph size={12} /> Authorize
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Right — Access & Security */}

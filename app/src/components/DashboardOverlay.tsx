@@ -40,6 +40,9 @@ interface DashboardOverlayProps {
   isOtw?: boolean;
   routeHazards?: Hydrant[];
   onSelectHazardHydrant?: (h: Hydrant) => void;
+  /** OTW hazard panel minimized state — lifted so a map tap can collapse it. */
+  hazardPanelMinimized?: boolean;
+  onHazardPanelMinimizedChange?: (minimized: boolean) => void;
 }
 
 export default function DashboardOverlay({
@@ -67,6 +70,8 @@ export default function DashboardOverlay({
   isOtw = false,
   routeHazards = [],
   onSelectHazardHydrant,
+  hazardPanelMinimized = false,
+  onHazardPanelMinimizedChange,
 }: DashboardOverlayProps) {
   const { user, role } = useAuth();
   const { isDark, toggleTheme } = useTheme();
@@ -76,12 +81,7 @@ export default function DashboardOverlay({
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   const [showCounts] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hazardPanelMinimized, setHazardPanelMinimized] = useState(false);
-
-  // Reset minimized state when OTW mode changes
-  useEffect(() => {
-    if (!isOtw) setHazardPanelMinimized(false);
-  }, [isOtw]);
+  const setHazardPanelMinimized = onHazardPanelMinimizedChange ?? (() => {});
 
   const displayName = user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest';
   const roleLabel: Record<string, string> = { admin: 'Admin', head: 'Head Inspector', authorized: 'Authorized', general: 'General' };
