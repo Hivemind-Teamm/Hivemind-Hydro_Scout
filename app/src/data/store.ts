@@ -15,6 +15,7 @@ import {
   updateDoc,
   addDoc,
   runTransaction,
+  writeBatch,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
@@ -264,13 +265,45 @@ export async function setDisplayPhoto(hydrantId: string, photoUrl: string, allPh
 }
 
 // Updates a report's status (head / admin only — enforced by Firestore rules).
+// When resolver metadata is supplied, the outcome is also written to the parent
+// hydrant's maintenance history (register) so resolutions/denials are auditable
+// from the hydrant record, not just the Reports panel. Both writes are batched
+// so the report status and the history entry land atomically.
 export async function updateReportStatus(
   hydrantId: string,
   firestoreId: string,
   status: 'resolved' | 'denied',
+  meta?: { by: string; role: string; reportTitle?: string },
 ): Promise<void> {
-  const ref = doc(db, 'hydrants', hydrantId, 'reports', firestoreId);
-  await updateDoc(ref, { status });
+  const reportRef = doc(db, 'hydrants', hydrantId, 'reports', firestoreId);
+
+  if (!meta) {
+    await updateDoc(reportRef, { status });
+    return;
+  }
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const hydrantRef = doc(db, 'hydrants', hydrantId);
+  const titleSuffix = meta.reportTitle ? `: ${meta.reportTitle}` : '';
+
+  const batch = writeBatch(db);
+  batch.update(reportRef, {
+    status,
+    resolvedBy: meta.by,
+    resolvedRole: meta.role,
+    resolvedAt: serverTimestamp(),
+  });
+  batch.update(hydrantRef, {
+    updatedAt: serverTimestamp(),
+    register: arrayUnion({
+      statusColor: status === 'resolved' ? '#2fbf4f' : '#e0353b',
+      action: status === 'resolved' ? `Report resolved${titleSuffix}` : `Report denied${titleSuffix}`,
+      by: meta.by,
+      role: meta.role,
+      date: dateStr,
+    }),
+  });
+  await batch.commit();
 }
 
 export async function validateHydrant(hydrantId: string, by: string, role: string): Promise<void> {

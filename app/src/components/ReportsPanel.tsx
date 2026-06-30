@@ -87,15 +87,24 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
 }
 
 function ReportCard({ report, onViewUser, canResolve }: { report: Report; onViewUser: (name: string, role: string) => void; canResolve: boolean }) {
+  const { user, role } = useAuth();
   const sc = STATUS_COLORS[report.status];
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const resolverName = user?.displayName
+    || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Head');
+  const roleLabel: Record<string, string> = { admin: 'Admin', head: 'Head Inspector', authorized: 'Authorized', general: 'General' };
 
   async function handleStatusChange(status: 'resolved' | 'denied') {
     setSaving(true);
     setErr(null);
     try {
-      await updateReportStatus(report.hydrantId, report.firestoreId, status);
+      await updateReportStatus(report.hydrantId, report.firestoreId, status, {
+        by: resolverName,
+        role: roleLabel[role ?? ''] ?? 'Head Inspector',
+        reportTitle: report.title,
+      });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed to update.');
     } finally {

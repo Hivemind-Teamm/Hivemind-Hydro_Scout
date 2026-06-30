@@ -254,6 +254,13 @@ export default function HydroScoutDashboard() {
     });
   }, []);
 
+  const hasAutoLocatedRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoLocatedRef.current || !mapReady || !userLocation) return;
+    hasAutoLocatedRef.current = true;
+    controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 17);
+  }, [mapReady, userLocation]);
+
   const watchIdRef = useRef<number | null>(null);
   const geoErrorRef = useRef<GeolocationPositionError | null>(null);
   useEffect(() => {
@@ -941,6 +948,7 @@ export default function HydroScoutDashboard() {
           onFlyTo={(lat, lng) => controllerRef.current?.flyTo(lat, lng, 17)}
           distanceM={userLocation ? haversineM(userLocation.lat, userLocation.lng, selectedHydrant.lat, selectedHydrant.lng) : null}
           isOtw={otwHydrant?.id === selectedHydrant?.id}
+          linkedReports={reports.filter((r) => r.hydrantId === selectedHydrant.id)}
         />
       )}
       {selectedHydrant && showEdit && (
