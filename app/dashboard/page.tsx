@@ -3,27 +3,19 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import AdminDashboard from "../src/components/AdminDashboard";
+import HydroScoutDashboard from "../src/components/HydroScoutDashboard";
 
-// /admin — System Administration panel.
-//
-// proxy.ts already gates this path to the `admin` role server-side; this
-// client guard is the second line of defense and handles the brief window
-// before auth resolves (and direct client-side navigations).
-export default function AdminPage() {
-  const { user, role, loading } = useAuth();
+export default function DashboardPage() {
+  const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      router.replace("/login?next=/admin");
-    } else if (role !== "admin") {
-      router.replace("/dashboard");
+    if (!loading && !user) {
+      router.replace("/login");
     }
-  }, [user, role, loading, router]);
+  }, [user, loading, router]);
 
-  if (loading || !user || role !== "admin") {
+  if (loading) {
     return (
       <div className="flex h-dvh w-screen flex-col items-center justify-center bg-neutral-700">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -41,12 +33,12 @@ export default function AdminPage() {
           <span className="bounce-dot-2 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
           <span className="bounce-dot-3 h-2.5 w-2.5 rounded-full bg-[#FED42E]" />
         </div>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-widest text-white/50">
-          {loading ? "Signing you in…" : "Redirecting…"}
-        </p>
+        <p className="mt-4 text-xs font-semibold uppercase tracking-widest text-white/50">Signing you in…</p>
       </div>
     );
   }
 
-  return <AdminDashboard onBack={() => router.push("/dashboard")} />;
+  if (!user) return null;
+
+  return <HydroScoutDashboard />;
 }

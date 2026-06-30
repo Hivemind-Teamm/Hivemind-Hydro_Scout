@@ -22,9 +22,7 @@ const ROUTE_RULES: { prefix: string; allowed: Role[] }[] = [
   { prefix: "/maintenance", allowed: ["head", "admin"] },
   { prefix: "/reports", allowed: ["head", "admin"] },
   { prefix: "/pins/new", allowed: ["authorized", "admin"] },
-  { prefix: "/dashboard", allowed: ALL_ROLES },
-  // Homepage (the map view): temporarily open (no auth required).
-  // TODO: restore { prefix: "/", allowed: ALL_ROLES } when auth is set up.
+  // Homepage and dashboard: auth enforced client-side (same as /admin).
 ];
 
 function getSession(req: NextRequest): { uid: string; role: Role } | null {

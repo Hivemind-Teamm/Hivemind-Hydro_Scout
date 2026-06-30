@@ -25,7 +25,7 @@ export default function SignUpPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/");
+      router.replace("/dashboard");
     }
   }, [loading, user, router]);
 
@@ -41,7 +41,7 @@ export default function SignUpPage() {
     setSubmitting(true);
     try {
       await signup(email, password, displayName.trim() || email.split("@")[0]);
-      router.push("/");
+      router.push("/dashboard");
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? "";
       if (code === "auth/email-already-in-use") setError("An account with this email already exists.");
