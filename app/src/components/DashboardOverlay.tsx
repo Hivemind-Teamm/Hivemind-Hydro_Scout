@@ -192,10 +192,15 @@ export default function DashboardOverlay({
               onClick={onToggleAddHydrant}
               className="relative flex h-12 w-12 items-center justify-center transition-transform active:scale-90"
             >
+              {addHydrantMode && <span className="hydrant-pin-ripple" />}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/Hydrant%20Pin%20Red.png" alt="Pin hydrant" className="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]" />
-              <span className={`pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#e0353b] text-[10px]' : 'bg-[#2fbf4f] text-xs'}`}>
-                {addHydrantMode ? '✕' : '+'}
+              <img src="/Hydrant%20Pin%20Red.png" alt="Pin hydrant" className="relative h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]" />
+              <span className={`pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#e0353b]' : 'bg-[#2fbf4f] text-xs'}`}>
+                {addHydrantMode ? (
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+                    <line x1="1.5" y1="1.5" x2="6.5" y2="6.5" /><line x1="6.5" y1="1.5" x2="1.5" y2="6.5" />
+                  </svg>
+                ) : '+'}
               </span>
             </button>
           )}
@@ -492,15 +497,20 @@ export default function DashboardOverlay({
               onClick={onToggleAddHydrant}
               className="relative flex h-11 w-11 items-center justify-center transition-all duration-150 ease-out hover:scale-110 hover:drop-shadow-[0_4px_8px_rgba(224,53,59,0.5)] active:scale-90 active:duration-75"
             >
+              {addHydrantMode && <span className="hydrant-pin-ripple" />}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/Hydrant%20Pin%20Red.png"
                 alt="Pin hydrant"
-                className="h-12 w-12 object-contain"
+                className="relative h-12 w-12 object-contain"
               />
             </button>
-            <span className={`pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#e0353b] text-[9px]' : 'bg-[#2fbf4f] text-[11px]'}`}>
-              {addHydrantMode ? '✕' : '+'}
+            <span className={`pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full font-extrabold text-white shadow ${addHydrantMode ? 'bg-[#e0353b]' : 'bg-[#2fbf4f] text-[11px]'}`}>
+              {addHydrantMode ? (
+                <svg width="7" height="7" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+                  <line x1="1.5" y1="1.5" x2="6.5" y2="6.5" /><line x1="6.5" y1="1.5" x2="1.5" y2="6.5" />
+                </svg>
+              ) : '+'}
             </span>
             <div className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-[9999] -translate-y-1/2 opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-hover:[transition-delay:500ms]">
               <span className="block whitespace-nowrap rounded-lg bg-neutral-900/95 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-xl dark:bg-neutral-800 dark:ring-1 dark:ring-white/10">

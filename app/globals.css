@@ -276,3 +276,30 @@ body {
 
 /* ── Leaflet dark tiles — soften from pure black to charcoal gray ── */
 .leaflet-tiles-dark { filter: brightness(1.45) contrast(0.82); }
+
+/* ── Add-hydrant active ripple — hydrant-shaped, short reach ── */
+@keyframes ping-hydrant {
+  0%   { scale: 1;    opacity: 0.55; }
+  100% { scale: 1.65; opacity: 0;    }
+}
+.hydrant-pin-ripple {
+  position: absolute;
+  pointer-events: none;
+  /* Sized and centered via inline style so it always matches the 48px image
+     regardless of the button's own dimensions. */
+  width: 3rem;
+  height: 3rem;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  background: #e0353b;
+  mask-image: url('/Hydrant%20Pin%20Red.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-image: url('/Hydrant%20Pin%20Red.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  animation: ping-hydrant 1.3s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
