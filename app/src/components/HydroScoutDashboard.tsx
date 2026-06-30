@@ -11,6 +11,7 @@ import ReportsPanel from './ReportsPanel';
 import AccountCenterModal from './AccountCenterModal';
 import UserProfileModal, { type ViewingUser } from './UserProfileModal';
 import OperationsDashboard from './OperationsDashboard';
+import AdminDashboard from './AdminDashboard';
 import PinHydrantModal from './PinHydrantModal';
 import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
@@ -47,6 +48,7 @@ export default function HydroScoutDashboard() {
   const [showReports, setShowReports] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [showOpsDashboard, setShowOpsDashboard] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [showPinHydrant,   setShowPinHydrant]   = useState(false);
   const [addHydrantMode,   setAddHydrantMode]   = useState(false);
   const [pendingLocation,  setPendingLocation]  = useState<{ lat: number; lng: number; address: string } | null>(null);
@@ -740,6 +742,7 @@ export default function HydroScoutDashboard() {
         onToggleReports={() => setShowReports((v) => !v)}
         onOpenAccount={handleOpenAccount}
         onOpenDashboard={() => setShowOpsDashboard(true)}
+        onOpenAdmin={() => setShowAdminDashboard(true)}
         addHydrantMode={addHydrantMode}
         onToggleAddHydrant={handleToggleAddHydrant}
         hasPendingReports={hasPendingReports}
@@ -996,6 +999,12 @@ export default function HydroScoutDashboard() {
           role={role}
           onClose={() => setShowOpsDashboard(false)}
         />
+      )}
+
+      {showAdminDashboard && (
+        <div className="anim-fade absolute inset-0 z-[6000] overflow-auto">
+          <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
+        </div>
       )}
 
       {viewingUser && (

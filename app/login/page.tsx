@@ -65,7 +65,7 @@ function LoginContent() {
 
   useEffect(() => {
     if (!loading && user) {
-      const next = searchParams.get("next") || "/dashboard";
+      const next = searchParams.get("next") || "/";
       // Refresh the session cookie in case it's missing/stale, then navigate.
       refreshSession().finally(() => router.replace(next));
     }
@@ -78,7 +78,7 @@ function LoginContent() {
 
     try {
       await login(email, password);
-      const next = searchParams.get("next") || "/dashboard";
+      const next = searchParams.get("next") || "/";
       router.push(next);
     } catch (err) {
       setError("Invalid email or password.");

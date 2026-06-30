@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -31,6 +30,7 @@ interface DashboardOverlayProps {
   onToggleReports: () => void;
   onOpenAccount: () => void;
   onOpenDashboard: () => void;
+  onOpenAdmin: () => void;
   addHydrantMode: boolean;
   onToggleAddHydrant: () => void;
   hasPendingReports: boolean;
@@ -61,6 +61,7 @@ export default function DashboardOverlay({
   onToggleReports,
   onOpenAccount,
   onOpenDashboard,
+  onOpenAdmin,
   addHydrantMode,
   onToggleAddHydrant,
   hasPendingReports,
@@ -75,7 +76,6 @@ export default function DashboardOverlay({
 }: DashboardOverlayProps) {
   const { user, role } = useAuth();
   const { isDark, toggleTheme } = useTheme();
-  const router = useRouter();
   const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
@@ -303,7 +303,7 @@ export default function DashboardOverlay({
                   />
                 )}
                 {role === 'admin' && (
-                  <MobileMenuRow label="Admin Dashboard" onClick={() => { setMobileMenuOpen(false); router.push('/admin'); }} accent
+                  <MobileMenuRow label="Admin Dashboard" onClick={() => { setMobileMenuOpen(false); onOpenAdmin(); }} accent
                     icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
                   />
                 )}
@@ -379,7 +379,7 @@ export default function DashboardOverlay({
             {role === 'admin' && (
               <div className="flex items-center border-l border-white/15 px-5">
                 <button
-                  onClick={() => router.push('/admin')}
+                  onClick={onOpenAdmin}
                   className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition-all duration-150 ease-out hover:scale-[1.04] hover:shadow-[0_4px_14px_rgba(224,53,59,0.5)] active:scale-[0.96] active:duration-75"
                   style={{ background: '#e0353b' }}
                 >

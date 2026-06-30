@@ -6,7 +6,8 @@
 // create / promote / demote / remove, and a bulk hydrant CSV importer that
 // parses + validates client-side before committing valid rows to Firestore.
 //
-// Reached via /admin (guarded by proxy.ts + the page's own role check).
+// Opened as an overlay from the map dashboard. The button that opens it is
+// only rendered for admins; Firestore security rules are the real enforcement.
 
 import { useMemo, useRef, useState, type DragEvent } from 'react';
 import { useAuth } from '@/lib/auth-context';

@@ -22,7 +22,8 @@ const ROUTE_RULES: { prefix: string; allowed: Role[] }[] = [
   { prefix: "/maintenance", allowed: ["head", "admin"] },
   { prefix: "/reports", allowed: ["head", "admin"] },
   { prefix: "/pins/new", allowed: ["authorized", "admin"] },
-  // Homepage and dashboard: auth enforced client-side (same as /admin).
+  // Homepage and admin: auth enforced client-side (admin is an overlay,
+  // gated by role + Firestore rules).
 ];
 
 function getSession(req: NextRequest): { uid: string; role: Role } | null {
