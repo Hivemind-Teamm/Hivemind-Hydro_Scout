@@ -34,6 +34,7 @@ interface DashboardOverlayProps {
   addHydrantMode: boolean;
   onToggleAddHydrant: () => void;
   hasPendingReports: boolean;
+  onTargetLocation: () => void;
   onFlyTo: (lat: number, lng: number, zoom?: number) => void;
   loading?: boolean;
   lastSynced?: Date | null;
@@ -65,6 +66,7 @@ export default function DashboardOverlay({
   addHydrantMode,
   onToggleAddHydrant,
   hasPendingReports,
+  onTargetLocation,
   onFlyTo,
   loading = false,
   lastSynced = null,
@@ -206,6 +208,11 @@ export default function DashboardOverlay({
                 <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e0353b] text-[9px] font-bold text-white">!</span>
               )}
             </div>
+          )}
+          {addHydrantMode && (
+            <ToolButton label="Pin at my location" onClick={onTargetLocation} rounded tooltipSide="left">
+              <TargetGlyph />
+            </ToolButton>
           )}
           <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide="left">
             <GpsGlyph />
@@ -508,6 +515,11 @@ export default function DashboardOverlay({
       <div className={`absolute bottom-6 right-6 z-[1000] flex flex-col items-end gap-3 ${isOtw ? 'w-72' : 'w-60'}`}>
         {/* GPS + 3D + theme buttons row — always visible */}
         <div className="pointer-events-auto flex gap-2">
+          {addHydrantMode && (
+            <ToolButton label="Pin at my location" onClick={onTargetLocation} rounded tooltipSide="top">
+              <TargetGlyph />
+            </ToolButton>
+          )}
           <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide="top">
             <GpsGlyph />
           </ToolButton>
@@ -839,6 +851,19 @@ function GpsGlyph() {
       <line x1="12" y1="19" x2="12" y2="22" />
       <line x1="2" y1="12" x2="5" y2="12" />
       <line x1="19" y1="12" x2="22" y2="12" />
+    </svg>
+  );
+}
+
+function TargetGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" {...stroke}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3" />
+      <line x1="12" y1="2" x2="12" y2="4" />
+      <line x1="12" y1="20" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="4" y2="12" />
+      <line x1="20" y1="12" x2="22" y2="12" />
     </svg>
   );
 }

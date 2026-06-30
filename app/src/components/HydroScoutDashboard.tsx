@@ -543,6 +543,40 @@ export default function HydroScoutDashboard() {
     }
   }, []);
 
+  const handleTargetLocation = useCallback(() => {
+    if (userLocation) {
+      handleMapClick(userLocation.lat, userLocation.lng);
+      return;
+    }
+    if (!('geolocation' in navigator)) {
+      showGeoError('Geolocation is not supported by this browser.');
+      return;
+    }
+    if (!window.isSecureContext) {
+      showGeoError('Location needs a secure connection. Open the app over HTTPS or http://localhost.');
+      return;
+    }
+    const onSuccess = (pos: GeolocationPosition) => {
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setUserLocation(loc);
+      handleMapClick(loc.lat, loc.lng);
+    };
+    const onFinalError = (err: GeolocationPositionError) => {
+      showGeoError(
+        err.code === err.PERMISSION_DENIED
+          ? 'Location permission is blocked. Enable it in your browser settings.'
+          : err.code === err.POSITION_UNAVAILABLE
+          ? 'Could not get a location fix. Try again on a device with GPS.'
+          : 'Could not determine your location. Please try again.',
+      );
+    };
+    navigator.geolocation.getCurrentPosition(onSuccess, onFinalError, {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 30000,
+    });
+  }, [userLocation, handleMapClick, showGeoError]);
+
   // Handle nearest hydrant selection — fly map to it
   const handleNearestHydrantSelect = useCallback((hydrant: RankedHydrant | null) => {
     setNearestHydrant(hydrant);
@@ -746,6 +780,7 @@ export default function HydroScoutDashboard() {
         addHydrantMode={addHydrantMode}
         onToggleAddHydrant={handleToggleAddHydrant}
         hasPendingReports={hasPendingReports}
+        onTargetLocation={handleTargetLocation}
         loading={loading}
         lastSynced={lastSynced}
         isOtw={!!otwHydrant}
