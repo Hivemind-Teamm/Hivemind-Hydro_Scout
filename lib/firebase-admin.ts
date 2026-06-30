@@ -18,5 +18,9 @@ export function adminApp(): App {
     );
   }
   const serviceAccount = JSON.parse(raw);
+  // Vercel double-escapes \n in env vars; restore actual newlines in the private key.
+  if (typeof serviceAccount.private_key === 'string') {
+    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  }
   return initializeApp({ credential: cert(serviceAccount) });
 }
