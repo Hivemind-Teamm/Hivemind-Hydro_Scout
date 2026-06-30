@@ -19,7 +19,6 @@ const ALL_ROLES: Role[] = ["general", "authorized", "head", "admin"];
 // Add new protected routes here as the app grows. Order matters: the
 // FIRST matching rule wins, so put more specific prefixes before "/".
 const ROUTE_RULES: { prefix: string; allowed: Role[] }[] = [
-  { prefix: "/admin", allowed: ["admin"] },
   { prefix: "/maintenance", allowed: ["head", "admin"] },
   { prefix: "/reports", allowed: ["head", "admin"] },
   { prefix: "/pins/new", allowed: ["authorized", "admin"] },
