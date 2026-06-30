@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
 import { STATUS_COLORS, type ReportStatus, type Report } from '../data/reports';
-import { updateReportStatus } from '../data/store';
+import { updateReportStatus, deleteReport } from '../data/store';
+import PillBadge from './PillBadge';
 
 type Filter = 'all' | ReportStatus;
 
@@ -90,7 +91,12 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
   const { user, role } = useAuth();
   const sc = STATUS_COLORS[report.status];
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const isAdmin = role === 'admin';
+  const isClosed = report.status === 'resolved' || report.status === 'denied';
 
   const resolverName = user?.displayName
     || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Head');
@@ -112,6 +118,19 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
     }
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    setErr(null);
+    try {
+      await deleteReport(report.hydrantId, report.firestoreId);
+      // Live subscription removes the card on success — no local cleanup needed.
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed to delete.');
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
   return (
     <div
       className="px-4 py-3"
@@ -119,12 +138,7 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
     >
       <div className="mb-1 flex items-start justify-between gap-2">
         <span className="text-[10px] font-bold text-[#e0353b]">{report.id}</span>
-        <span
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
-          style={{ background: sc.badge, color: sc.text }}
-        >
-          {sc.label}
-        </span>
+        <PillBadge dot={sc.border} color={sc.text} label={sc.label} />
       </div>
       <p className="mb-1 text-xs font-semibold text-neutral-800 leading-snug dark:text-neutral-100">{report.title}</p>
       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">{report.location}</p>
@@ -156,7 +170,45 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
           </button>
         </div>
       )}
+      {/* Admin-only: permanently remove a closed (resolved/denied) report. */}
+      {isAdmin && isClosed && (
+        confirmDelete ? (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="flex-1 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">Remove permanently?</span>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="rounded px-2.5 py-1 text-[10px] font-bold bg-[#fce8e9] text-[#e0353b] transition-all duration-150 ease-out hover:bg-[#f9d0d2] active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {deleting ? '…' : 'Confirm'}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              className="rounded px-2.5 py-1 text-[10px] font-bold text-neutral-500 hover:bg-neutral-100 active:scale-[0.97] disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-neutral-800"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="mt-2 flex items-center gap-1 text-[10px] font-bold text-neutral-400 transition-colors hover:text-[#e0353b] dark:text-neutral-500 dark:hover:text-[#e0353b]"
+          >
+            <TrashIcon /> Remove report
+          </button>
+        )
+      )}
       {err && <p className="mt-1 text-[10px] text-[#e0353b] dark:text-[#e0353b]">{err}</p>}
     </div>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
   );
 }

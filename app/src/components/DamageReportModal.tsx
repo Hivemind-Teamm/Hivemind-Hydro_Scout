@@ -1,9 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
+import { proxiedPhotoUrl } from '@/lib/photo-url';
+import { useStorageConsent } from '@/lib/use-storage-consent';
+import StorageConsentModal from './StorageConsentModal';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { createReport } from '../data/store';
 
@@ -40,14 +43,46 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
   const [damageType, setDamageType] = useState(DAMAGE_TYPES[0]);
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { requestConsent, modalOpen: consentOpen, handleAllow, handleDecline } = useStorageConsent();
 
   const meta = STATUS_META[hydrant.status];
   const displayName = user?.email ? user.email.replace('@', ' ').split(' ')[0] : 'Unknown';
   const roleLabel = role ? (ROLE_LABELS[role] ?? role) : 'Authorized User';
   const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace(/\//g, '/');
   const lastInspection = hydrant.register[0]?.date.split(' ')[0] ?? '—';
+
+  // Upload each picked image to Cloudinary (under this hydrant's folder) and
+  // keep the returned URLs in state; they're saved with the report on Submit.
+  async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('hydrantId', hydrant.id);
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Upload failed.');
+        setPhotos((p) => [...p, data.url as string]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function handlePhotoRemove(index: number) {
+    setPhotos((p) => p.filter((_, i) => i !== index));
+  }
 
   async function handleSubmit() {
     if (!user) { setError('You must be signed in to file a report.'); return; }
@@ -60,6 +95,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
         location: hydrant.name,
         reporter: displayName,
         role: roleLabel,
+        photos,
       });
       onClose();
     } catch (e) {
@@ -70,7 +106,9 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
   }
 
   return (
-    // Backdrop
+    <>
+    {consentOpen && <StorageConsentModal onAllow={handleAllow} onDecline={handleDecline} />}
+    {/* Backdrop */}
     <div className="anim-fade pointer-events-auto absolute inset-0 z-[4000] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="anim-fade-scale relative flex h-[90vh] max-h-[600px] w-[90vw] max-w-[720px] overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
@@ -181,18 +219,42 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
 
             {/* Photo Evidence */}
             <p className="mb-2 text-xs font-bold text-[#e0353b] dark:text-[#e0353b]">Photo Evidence</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.heic,.heif"
+              multiple
+              onChange={handleFilesSelected}
+              className="hidden"
+            />
             <button
-              onClick={() => setPhotos((p) => [...p, ''])}
-              className="mb-3 flex h-20 w-full items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-2xl text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700"
+              onClick={async () => { if (await requestConsent()) fileInputRef.current?.click(); }}
+              disabled={uploading}
+              className="mb-3 flex h-20 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 text-sm font-semibold text-neutral-400 hover:border-neutral-400 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:border-neutral-500 dark:hover:bg-neutral-700"
             >
-              +
+              {uploading ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-[#e0353b]" />
+                  Uploading…
+                </>
+              ) : (
+                <><span className="text-2xl leading-none">+</span> Add Photo</>
+              )}
             </button>
             {photos.length > 0 && (
               <div className="mb-4 flex flex-wrap gap-2">
-                {photos.map((_, i) => (
-                  <div key={i} className="relative flex h-14 w-14 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-800">
-                    <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#e0353b]" />
-                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500">Photo</span>
+                {photos.map((url, i) => (
+                  <div key={url} className="group relative h-14 w-14 overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={proxiedPhotoUrl(url)} alt={`Evidence ${i + 1}`} className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => handlePhotoRemove(i)}
+                      title="Remove photo"
+                      className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      ✕
+                    </button>
                   </div>
                 ))}
               </div>
@@ -211,7 +273,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={saving}
+                  disabled={saving || uploading}
                   className="rounded-lg bg-[#e0353b] px-6 py-2 text-sm font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.02] hover:shadow-[0_4px_14px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75 disabled:opacity-60 disabled:pointer-events-none"
                 >
                   {saving ? 'Submitting…' : 'Submit'}
@@ -222,6 +284,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
         </div>
       </div>
     </div>
+    </>
   );
 }
 

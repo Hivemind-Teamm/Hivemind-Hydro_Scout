@@ -23,6 +23,7 @@ import {
 } from '../data/users';
 import { useHydrants, createHydrant } from '../data/store';
 import { type HydrantStatus } from '../data/hydrants';
+import PillBadge from './PillBadge';
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
@@ -239,7 +240,6 @@ function UserRow({
   onEdit: () => void;
   onRemove: () => void;
 }) {
-  const meta = ROLE_META[user.role];
   return (
     <tr className="border-b border-neutral-100 last:border-0 transition-colors hover:bg-neutral-50/60 dark:border-neutral-800 dark:hover:bg-neutral-800/40">
       {/* User */}
@@ -259,12 +259,7 @@ function UserRow({
       </td>
       {/* Role */}
       <td className="px-3 py-3">
-        <span
-          className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold"
-          style={{ background: meta.badgeBg, color: meta.badgeText }}
-        >
-          {meta.label}
-        </span>
+        <RoleBadge role={user.role} />
       </td>
       {/* Station */}
       <td className="px-3 py-3 text-sm text-neutral-600 dark:text-neutral-300">{user.station}</td>
@@ -299,6 +294,13 @@ function UserRow({
       </td>
     </tr>
   );
+}
+
+// Role indicator: a colored status dot + uppercase label on a thin tinted,
+// fully-rounded chip. Shares its look with the report-status tags via PillBadge.
+function RoleBadge({ role }: { role: UserRole }) {
+  const meta = ROLE_META[role];
+  return <PillBadge dot={meta.dot} color={meta.badgeText} label={meta.label} />;
 }
 
 function SkeletonRows() {

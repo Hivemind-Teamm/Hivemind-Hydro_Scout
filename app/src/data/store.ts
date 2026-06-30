@@ -162,6 +162,7 @@ export interface CreateReportInput {
   location: string;       // hydrant name / address
   reporter: string;
   role: string;
+  photos?: string[];      // Cloudinary secure URLs of the attached evidence
 }
 
 // Files a damage report into hydrants/{id}/reports.
@@ -173,9 +174,17 @@ export async function createReport(hydrantId: string, input: CreateReportInput):
     location: input.location,
     reporter: input.reporter,
     role: input.role,
+    photos: input.photos ?? [],
     status: 'pending',
     createdAt: serverTimestamp(),
   });
+}
+
+// Permanently removes a report from hydrants/{id}/reports (head / admin only —
+// enforced by firestore.rules). Used by admins to clear out resolved/denied
+// reports that no longer need to stay in the register.
+export async function deleteReport(hydrantId: string, firestoreId: string): Promise<void> {
+  await deleteDoc(doc(db, 'hydrants', hydrantId, 'reports', firestoreId));
 }
 
 /* ───────────────────────────── Create hydrant ──────────────────────────── */

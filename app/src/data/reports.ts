@@ -51,12 +51,24 @@ function toDateTime(value: unknown, fallbackDate?: string, fallbackTime?: string
   return { date: fallbackDate ?? '—', time: fallbackTime ?? '' };
 }
 
+// Builds a clean, human-readable report reference (e.g. "RPT-3JMTH67") instead
+// of exposing the raw Firestore document key. Prefers an explicit reportNo when
+// one was assigned; otherwise derives a stable, professional-looking code from
+// the document id so the Reports register never shows a database key.
+function displayReportId(reportNo: unknown, firestoreId: string): string {
+  if (reportNo !== undefined && reportNo !== null && String(reportNo).trim()) {
+    return String(reportNo);
+  }
+  const slug = firestoreId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(-7);
+  return `RPT-${slug || firestoreId.toUpperCase()}`;
+}
+
 // Maps a raw Firestore report document → the UI `Report` view-model.
 export function reportFromDoc(id: string, hydrantId: string, d: DocumentData): Report {
   const { date, time } = toDateTime(d.createdAt, d.date, d.time);
   const title = d.title ?? d.damageType ?? 'Reported issue';
   return {
-    id: d.reportNo ?? id,
+    id: displayReportId(d.reportNo, id),
     firestoreId: id,
     hydrantId,
     title,

@@ -9,6 +9,7 @@ import { type Report, STATUS_COLORS } from '../data/reports';
 import { formatDistance } from '@/lib/haversine';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { deleteHydrantPhoto, setDisplayPhoto, validateHydrant, flagForReinspection, deleteHydrant } from '../data/store';
+import PillBadge from './PillBadge';
 
 type Tab = 'quick' | 'details' | 'log' | 'admin';
 
@@ -484,12 +485,7 @@ function MaintenanceTab({ hydrant, linkedReports, onViewUser }: {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">{r.title}</p>
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                      style={{ background: c.badge, color: c.text }}
-                    >
-                      {c.label}
-                    </span>
+                    <PillBadge dot={c.border} color={c.text} label={c.label} />
                   </div>
                   <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
                     {r.id} · filed by{' '}
