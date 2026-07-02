@@ -51,13 +51,10 @@ service cloud.firestore {
 
       allow create: if isAuthorized() || isHead() || isAdmin();
 
+      // Only head and admin may edit an existing hydrant's status/details.
+      // Authorized users may still create hydrants and file damage reports
+      // (see the /reports subcollection below), just not edit directly.
       allow update: if isAdmin()
-        || (isAuthorized() && onlyChangedFields([
-              'status', 'operationalStatus', 'notes', 'fieldNotes', 'register',
-              'photoURL', 'photoUrl', 'photos', 'hazardFlags', 'hazards',
-              'pressureStatus', 'waterCleanliness',
-              'updatedBy', 'updatedAt'
-            ]))
         || (isHead() && onlyChangedFields([
               'operationalStatus', 'pressureStatus', 'waterCleanliness',
               'hazards', 'photos', 'notes', 'fieldNotes', 'register',

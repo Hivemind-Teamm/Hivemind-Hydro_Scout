@@ -39,7 +39,7 @@ export default function HydrantInfoPanel({
   const { role } = useAuth();
   const isMobile = useIsMobile();
   const meta = STATUS_META[hydrant.status];
-  const canEdit   = role === 'authorized' || role === 'head' || role === 'admin';
+  const canEdit   = role === 'head' || role === 'admin';
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
 
   // Touch device (phone / tablet) = primary pointer is coarse (finger).
