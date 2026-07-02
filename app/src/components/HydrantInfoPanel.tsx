@@ -17,6 +17,8 @@ interface HydrantInfoPanelProps {
   onRoute: () => void;
   onRouteDismiss: () => void;
   isOtw: boolean;
+  /** True while the route is toggled on but the directions are still loading. */
+  routeCalculating?: boolean;
   /** Forwarded to the inner scrollable div — used by the map scroll-mode gesture. */
   scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
@@ -32,7 +34,7 @@ type FlashState = 'idle' | 'red1' | 'off1' | 'red2' | 'active';
 
 export default function HydrantInfoPanel({
   hydrant, onClose, onOpenFullDetails, onEdit, onReport,
-  onFlyTo, onRoute, onRouteDismiss, isOtw, scrollRef,
+  onFlyTo, onRoute, onRouteDismiss, isOtw, routeCalculating = false, scrollRef,
 }: HydrantInfoPanelProps) {
   const { role } = useAuth();
   const isMobile = useIsMobile();
@@ -287,6 +289,13 @@ export default function HydrantInfoPanel({
               </button>
             )}
           </div>
+
+          {routeCalculating && (
+            <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-[#e0353b]">
+              <span className="h-3 w-3 rounded-full border-2 border-[#e0353b]/30 border-t-[#e0353b] anim-spin" />
+              Calculating route…
+            </div>
+          )}
 
           <button
             className="mt-2 w-full text-center text-xs text-[#e0353b] hover:underline"

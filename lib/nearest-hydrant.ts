@@ -32,8 +32,10 @@ export interface NearestHydrantResult {
 
 const RADIUS_METRES = 2000;
 const HAVERSINE_PREFILTER_METRES = 4000;
-const ISOCHRONE_PROFILE = 'mapbox/walking';
-const ISOCHRONE_MINUTES = 24;
+const ISOCHRONE_PROFILE = 'mapbox/driving';
+// Minutes tuned so the DRIVING isochrone roughly matches the 2 km radius
+// (~25 km/h city driving → ~2 km in 5 min). Walking previously used 24 min.
+const ISOCHRONE_MINUTES = 5;
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '';
 
 // ─── Haversine ────────────────────────────────────────────────────────────────

@@ -414,11 +414,6 @@ body {
     linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85) 25%, rgba(255, 255, 255, 0.85) 75%, transparent);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .hydrant-spout { display: none; }
-  .hydrant-slice .cut { animation: none; }
-}
-
 /* ── Add-hydrant active ripple — hydrant-shaped, short reach ── */
 @keyframes ping-hydrant {
   0%   { scale: 1;    opacity: 0.55; }

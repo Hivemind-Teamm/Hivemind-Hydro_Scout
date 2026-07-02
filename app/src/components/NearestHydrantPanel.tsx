@@ -181,7 +181,7 @@ export default function NearestHydrantPanel({
                             <IconLocation />{formatDistance(hydrant.sortDistance)}
                           </span>
                           {hydrant.travelMetres !== null && (
-                            <span className="text-[11px] text-neutral-400 dark:text-neutral-500">walking est.</span>
+                            <span className="text-[11px] text-neutral-400 dark:text-neutral-500">driving est.</span>
                           )}
                         </div>
                       </div>
@@ -202,7 +202,7 @@ export default function NearestHydrantPanel({
           {/* Footer */}
           {result && !result.noHydrantsFound && (
             <div className="flex items-center gap-1.5 border-t border-neutral-100 bg-neutral-50 px-4 py-2 text-[11px] text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500">
-              <FiMap className="h-3 w-3 shrink-0" /> Distances via Mapbox walking isochrone
+              <FiMap className="h-3 w-3 shrink-0" /> Distances via Mapbox driving isochrone
             </div>
           )}
         </div>

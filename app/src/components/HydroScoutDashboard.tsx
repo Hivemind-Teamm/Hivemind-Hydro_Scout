@@ -23,7 +23,7 @@ import {
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
-import { haversineM, formatDistance, distToRouteM } from '@/lib/haversine';
+import { haversineM, formatDistance, formatDuration, distToRouteM } from '@/lib/haversine';
 import { type RankedHydrant } from '@/lib/nearest-hydrant';
 import { playHazardChime } from '@/lib/chime';
 
@@ -180,8 +180,8 @@ export default function HydroScoutDashboard() {
 
     // Mapbox Directions: request duration + distance in addition to geometry
     const url = token
-      ? `https://api.mapbox.com/directions/v5/mapbox/walking/${coords}?geometries=geojson&overview=full&annotations=duration,distance&access_token=${token}`
-      : `https://router.project-osrm.org/route/v1/foot/${coords}?geometries=geojson&overview=full`;
+      ? `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&annotations=duration,distance&access_token=${token}`
+      : `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`;
 
     fetch(url)
       .then((r) => {
@@ -799,8 +799,9 @@ export default function HydroScoutDashboard() {
         onHazardPanelMinimizedChange={setHazardPanelMinimized}
       />
 
-      {/* ── Nearest Hydrant Panel — bottom-left, above map, below modals ── */}
-      <div style={{ position: "absolute", bottom: 32, left: 16, zIndex: 1100, pointerEvents: "none" }}>
+      {/* ── Nearest Hydrant Panel — bottom-left, above map, below modals ──
+          Raised further up on mobile so it clears the Mapbox attribution bar. */}
+      <div style={{ position: "absolute", bottom: isMobile ? 72 : 32, left: 16, zIndex: 1100, pointerEvents: "none" }}>
         <NearestHydrantPanel
           userPosition={userLocation}
           onHydrantSelect={handleNearestHydrantSelect}
@@ -836,9 +837,7 @@ export default function HydroScoutDashboard() {
                   <span className="text-xs font-bold text-white">{formatDistance(otwMeta.distanceM)}</span>
                   <span className="text-red-400 text-xs">·</span>
                   <span className="text-xs font-bold text-emerald-300">
-                    {otwMeta.durationS < 60
-                      ? `${otwMeta.durationS}s`
-                      : `${Math.round(otwMeta.durationS / 60)} min`}
+                    {formatDuration(otwMeta.durationS)}
                   </span>
                 </>
               ) : userLocation ? (
@@ -891,9 +890,7 @@ export default function HydroScoutDashboard() {
                 <span className="text-xs font-bold text-white">{formatDistance(otwMeta.distanceM)}</span>
                 <span className="text-red-400 text-xs">·</span>
                 <span className="text-xs font-bold text-emerald-300">
-                  {otwMeta.durationS < 60
-                    ? `${otwMeta.durationS}s`
-                    : `${Math.round(otwMeta.durationS / 60)} min`}
+                  {formatDuration(otwMeta.durationS)}
                 </span>
               </>
             ) : userLocation ? (
@@ -983,6 +980,7 @@ export default function HydroScoutDashboard() {
           onRoute={handleRoute}
           onRouteDismiss={handleRouteDismiss}
           isOtw={otwHydrant?.id === selectedHydrant?.id}
+          routeCalculating={otwHydrant?.id === selectedHydrant?.id && !otwMeta}
           scrollRef={panelScrollRef}
         />
       )}

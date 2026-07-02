@@ -12,6 +12,18 @@ export function formatDistance(m: number): string {
   return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`;
 }
 
+// Human-readable travel time. Under a minute → seconds; under an hour → minutes;
+// once it hits 60 min it rolls into hours (e.g. "2h 27m") instead of a runaway
+// minute count like "147 min".
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const totalMin = Math.round(seconds / 60);
+  if (totalMin < 60) return `${totalMin} min`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 // Minimum distance in metres from a point to a GeoJSON polyline ([lng,lat][] coords).
 export function distToRouteM(lat: number, lng: number, route: [number, number][]): number {
   let min = Infinity;
