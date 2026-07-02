@@ -13,6 +13,7 @@ import {
 import { HYDRANT_PIN_FILTER } from './hydrantIcon';
 import OtwHazardPanel from './OtwHazardPanel';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
+import { FiAlertTriangle } from 'react-icons/fi';
 
 interface DashboardOverlayProps {
   activeStatus: HydrantStatus | null;
@@ -172,7 +173,7 @@ export default function DashboardOverlay({
             style={{ bottom: '5.5rem' }}
             aria-label="Show hazards panel"
           >
-            <span className="text-sm leading-none mb-1.5">⚠️</span>
+            <FiAlertTriangle className="mb-1.5 h-4 w-4 text-white" />
             {routeHazards.length > 0 && (
               <span className="mb-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white/25 text-[9px] font-bold text-white">
                 {routeHazards.length}
@@ -612,6 +613,8 @@ function LocationSearch({ onFlyTo, mobile = false }: { onFlyTo: (lat: number, ln
   // Debounced geocode fetch
   useEffect(() => {
     const q = query.trim();
+    // Debounced geocode search: clear stale results as the query is typed.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (q.length < 2) { setResults([]); setOpen(false); return; }
     const timer = setTimeout(async () => {
       setLoading(true);

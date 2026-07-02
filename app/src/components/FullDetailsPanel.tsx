@@ -10,6 +10,7 @@ import { formatDistance } from '@/lib/haversine';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { deleteHydrantPhoto, setDisplayPhoto, validateHydrant, flagForReinspection, deleteHydrant } from '../data/store';
 import PillBadge from './PillBadge';
+import { FiX, FiCheck, FiInfo } from 'react-icons/fi';
 
 type Tab = 'quick' | 'details' | 'log' | 'admin';
 
@@ -127,9 +128,10 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 
         <button
           onClick={onClose}
-          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-neutral-700 hover:scale-110 active:scale-90 active:duration-75 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-400 transition-all duration-150 ease-out hover:bg-neutral-100 hover:text-neutral-700 hover:scale-110 active:scale-90 active:duration-75 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+          aria-label="Close"
         >
-          ✕
+          <FiX className="h-4 w-4" strokeWidth={2.5} />
         </button>
       </div>
 
@@ -384,7 +386,7 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
           ))}
         </div>
         <div className="mt-4 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-          <span className="mt-0.5 shrink-0">ⓘ</span>
+          <FiInfo className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>Inspector names stay visible to logged-in users (lawful under RA 10173) so inspectors can confirm their own work. Entries are immutable once signed.</p>
         </div>
       </div>
@@ -505,7 +507,7 @@ function MaintenanceTab({ hydrant, linkedReports, onViewUser }: {
       </div>
 
       <div className="mt-4 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-        <span className="mt-0.5 shrink-0">ⓘ</span>
+        <FiInfo className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <p>Sign-off names stay visible to logged-in users (lawful under RA 10173) for accountability. History entries are immutable once recorded.</p>
       </div>
     </div>
@@ -568,8 +570,8 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
               {[
                 { label: 'Internal ID',     value: hydrant.id },
                 { label: 'Data Source',     value: 'Field survey' },
-                { label: 'GPS Complete',    value: '✓ Yes',      green: true },
-                { label: 'Required Fields', value: '✓ Complete', green: true },
+                { label: 'GPS Complete',    value: <><FiCheck className="inline h-3 w-3" strokeWidth={3} /> Yes</>,      green: true },
+                { label: 'Required Fields', value: <><FiCheck className="inline h-3 w-3" strokeWidth={3} /> Complete</>, green: true },
                 { label: 'Validation',      value: 'No follow-up needed' },
               ].map((r, i) => (
                 <tr key={i} className={i % 2 === 0 ? 'bg-neutral-50 dark:bg-neutral-700/60' : ''}>
@@ -593,7 +595,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
               disabled={validating || validated}
               className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] hover:bg-neutral-50 active:scale-[0.98] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
             >
-              {validating ? 'Validating…' : validated ? '✓ Record Validated' : 'Validate Hydrant Record'}
+              {validating ? 'Validating…' : validated ? <span className="inline-flex items-center gap-1"><FiCheck className="h-3.5 w-3.5" strokeWidth={3} /> Record Validated</span> : 'Validate Hydrant Record'}
             </button>
 
             {/* Flag for Re-inspection */}
@@ -602,7 +604,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
               disabled={flagging || flagged}
               className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] hover:bg-neutral-50 active:scale-[0.98] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
             >
-              {flagging ? 'Flagging…' : flagged ? '✓ Flagged for Re-inspection' : 'Flag for Re-inspection'}
+              {flagging ? 'Flagging…' : flagged ? <span className="inline-flex items-center gap-1"><FiCheck className="h-3.5 w-3.5" strokeWidth={3} /> Flagged for Re-inspection</span> : 'Flag for Re-inspection'}
             </button>
 
             {/* Decommission — with inline confirmation */}

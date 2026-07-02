@@ -35,8 +35,14 @@ const ROUTE_BUFFER_M   = 300;
 const ROUTE_CORRIDOR_M = 300;
 
 export default function HydroScoutDashboard() {
-  const [provider, setProvider] = useState<MapProvider>('mapbox');
-  const [autoFallback, setAutoFallback] = useState(false);
+  // Start on Leaflet/OSM immediately when no Mapbox token is configured, so we
+  // never flash a broken Mapbox render before an effect can fall back.
+  const [provider, setProvider] = useState<MapProvider>(
+    () => (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ? 'mapbox' : 'leaflet'),
+  );
+  const [autoFallback, setAutoFallback] = useState(
+    () => !process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+  );
   const [userOverride, setUserOverride] = useState(false);
   const [mapViewport, setMapViewport] = useState<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const [is3D, setIs3D] = useState(false);
@@ -107,6 +113,9 @@ export default function HydroScoutDashboard() {
   }, [loading, mapReady]);
 
   useEffect(() => {
+    // Stamp the sync time whenever the live hydrant feed delivers new data —
+    // this is inherently a reaction to an external subscription, not derivable.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!loading) setLastSynced(new Date());
   }, [loading, hydrants]);
 
@@ -134,6 +143,8 @@ export default function HydroScoutDashboard() {
       localStorage.removeItem(OTW_ROUTE_KEY);
       return;
     }
+    // One-time restore of persisted OTW state after the hydrant list loads.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOtwHydrant(hydrant);
     const savedRoute = localStorage.getItem(OTW_ROUTE_KEY);
     if (savedRoute) {
@@ -146,6 +157,8 @@ export default function HydroScoutDashboard() {
 
   useEffect(() => {
     if (!otwHydrant || !userLocation) {
+      // Clear stale route state when the OTW target or GPS fix goes away.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOtwRoute(null);
       setOtwMeta(null);
       otwFetchedForRef.current = null;
@@ -202,13 +215,6 @@ export default function HydroScoutDashboard() {
     controllerRef.current?.setZoomLimits(OTW_MIN_ZOOM, OTW_MAX_ZOOM);
     controllerRef.current?.fitRoute(otwRoute);
   }, [otwRoute]);
-
-  useEffect(() => {
-    if (!process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
-      setAutoFallback(true);
-      setProvider('leaflet');
-    }
-  }, []);
 
   const handleMapboxError = useCallback(
     (error: unknown) => {
@@ -381,6 +387,8 @@ export default function HydroScoutDashboard() {
     const fresh = hydrants.find((h) => h.id === selectedHydrant.id);
     if (!fresh) {
       const removed = { id: selectedHydrant.id, name: selectedHydrant.name };
+      // React to the selected hydrant being deleted from the live feed.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedHydrant(null);
       setShowFullDetails(false);
       setShowEdit(false);
@@ -417,6 +425,7 @@ export default function HydroScoutDashboard() {
 
   // Reset the hazard panel back to expanded whenever OTW mode ends.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!otwHydrant) setHazardPanelMinimized(false);
   }, [otwHydrant]);
 

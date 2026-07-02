@@ -1,15 +1,18 @@
 'use client';
 
 import { type Hydrant } from '../data/hydrants';
+import { type IconType } from 'react-icons';
+import { FiSlash, FiAlertTriangle } from 'react-icons/fi';
+import { MdFireTruck } from 'react-icons/md';
 
 interface OtwHazardPanelProps {
   hazards: Hydrant[];
   onSelectHydrant: (hydrant: Hydrant) => void;
 }
 
-const HAZARD_META: Record<string, { label: string; color: string; icon: string }> = {
-  out:     { label: 'Out of Service',   color: '#9aa0a6', icon: '🚫' },
-  reduced: { label: 'Reduced Pressure', color: '#f59e0b', icon: '⚠️' },
+const HAZARD_META: Record<string, { label: string; color: string; Icon: IconType }> = {
+  out:     { label: 'Out of Service',   color: '#9aa0a6', Icon: FiSlash },
+  reduced: { label: 'Reduced Pressure', color: '#f59e0b', Icon: FiAlertTriangle },
 };
 
 export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPanelProps) {
@@ -20,7 +23,7 @@ export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPa
     return (
       <div className="w-full pointer-events-auto overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.18)] backdrop-blur dark:border-neutral-700/60 dark:bg-neutral-900 dark:shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
         <div className="flex items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-3.5 py-2.5 dark:border-neutral-800 dark:bg-neutral-800/50">
-          <span className="text-sm leading-none">🚒</span>
+          <MdFireTruck className="h-4 w-4 shrink-0 text-neutral-700 dark:text-neutral-200" />
           <p className="text-xs font-bold text-neutral-700 dark:text-neutral-200 leading-none">En Route</p>
         </div>
         <p className="px-3.5 py-3 text-xs text-neutral-400 dark:text-neutral-500">No hazards along your route.</p>
@@ -33,7 +36,7 @@ export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPa
 
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-neutral-200 bg-[#FED42E]/10 px-3.5 py-2.5 dark:border-neutral-700">
-        <span className="text-sm leading-none">⚠️</span>
+        <FiAlertTriangle className="h-4 w-4 shrink-0 text-[#FED42E]" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-bold text-[#FED42E] leading-none">Route Hazards Detected</p>
           <p className="mt-0.5 text-[10px] leading-none text-neutral-500 dark:text-neutral-400">
@@ -63,8 +66,8 @@ export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPa
                   <p className="truncate text-xs font-semibold text-neutral-800 dark:text-neutral-100">
                     {h.name}
                   </p>
-                  <p className="mt-0.5 text-[10px] font-semibold" style={{ color: m.color }}>
-                    {m.icon} {m.label}
+                  <p className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold" style={{ color: m.color }}>
+                    <m.Icon className="h-2.5 w-2.5 shrink-0" /> {m.label}
                   </p>
                   {h.hazard && h.hazard !== 'None' && (
                     <p className="mt-0.5 truncate text-[10px] text-neutral-400 dark:text-neutral-500">
@@ -82,8 +85,8 @@ export default function OtwHazardPanel({ hazards, onSelectHydrant }: OtwHazardPa
       </ul>
 
       {/* Footer */}
-      <div className="flex items-center gap-1 border-t border-neutral-100 bg-neutral-50 px-3.5 py-2 text-[10px] text-neutral-400 dark:border-neutral-800 dark:bg-neutral-800/50 dark:text-neutral-500">
-        🚒 Tap a hydrant to view details and find an alternative
+      <div className="flex items-center gap-1.5 border-t border-neutral-100 bg-neutral-50 px-3.5 py-2 text-[10px] text-neutral-400 dark:border-neutral-800 dark:bg-neutral-800/50 dark:text-neutral-500">
+        <MdFireTruck className="h-3 w-3 shrink-0" /> Tap a hydrant to view details and find an alternative
       </div>
     </div>
   );

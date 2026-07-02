@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { FiX } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 import { updatePassword } from 'firebase/auth';
 import { useAuth } from '@/lib/auth-context';
@@ -143,8 +144,9 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
         <button
           onClick={onClose}
           className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full text-red-200 transition-all duration-150 ease-out hover:scale-110 hover:bg-red-900 hover:text-white active:scale-90 active:duration-75"
+          aria-label="Close"
         >
-          ✕
+          <FiX className="h-4 w-4" strokeWidth={2.5} />
         </button>
 
         {/* Profile banner */}

@@ -1,5 +1,7 @@
 'use client';
 
+import { FiX } from 'react-icons/fi';
+
 const ROLE_COLORS: Record<string, string> = {
   Admin:             '#e0353b',
   Head:              '#7c3aed',
@@ -29,9 +31,10 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
         <div className="flex flex-col items-center gap-2 bg-[#e0353b] px-6 py-6">
           <button
             onClick={onClose}
-            className="absolute right-3 top-3 rounded-full p-1.5 text-red-200 hover:bg-red-900 hover:text-white"
+            className="absolute right-3 top-3 flex items-center justify-center rounded-full p-1.5 text-red-200 hover:bg-red-900 hover:text-white"
+            aria-label="Close"
           >
-            ✕
+            <FiX className="h-4 w-4" strokeWidth={2.5} />
           </button>
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xl font-extrabold text-[#e0353b]">
             {initials}

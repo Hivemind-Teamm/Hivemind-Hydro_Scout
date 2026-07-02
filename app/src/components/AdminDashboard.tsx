@@ -10,6 +10,7 @@
 // only rendered for admins; Firestore security rules are the real enforcement.
 
 import { useMemo, useRef, useState, type DragEvent } from 'react';
+import { FiX } from 'react-icons/fi';
 import { useAuth } from '@/lib/auth-context';
 import {
   useUsers,
@@ -892,7 +893,7 @@ function ModalShell({
             <h3 className="text-base font-extrabold text-white">{title}</h3>
             {subtitle && <p className="text-xs text-red-200">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-red-200 transition-all duration-150 ease-out hover:bg-red-900 hover:text-white hover:scale-110 active:scale-90 active:duration-75">✕</button>
+          <button onClick={onClose} aria-label="Close" className="flex items-center justify-center rounded-full p-1.5 text-red-200 transition-all duration-150 ease-out hover:bg-red-900 hover:text-white hover:scale-110 active:scale-90 active:duration-75"><FiX className="h-4 w-4" strokeWidth={2.5} /></button>
         </div>
         {children}
       </div>

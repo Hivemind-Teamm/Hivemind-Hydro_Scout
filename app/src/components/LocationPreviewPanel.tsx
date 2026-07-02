@@ -1,5 +1,7 @@
 'use client';
 
+import { FiX } from 'react-icons/fi';
+
 interface LocationPreviewPanelProps {
   lat: number;
   lng: number;
@@ -19,9 +21,10 @@ export default function LocationPreviewPanel({ lat, lng, address, onPinHydrant, 
         <span className="flex-1 text-sm font-bold text-white">New Hydrant Location</span>
         <button
           onClick={onDismiss}
-          className="rounded-full p-0.5 text-red-200 hover:bg-red-800 hover:text-white"
+          className="flex items-center justify-center rounded-full p-0.5 text-red-200 hover:bg-red-800 hover:text-white"
+          aria-label="Dismiss"
         >
-          ✕
+          <FiX className="h-4 w-4" strokeWidth={2.5} />
         </button>
       </div>
 

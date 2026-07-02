@@ -6,6 +6,7 @@ import { type Report } from '../data/reports';
 import { useAuth, type Role } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import PillBadge from './PillBadge';
+import { FiX, FiAlertTriangle } from 'react-icons/fi';
 
 interface Props {
   hydrants: Hydrant[];
@@ -401,7 +402,7 @@ function GeoPerformanceMap({
               {active.hazard && active.hazard !== 'None' && (
                 <>
                   <span className="text-neutral-400 dark:text-neutral-500">·</span>
-                  <span className="font-semibold text-[#f5a623]">⚠ {active.hazard}</span>
+                  <span className="inline-flex items-center gap-1 font-semibold text-[#f5a623]"><FiAlertTriangle className="h-3 w-3 shrink-0" /> {active.hazard}</span>
                 </>
               )}
             </div>
@@ -430,9 +431,9 @@ function GeoPerformanceMap({
         {selectedZone && (
           <button
             onClick={() => { onSelectZone(selectedZone); setActiveId(null); }}
-            className="ml-auto rounded-full bg-neutral-100 px-2.5 py-0.5 text-[11px] font-bold text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+            className="ml-auto inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-0.5 text-[11px] font-bold text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
           >
-            {selectedZone} · clear ✕
+            {selectedZone} · clear <FiX className="h-3 w-3" strokeWidth={2.5} />
           </button>
         )}
       </div>

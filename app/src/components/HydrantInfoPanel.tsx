@@ -5,6 +5,7 @@ import { useIsMobile } from '@/lib/use-media-query';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
+import { FiX } from 'react-icons/fi';
 
 interface HydrantInfoPanelProps {
   hydrant: Hydrant;
@@ -71,6 +72,8 @@ export default function HydrantInfoPanel({
 
   // Reset everything when a new hydrant is selected
   useEffect(() => {
+    // Deliberately resync local panel UI state to the newly selected hydrant.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPanelHeight(null);
     scaleModeRef.current = false;
     setScaleMode(false);
@@ -212,9 +215,9 @@ export default function HydrantInfoPanel({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="ml-2 mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-lg text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+          className="ml-2 mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
         >
-          ✕
+          <FiX className="h-4 w-4" strokeWidth={2.5} />
         </button>
       </div>
 

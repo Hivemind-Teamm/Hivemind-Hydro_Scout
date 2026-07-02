@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { findNearestHydrants, type RankedHydrant, type NearestHydrantResult } from '../../../lib/nearest-hydrant';
+import { FiAlertTriangle, FiSearch, FiMap } from 'react-icons/fi';
 
 const IconSearch = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -127,14 +128,14 @@ export default function NearestHydrantPanel({
           {/* Error */}
           {error && (
             <div className="flex items-start gap-2 px-4 py-3 text-xs text-amber-600 dark:text-amber-400">
-              <span>⚠️</span><span>{error}</span>
+              <FiAlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{error}</span>
             </div>
           )}
 
           {/* No hydrants */}
           {result?.noHydrantsFound && !error && (
             <div className="px-4 py-5 text-center">
-              <div className="mb-2 text-3xl">🔍</div>
+              <div className="mb-2 flex justify-center"><FiSearch className="h-7 w-7 text-neutral-400 dark:text-neutral-500" /></div>
               <p className="text-[13px] font-semibold text-neutral-800 dark:text-neutral-100">No operational hydrants nearby</p>
               <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">Nothing within 2 km of your location.</p>
               {result.ranked.length > 0 && (
@@ -200,8 +201,8 @@ export default function NearestHydrantPanel({
 
           {/* Footer */}
           {result && !result.noHydrantsFound && (
-            <div className="flex items-center gap-1 border-t border-neutral-100 bg-neutral-50 px-4 py-2 text-[11px] text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500">
-              🗺 Distances via Mapbox walking isochrone
+            <div className="flex items-center gap-1.5 border-t border-neutral-100 bg-neutral-50 px-4 py-2 text-[11px] text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500">
+              <FiMap className="h-3 w-3 shrink-0" /> Distances via Mapbox walking isochrone
             </div>
           )}
         </div>

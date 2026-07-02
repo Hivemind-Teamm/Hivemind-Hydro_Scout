@@ -8,6 +8,7 @@ import { updateHydrantStatus } from '../data/store';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { useStorageConsent } from '@/lib/use-storage-consent';
 import StorageConsentModal from './StorageConsentModal';
+import { FiX, FiLock } from 'react-icons/fi';
 
 const ROLE_LABELS: Record<string, string> = {
   general: 'General', authorized: 'Authorized', head: 'Head', admin: 'Admin',
@@ -115,9 +116,10 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
         </div>
         <button
           onClick={onClose}
-          className="mt-0.5 rounded-full p-1 text-red-200 transition-all duration-150 ease-out hover:bg-red-800 hover:text-white hover:scale-110 active:scale-90 active:duration-75"
+          className="mt-0.5 flex items-center justify-center rounded-full p-1 text-red-200 transition-all duration-150 ease-out hover:bg-red-800 hover:text-white hover:scale-110 active:scale-90 active:duration-75"
+          aria-label="Close"
         >
-          ✕
+          <FiX className="h-4 w-4" strokeWidth={2.5} />
         </button>
       </div>
 
@@ -202,9 +204,9 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
                   type="button"
                   onClick={() => handlePhotoRemove(i)}
                   title="Remove photo"
-                  className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
                 >
-                  ✕
+                  <FiX className="h-2.5 w-2.5" strokeWidth={3} />
                 </button>
               </div>
             ))}
@@ -240,7 +242,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
               <p className="text-neutral-500 dark:text-neutral-400">{timeStr}</p>
             </div>
             <div className="flex items-center gap-1 text-[10px] text-neutral-400 dark:text-neutral-500">
-              <span>🔒</span>
+              <FiLock className="h-2.5 w-2.5 shrink-0" />
               <span>Immutable once signed</span>
             </div>
           </div>

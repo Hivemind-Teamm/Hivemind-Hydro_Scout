@@ -9,6 +9,7 @@ import { useStorageConsent } from '@/lib/use-storage-consent';
 import StorageConsentModal from './StorageConsentModal';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { createReport } from '../data/store';
+import { FiX } from 'react-icons/fi';
 
 const ROLE_LABELS: Record<string, string> = {
   general: 'General User', authorized: 'Authorized User', head: 'Head', admin: 'Admin',
@@ -120,8 +121,8 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
               Authorized User
             </span>
           </div>
-          <button onClick={onClose} className="rounded-full p-1 text-red-200 transition-all duration-150 ease-out hover:bg-red-800 hover:text-white hover:scale-110 active:scale-90 active:duration-75">
-            ✕
+          <button onClick={onClose} aria-label="Close" className="flex items-center justify-center rounded-full p-1 text-red-200 transition-all duration-150 ease-out hover:bg-red-800 hover:text-white hover:scale-110 active:scale-90 active:duration-75">
+            <FiX className="h-4 w-4" strokeWidth={2.5} />
           </button>
         </div>
 
@@ -251,9 +252,9 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
                       type="button"
                       onClick={() => handlePhotoRemove(i)}
                       title="Remove photo"
-                      className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                      className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
                     >
-                      ✕
+                      <FiX className="h-2.5 w-2.5" strokeWidth={3} />
                     </button>
                   </div>
                 ))}

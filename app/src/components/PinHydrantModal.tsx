@@ -11,6 +11,7 @@ import { createHydrant } from '../data/store';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { useStorageConsent } from '@/lib/use-storage-consent';
 import StorageConsentModal from './StorageConsentModal';
+import { FiX, FiLock } from 'react-icons/fi';
 
 const MiniMap = dynamic(() => import('./MiniMap'), { ssr: false });
 
@@ -161,9 +162,10 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-red-300 transition-all duration-150 ease-out hover:bg-red-800 hover:text-white hover:scale-110 active:scale-90 active:duration-75"
+            className="flex items-center justify-center rounded-full p-1.5 text-red-300 transition-all duration-150 ease-out hover:bg-red-800 hover:text-white hover:scale-110 active:scale-90 active:duration-75"
+            aria-label="Close"
           >
-            ✕
+            <FiX className="h-4 w-4" strokeWidth={2.5} />
           </button>
         </div>
 
@@ -388,9 +390,9 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                         type="button"
                         onClick={() => setPhotos(p => p.filter((_, idx) => idx !== i))}
                         title="Remove photo"
-                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
                       >
-                        ✕
+                        <FiX className="h-2.5 w-2.5" strokeWidth={3} />
                       </button>
                     </div>
                   ))}
@@ -421,7 +423,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                     <p className="font-bold text-neutral-700 dark:text-neutral-200">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 dark:text-neutral-500">
-                    <span>🔒</span>
+                    <FiLock className="h-2.5 w-2.5 shrink-0" />
                     <span>Entry is immutable once submitted</span>
                   </div>
                 </div>
