@@ -389,21 +389,56 @@ export default function DilimanMap({
                     ))}
                   </>
                 )}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={meta.iconUrl}
-                  alt={`${h.name} — ${meta.legendLabel}`}
-                  title={`${h.name} — ${meta.legendLabel}`}
-                  width={HYDRANT_ICON_WIDTH}
-                  height={HYDRANT_ICON_HEIGHT}
-                  style={{
-                    display: 'block',
-                    width: HYDRANT_ICON_WIDTH,
-                    height: HYDRANT_ICON_HEIGHT,
-                    objectFit: 'contain',
-                    filter: HYDRANT_PIN_FILTER,
-                  }}
-                />
+                {h.status === 'out' ? (
+                  /* Out of service → sliced hydrant (two clipped halves + glint). */
+                  <div className="hydrant-slice" style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="half top"
+                      src={meta.iconUrl}
+                      alt={`${h.name} — ${meta.legendLabel}`}
+                      title={`${h.name} — ${meta.legendLabel}`}
+                      width={HYDRANT_ICON_WIDTH}
+                      height={HYDRANT_ICON_HEIGHT}
+                      style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
+                    />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="half bot"
+                      src={meta.iconUrl}
+                      alt=""
+                      aria-hidden
+                      width={HYDRANT_ICON_WIDTH}
+                      height={HYDRANT_ICON_HEIGHT}
+                      style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
+                    />
+                    <span className="cut" />
+                  </div>
+                ) : (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={meta.iconUrl}
+                      alt={`${h.name} — ${meta.legendLabel}`}
+                      title={`${h.name} — ${meta.legendLabel}`}
+                      width={HYDRANT_ICON_WIDTH}
+                      height={HYDRANT_ICON_HEIGHT}
+                      style={{
+                        display: 'block',
+                        width: HYDRANT_ICON_WIDTH,
+                        height: HYDRANT_ICON_HEIGHT,
+                        objectFit: 'contain',
+                        filter: HYDRANT_PIN_FILTER,
+                      }}
+                    />
+                    {/* Operational → strong jet · reduced pressure → weak dribble. */}
+                    <div className="hydrant-fx">
+                      <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
+                        <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </Marker>
           );

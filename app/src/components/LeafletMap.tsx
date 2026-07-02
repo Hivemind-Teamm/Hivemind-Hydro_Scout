@@ -9,13 +9,35 @@ import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './h
 import { STATUS_META, type Hydrant } from '../data/hydrants';
 import type { MapController, PendingPin } from './MapView';
 
-function hydrantIcon(iconUrl: string, selected: boolean) {
+function hydrantIcon(status: Hydrant['status'], iconUrl: string, selected: boolean) {
   const pulse = selected ? `<div class="hydrant-pulse-ring"></div>` : '';
+  const W = HYDRANT_ICON_WIDTH, H = HYDRANT_ICON_HEIGHT;
+  const imgStyle = `display:block;width:${W}px;height:${H}px;object-fit:contain;filter:${HYDRANT_PIN_FILTER};cursor:pointer;`;
+
+  let content: string;
+  if (status === 'out') {
+    // Out of service → sliced hydrant (two clipped halves + glint sweep).
+    content =
+      `<div class="hydrant-slice" style="width:${W}px;height:${H}px;">` +
+        `<img class="half top" src="${iconUrl}" width="${W}" height="${H}" style="${imgStyle}" />` +
+        `<img class="half bot" src="${iconUrl}" width="${W}" height="${H}" style="${imgStyle}" />` +
+        `<span class="cut"></span>` +
+      `</div>`;
+  } else {
+    // Operational → strong jet · reduced pressure → weak dribble.
+    const power = status === 'operational' ? 'strong' : 'weak';
+    content =
+      `<img src="${iconUrl}" width="${W}" height="${H}" style="${imgStyle}" />` +
+      `<div class="hydrant-fx"><div class="hydrant-spout ${power}">` +
+        `<span class="drop"></span><span class="drop"></span><span class="drop"></span><span class="drop"></span><span class="drop"></span>` +
+      `</div></div>`;
+  }
+
   return L.divIcon({
-    html: `<div style="position:relative;">${pulse}<img src="${iconUrl}" width="${HYDRANT_ICON_WIDTH}" height="${HYDRANT_ICON_HEIGHT}" style="display:block;width:${HYDRANT_ICON_WIDTH}px;height:${HYDRANT_ICON_HEIGHT}px;object-fit:contain;filter:${HYDRANT_PIN_FILTER};cursor:pointer;" /></div>`,
+    html: `<div style="position:relative;width:${W}px;height:${H}px;">${pulse}${content}</div>`,
     className: '',
-    iconSize: [HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT],
-    iconAnchor: [HYDRANT_ICON_WIDTH / 2, HYDRANT_ICON_HEIGHT],
+    iconSize: [W, H],
+    iconAnchor: [W / 2, H],
   });
 }
 
@@ -236,7 +258,7 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
             <Marker
               key={h.id}
               position={[h.lat, h.lng]}
-              icon={hydrantIcon(STATUS_META[h.status].iconUrl, shouldPulse)}
+              icon={hydrantIcon(h.status, STATUS_META[h.status].iconUrl, shouldPulse)}
               eventHandlers={{ click: () => { if (!addHydrantMode) onSelectHydrant(h); } }}
             />
           );

@@ -1,16 +1,18 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { countByStatus, STATUS_META, type Hydrant } from '../data/hydrants';
+import { countByStatus, STATUS_META, type Hydrant, type HydrantStatus } from '../data/hydrants';
 import { type Report } from '../data/reports';
 import { useAuth, type Role } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
+import PillBadge from './PillBadge';
 
 interface Props {
   hydrants: Hydrant[];
   reports: Report[];
   role: Role;
   onClose: () => void;
+  onFindOnMap: (hydrantId: string) => void;
 }
 
 /* ── Zone computation ─────────────────────────────────────────────────────── */
@@ -185,9 +187,9 @@ function TrendChart({ points, labels }: { points: number[]; labels: string[] }) 
 
 /* ── Zone row ─────────────────────────────────────────────────────────────── */
 const RATING_META = {
-  good:     { color: '#2fbf4f', bg: '#e6f9ec', label: 'GOOD'     },
-  moderate: { color: '#f5a623', bg: '#fff4e0', label: 'MODERATE' },
-  poor:     { color: '#e0353b', bg: '#fce8e9', label: 'POOR'     },
+  good:     { color: '#2fbf4f', label: 'GOOD'     },
+  moderate: { color: '#f5a623', label: 'MODERATE' },
+  poor:     { color: '#e0353b', label: 'POOR'     },
 };
 
 function ZoneRow({ name, total, operational, rating, selected, onClick }: ZoneData & { selected: boolean; onClick: () => void }) {
@@ -206,13 +208,105 @@ function ZoneRow({ name, total, operational, rating, selected, onClick }: ZoneDa
           <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{total} hyd · {operational} op</p>
         </div>
       </div>
-      <span
-        className="shrink-0 rounded px-2 py-0.5 text-[10px] font-bold"
-        style={{ color: meta.color, background: meta.bg }}
-      >
-        {meta.label}
+      <span className="shrink-0">
+        <PillBadge dot={meta.color} color={meta.color} label={meta.label} />
       </span>
     </button>
+  );
+}
+
+/* ── Recent activity ──────────────────────────────────────────────────────────
+   Surfaces the most recently touched hydrants by scanning each hydrant's
+   maintenance register for its latest-dated entry, then sorting newest-first.
+   "Initial inspection" entries naturally surface newly-added hydrants, while
+   "Status update" entries surface edits — covering both added & updated. */
+interface ActivityItem {
+  hydrantId: string;
+  name: string;
+  area: string;
+  action: string;
+  by: string;
+  date: string;
+  status: HydrantStatus;
+}
+
+function computeRecentActivity(hydrants: Hydrant[], limit = 8): ActivityItem[] {
+  const items: ActivityItem[] = [];
+  for (const h of hydrants) {
+    const dated = h.register.filter((r) => r.date);
+    if (dated.length === 0) continue;
+    const latest = dated.reduce((a, b) => (a.date > b.date ? a : b));
+    items.push({
+      hydrantId: h.id,
+      name: h.name,
+      area: h.area,
+      action: latest.action,
+      by: latest.by,
+      date: latest.date,
+      status: h.status,
+    });
+  }
+  // ISO-style date strings sort lexically, newest first.
+  return items
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, limit);
+}
+
+function formatActivityDate(date: string): string {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return date;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function ActivityRow({
+  item, expanded, onToggle, onFind,
+}: { item: ActivityItem; expanded: boolean; onToggle: () => void; onFind: () => void }) {
+  const { name, area, action, by, date, status } = item;
+  const meta = STATUS_META[status];
+  return (
+    <div className="border-b border-neutral-100 last:border-0 dark:border-neutral-800">
+      <button
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${
+          expanded ? 'bg-red-50 dark:bg-red-950/30' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: meta.color }} />
+          <div className="min-w-0">
+            <p className={`truncate text-xs font-bold ${expanded ? 'text-[#e0353b]' : 'text-neutral-800 dark:text-neutral-100'}`}>{name}</p>
+            <p className="truncate text-[11px] text-neutral-400 dark:text-neutral-500">
+              {action} · {by} · {area}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2.5">
+          <span className="hidden text-[11px] font-medium text-neutral-400 tabular-nums dark:text-neutral-500 sm:block">
+            {formatActivityDate(date)}
+          </span>
+          <PillBadge dot={meta.color} color={meta.color} label={meta.pillLabel} />
+        </div>
+      </button>
+      {expanded && (
+        <div className="anim-fade-scale flex justify-end px-2 pb-2.5">
+          <button
+            onClick={onFind}
+            className="flex items-center gap-1.5 rounded-lg bg-[#e0353b] px-3 py-1.5 text-[11px] font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.03] active:scale-[0.97] active:duration-75"
+          >
+            <PinGlyph /> Find in Map
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PinGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
+    </svg>
   );
 }
 
@@ -371,7 +465,7 @@ function StatBox({ value, label, sub }: { value: number; label: string; sub?: st
 }
 
 /* ── Main component ───────────────────────────────────────────────────────── */
-export default function OperationsDashboard({ hydrants, reports, role, onClose }: Props) {
+export default function OperationsDashboard({ hydrants, reports, role, onClose, onFindOnMap }: Props) {
   const { user } = useAuth();
   const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
   const total = hydrants.length;
@@ -379,13 +473,17 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
   const obstructed   = hydrants.filter(h => h.hazard && !['None', '—', '', 'none'].includes(h.hazard)).length;
   const verified     = hydrants.filter(h => h.register.length > 0).length;
 
-  const zones   = useMemo(() => computeZones(hydrants), [hydrants]);
-  const trend   = useMemo(() => computeTrendData(hydrants), [hydrants]);
+  const zones    = useMemo(() => computeZones(hydrants), [hydrants]);
+  const trend    = useMemo(() => computeTrendData(hydrants), [hydrants]);
+  const activity = useMemo(() => computeRecentActivity(hydrants), [hydrants]);
   const roleLabel = role === 'admin' ? 'Admin' : 'Head';
 
   // Selected zone drives the geographic drill-down (toggles off when re-tapped).
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const toggleZone = (zone: string) => setSelectedZone((prev) => (prev === zone ? null : zone));
+
+  // Which recent-activity row is expanded to reveal its "Find in Map" action.
+  const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
 
   const displayName = user?.displayName
     || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User');
@@ -485,6 +583,27 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose }
             <p className="text-xs text-neutral-400 dark:text-neutral-500">No zone data available.</p>
           )}
         </Card>
+
+        {/* Recently Updated */}
+        <div className="md:col-span-3">
+          <Card title="Recently Updated" subtitle="LATEST REGISTER ACTIVITY · NEWEST FIRST">
+            {activity.length > 0 ? (
+              <div className="flex flex-col">
+                {activity.map((a) => (
+                  <ActivityRow
+                    key={a.hydrantId}
+                    item={a}
+                    expanded={expandedActivity === a.hydrantId}
+                    onToggle={() => setExpandedActivity((prev) => (prev === a.hydrantId ? null : a.hydrantId))}
+                    onFind={() => onFindOnMap(a.hydrantId)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-neutral-400 dark:text-neutral-500">No recent activity recorded.</p>
+            )}
+          </Card>
+        </div>
 
         {/* Geographic Performance Map */}
         <div className="md:col-span-3">

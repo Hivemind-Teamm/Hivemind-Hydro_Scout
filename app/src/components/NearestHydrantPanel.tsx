@@ -134,7 +134,7 @@ export default function NearestHydrantPanel({
           {/* No hydrants */}
           {result?.noHydrantsFound && !error && (
             <div className="px-4 py-5 text-center">
-              <div className="mb-2 text-3xl">🚫</div>
+              <div className="mb-2 text-3xl">🔍</div>
               <p className="text-[13px] font-semibold text-neutral-800 dark:text-neutral-100">No operational hydrants nearby</p>
               <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">Nothing within 2 km of your location.</p>
               {result.ranked.length > 0 && (

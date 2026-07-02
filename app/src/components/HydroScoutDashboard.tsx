@@ -1033,6 +1033,12 @@ export default function HydroScoutDashboard() {
           reports={reports}
           role={role}
           onClose={() => setShowOpsDashboard(false)}
+          onFindOnMap={(hydrantId) => {
+            const target = hydrants.find((h) => h.id === hydrantId);
+            if (!target) return;
+            setShowOpsDashboard(false);
+            handleSelectHydrant(target);
+          }}
         />
       )}
 
