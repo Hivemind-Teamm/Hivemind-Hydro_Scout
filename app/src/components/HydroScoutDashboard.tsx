@@ -34,6 +34,13 @@ const OTW_MAX_ZOOM     = 19;
 const ROUTE_BUFFER_M   = 300;
 const ROUTE_CORRIDOR_M = 300;
 
+// Fire-truck response factor applied to the free-flow driving ETA. Mapbox has no
+// emergency-vehicle profile, so we approximate: a responding fire truck (siren,
+// right-of-way, exceeding limits, bypassing congestion) reaches the scene faster
+// than an ordinary car obeying normal flow. 0.75 ≈ 25% faster than free-flow.
+// Tune to match observed local response times.
+const EMERGENCY_ETA_FACTOR = 0.75;
+
 export default function HydroScoutDashboard() {
   // Start on Leaflet/OSM immediately when no Mapbox token is configured, so we
   // never flash a broken Mapbox render before an effect can fall back.
@@ -193,9 +200,13 @@ export default function HydroScoutDashboard() {
         const route = data.routes?.[0];
         if (!route) return;
         if (route.geometry?.coordinates?.length) setOtwRoute(route.geometry.coordinates);
-        // Extract ETA and road distance from API response
+        // Extract road distance + ETA. The ETA is scaled by the fire-truck
+        // response factor since an emergency vehicle beats ordinary-car flow.
         if (typeof route.distance === 'number' && typeof route.duration === 'number') {
-          setOtwMeta({ distanceM: Math.round(route.distance), durationS: Math.round(route.duration) });
+          setOtwMeta({
+            distanceM: Math.round(route.distance),
+            durationS: Math.round(route.duration * EMERGENCY_ETA_FACTOR),
+          });
         }
       })
       .catch((err) => {
