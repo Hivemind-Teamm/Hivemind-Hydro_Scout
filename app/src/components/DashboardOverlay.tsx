@@ -187,7 +187,7 @@ export default function DashboardOverlay({
 
         {/* Bottom-right FAB cluster — locate, reports, pin (zoom is pinch on touch).
             Raised to clear the Mapbox attribution/info button in the corner. */}
-        <div className="pointer-events-auto absolute bottom-[72px] right-4 z-[1000] flex flex-col items-end gap-3">
+        <div className="pointer-events-auto absolute bottom-12 right-4 z-[1000] flex flex-col items-end gap-3">
           {canPin && (
             <button
               aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}

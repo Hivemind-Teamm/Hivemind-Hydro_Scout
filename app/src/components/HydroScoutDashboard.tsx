@@ -801,7 +801,7 @@ export default function HydroScoutDashboard() {
 
       {/* ── Nearest Hydrant Panel — bottom-left, above map, below modals ──
           Raised further up on mobile so it clears the Mapbox attribution bar. */}
-      <div style={{ position: "absolute", bottom: isMobile ? 72 : 32, left: 16, zIndex: 1100, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", bottom: isMobile ? 48 : 32, left: 16, zIndex: 1100, pointerEvents: "none" }}>
         <NearestHydrantPanel
           userPosition={userLocation}
           onHydrantSelect={handleNearestHydrantSelect}
