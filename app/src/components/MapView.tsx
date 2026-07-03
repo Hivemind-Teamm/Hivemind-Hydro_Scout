@@ -1,11 +1,47 @@
 'use client';
 
+import { Component, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import DilimanMap from './DilimanMap';
 import { useTheme } from '@/lib/theme-context';
 import type { Hydrant } from '../data/hydrants';
 
 const LeafletMap = dynamic(() => import('./LeafletMap'), { ssr: false });
+
+/**
+ * Keeps a map render/load failure from taking down the whole dashboard.
+ * Covers two cases:
+ *  - A transient render throw (e.g. Leaflet projection math at an extreme zoom).
+ *  - A `ChunkLoadError` when the lazy map chunk can't be fetched (offline).
+ * Instead of Next's full-screen error overlay, it shows a quiet fallback with a
+ * retry that remounts the map subtree.
+ */
+class MapErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-neutral-100 p-6 text-center dark:bg-neutral-900">
+          <p className="max-w-xs text-sm text-neutral-500 dark:text-neutral-400">
+            The map couldn&apos;t be displayed. Check your connection and try again.
+          </p>
+          <button
+            onClick={() => this.setState({ failed: false })}
+            className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+          >
+            Reload map
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export type MapProvider = 'mapbox' | 'leaflet';
 
@@ -51,11 +87,13 @@ export default function MapView({ provider, hydrants, selectedHydrantId, onMapbo
   const { isDark } = useTheme();
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
+      <MapErrorBoundary>
       {provider === 'mapbox' ? (
         <DilimanMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onError={onMapboxError} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} pendingPin={pendingPin} is3D={is3D} userLocation={userLocation} otwHydrant={otwHydrant} otwRoute={otwRoute} nearRouteIds={nearRouteIds} initialCenter={initialCenter} initialZoom={initialZoom} isDark={isDark} onMapMove={onMapMove} />
       ) : (
         <LeafletMap hydrants={hydrants} selectedHydrantId={selectedHydrantId} onMapReady={onMapReady} onSelectHydrant={onSelectHydrant} addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} pendingPin={pendingPin} userLocation={userLocation} otwHydrant={otwHydrant} otwRoute={otwRoute} initialCenter={initialCenter} initialZoom={initialZoom} isDark={isDark} onMapMove={onMapMove} />
       )}
+      </MapErrorBoundary>
     </div>
   );
 }

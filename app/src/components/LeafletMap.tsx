@@ -121,7 +121,9 @@ function ZoomBridge({ onMapReady }: { onMapReady?: (controller: MapController) =
         map.fitBounds(bounds, { padding: [padding, padding] });
       },
       setZoomLimits: (min, max) => {
-        map.setMinZoom(min ?? 0);
+        // Keep the 3 floor even when callers "clear" the limit (null) — below it
+        // the world wraps and Leaflet's projection/cluster math can throw.
+        map.setMinZoom(min ?? 3);
         map.setMaxZoom(max ?? 22);
       },
       getCenter: () => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; },
@@ -175,6 +177,34 @@ interface LeafletMapProps {
 }
 
 export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, userLocation, otwHydrant, otwRoute, initialCenter, initialZoom, isDark, onMapMove }: LeafletMapProps) {
+  // Leaflet (and the clustering layer) can throw *inside its own zoom/pan
+  // animation frame* — outside React's render cycle, so an error boundary can't
+  // catch it and it escapes to `window`, where Next's dev overlay grabs it. The
+  // throw is non-fatal: the already-rendered map stays on screen. We swallow ONLY
+  // errors originating from those libraries so the map keeps what it has drawn and
+  // no error screen appears; app errors still surface normally.
+  useEffect(() => {
+    const fromMapLib = (stack: string, file: string) =>
+      /leaflet|markercluster|supercluster/i.test(stack) ||
+      /leaflet|markercluster|supercluster/i.test(file);
+    const onError = (e: ErrorEvent) => {
+      if (fromMapLib(e.error?.stack ?? '', e.filename ?? '')) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+    const onRejection = (e: PromiseRejectionEvent) => {
+      const r = e.reason as { stack?: string } | undefined;
+      if (fromMapLib(r?.stack ?? '', '')) e.preventDefault();
+    };
+    window.addEventListener('error', onError, true);
+    window.addEventListener('unhandledrejection', onRejection, true);
+    return () => {
+      window.removeEventListener('error', onError, true);
+      window.removeEventListener('unhandledrejection', onRejection, true);
+    };
+  }, []);
+
   // Cluster click → slow, eased zoom-in that emulates the Mapbox side's
   // flyTo(expansionZoom, speed 1.4). markercluster's built-in zoomToBoundsOnClick
   // uses an instant setView, which reads as a hard snap; we replace it.
@@ -196,6 +226,11 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
     <MapContainer
       center={[initialCenter?.lat ?? DILIMAN_CENTER.lat, initialCenter?.lng ?? DILIMAN_CENTER.lng]}
       zoom={initialZoom ?? DEFAULT_ZOOM}
+      // Floor the zoom-out: below ~3 the world wraps into multiple copies and
+      // Leaflet's projection/cluster math can throw. This keeps a very wide
+      // regional view available while staying in a valid range.
+      minZoom={3}
+      maxZoom={22}
       zoomControl={false}
       style={{ height: '100%', width: '100%' }}
     >

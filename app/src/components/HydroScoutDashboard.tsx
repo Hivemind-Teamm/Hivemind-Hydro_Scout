@@ -23,6 +23,7 @@ import {
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
+import { useOnlineStatus } from '@/lib/use-online-status';
 import { haversineM, formatDistance, formatDuration, distToRouteM } from '@/lib/haversine';
 import { type RankedHydrant } from '@/lib/nearest-hydrant';
 import { playHazardChime } from '@/lib/chime';
@@ -97,6 +98,29 @@ export default function HydroScoutDashboard() {
   const [otwEdgePos, setOtwEdgePos] = useState<{ x: number; y: number; angle: number } | null>(null);
   const [deletedHydrant, setDeletedHydrant] = useState<{ id: string; name: string } | null>(null);
   const deletedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Connectivity — notify when the internet drops or is weak so users know the
+  // hydrant locations they still see are coming from cache.
+  const connection = useOnlineStatus();
+  const [showReconnected, setShowReconnected] = useState(false);
+  const wasOfflineRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (connection === 'offline' || connection === 'weak') {
+      wasOfflineRef.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowReconnected(false);
+    } else if (wasOfflineRef.current) {
+      // Just came back — flash a brief confirmation, then auto-dismiss.
+      wasOfflineRef.current = false;
+      setShowReconnected(true);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = setTimeout(() => setShowReconnected(false), 3500);
+    }
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    };
+  }, [connection]);
 
   // Splash screen — shown until BOTH the map is ready AND hydrant data has loaded
   const [splashDone, setSplashDone] = useState(false);
@@ -940,6 +964,34 @@ export default function HydroScoutDashboard() {
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Connectivity toast — offline/weak signal, or a brief "back online" flash */}
+      {(connection === 'offline' || connection === 'weak') && (
+        <div
+          className="pointer-events-none absolute left-1/2 top-[4.25rem] z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)]"
+          style={isMobile ? { top: 'calc(6.5rem + env(safe-area-inset-top, 0px))' } : undefined}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={connection === 'offline' ? '#f87171' : '#fbbf24'} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+          <span className="text-xs text-neutral-200 leading-snug">
+            {connection === 'offline'
+              ? 'No internet connection — showing saved hydrant locations from cache.'
+              : 'Weak connection — updates may be slow. Saved hydrant locations still available.'}
+          </span>
+        </div>
+      )}
+      {showReconnected && (
+        <div
+          className="pointer-events-none absolute left-1/2 top-[4.25rem] z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)]"
+          style={isMobile ? { top: 'calc(6.5rem + env(safe-area-inset-top, 0px))' } : undefined}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+          <span className="text-xs text-neutral-200 leading-snug">Back online — data is syncing.</span>
         </div>
       )}
 
