@@ -17,6 +17,7 @@ import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
 import {
   countByStatus,
+  STATUS_META,
   type Hydrant,
   type HydrantStatus,
 } from '../data/hydrants';
@@ -71,6 +72,8 @@ export default function HydroScoutDashboard() {
   const [otwRoute,         setOtwRoute]         = useState<[number, number][] | null>(null);
   const [viewingUser, setViewingUser] = useState<ViewingUser | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
+  // Hydrant pending a "route anyway?" confirmation because it's not operational.
+  const [nonOperationalConfirm, setNonOperationalConfirm] = useState<Hydrant | null>(null);
 
   // Nearest hydrant state
   const [nearestHydrant, setNearestHydrant] = useState<RankedHydrant | null>(null);
@@ -466,6 +469,7 @@ export default function HydroScoutDashboard() {
     setShowReport(false);
     setNearestPanelOpen(false);
     setNearestHydrant(null);
+    setNonOperationalConfirm(null);
   }, [selectedHydrant, nearestHydrant]);
 
   // Reset the hazard panel back to expanded whenever OTW mode ends.
@@ -489,12 +493,13 @@ export default function HydroScoutDashboard() {
     setViewingUser({ name, role });
   }, []);
 
-  const handleRoute = useCallback(() => {
-    if (!selectedHydrant) return;
-
+  // Actually enters route mode for `hydrant` — the geolocation dance that used
+  // to live directly inside handleRoute. Split out so the non-operational
+  // confirm toast can trigger it after the user chooses "Route Anyway".
+  const proceedRoute = useCallback((hydrant: Hydrant) => {
     // Already have a fix — enter route mode immediately.
     if (userLocation) {
-      setOtwHydrant(selectedHydrant);
+      setOtwHydrant(hydrant);
       if (isMobile) setSelectedHydrant(null);
       return;
     }
@@ -514,7 +519,7 @@ export default function HydroScoutDashboard() {
       geoErrorRef.current = null;
       setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       // Only enter route mode once we actually have a position.
-      setOtwHydrant(selectedHydrant);
+      setOtwHydrant(hydrant);
       if (isMobile) setSelectedHydrant(null);
     };
     const onFinalError = (err: GeolocationPositionError) => {
@@ -541,7 +546,26 @@ export default function HydroScoutDashboard() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
     );
-  }, [selectedHydrant, userLocation, showGeoError, isMobile]);
+  }, [userLocation, showGeoError, isMobile]);
+
+  const handleRoute = useCallback(() => {
+    if (!selectedHydrant) return;
+
+    // Non-operational hydrant — confirm before entering route mode instead of
+    // silently sending a responder toward a hydrant that may not work.
+    if (selectedHydrant.status !== 'operational') {
+      setNonOperationalConfirm(selectedHydrant);
+      playHazardChime();
+      return;
+    }
+
+    proceedRoute(selectedHydrant);
+  }, [selectedHydrant, proceedRoute]);
+
+  const handleConfirmNonOperationalRoute = useCallback(() => {
+    if (nonOperationalConfirm) proceedRoute(nonOperationalConfirm);
+    setNonOperationalConfirm(null);
+  }, [nonOperationalConfirm, proceedRoute]);
 
   const handleCancelOtw = useCallback(() => {
     const ctrl = controllerRef.current;
@@ -562,6 +586,7 @@ export default function HydroScoutDashboard() {
     setShowFullDetails(false);
     setShowEdit(false);
     setShowReport(false);
+    setNonOperationalConfirm(null);
   }, []);
 
   const handleOpenAccount = useCallback(() => {
@@ -1023,6 +1048,38 @@ export default function HydroScoutDashboard() {
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Non-operational route confirmation toast */}
+      {nonOperationalConfirm && (
+        <div className="pointer-events-auto absolute left-1/2 top-[4.25rem] z-[2100] flex -translate-x-1/2 flex-col gap-2 rounded-2xl bg-neutral-900/90 px-4 py-3 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(420px,92vw)]">
+          <div className="flex items-start gap-2.5">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={STATUS_META[nonOperationalConfirm.status].color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span className="text-xs text-neutral-200 leading-snug">
+              <span className="font-bold" style={{ color: STATUS_META[nonOperationalConfirm.status].color }}>
+                {nonOperationalConfirm.name}
+              </span>{' '}
+              is currently <span className="font-semibold">{STATUS_META[nonOperationalConfirm.status].legendLabel}</span>. Route to it anyway?
+            </span>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setNonOperationalConfirm(null)}
+              className="rounded-full px-3 py-1.5 text-xs font-semibold text-neutral-300 hover:bg-white/10"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmNonOperationalRoute}
+              className="rounded-full bg-[#e0353b] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#c42d32]"
+            >
+              Route Anyway
+            </button>
+          </div>
         </div>
       )}
 

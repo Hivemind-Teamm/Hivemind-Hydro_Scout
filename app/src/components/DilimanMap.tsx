@@ -439,6 +439,10 @@ export default function DilimanMap({
                     </div>
                   </>
                 )}
+                {/* While routing, flag nearby non-operational hydrants as hazards. */}
+                {inOtwMode && !clustered && h.status !== 'operational' && (
+                  <div className="hydrant-hazard-badge">!</div>
+                )}
               </div>
             </Marker>
           );

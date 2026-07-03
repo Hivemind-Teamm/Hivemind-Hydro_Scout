@@ -255,12 +255,19 @@ function hydrantIcon(status: HydrantStatus): L.DivIcon {
     )
     .join('');
 
+  // Hazard "!" badge — baked in hidden for non-operational hydrants, toggled on
+  // by the positioner while routing (OTW mode). Operational pins never get one.
+  const hazardBadge = status !== 'operational'
+    ? `<div class="hydrant-hazard-badge" style="display:none;">!</div>`
+    : '';
+
   const icon = L.divIcon({
     html:
       `<div class="hydrant-anim" style="position:relative;width:${W}px;height:${H}px;transition:${PIN_GLIDE};will-change:transform,opacity;">` +
         selRing +
         otwRings +
         content +
+        hazardBadge +
       `</div>`,
     className: 'hydrant-pin',
     iconSize: [W, H],
@@ -482,6 +489,11 @@ function HydrantLayer({ hydrants, selectedHydrantId, onSelectHydrant, addHydrant
       wrapper.querySelectorAll('.otw-ring').forEach((r) => {
         (r as HTMLElement).style.display = showOtw ? 'block' : 'none';
       });
+
+      // Hazard "!" — visible while routing on any non-operational nearby hydrant.
+      const showHazard = inOtwMode && !clustered && h.status !== 'operational';
+      const hazard = wrapper.querySelector('.hydrant-hazard-badge') as HTMLElement | null;
+      if (hazard) hazard.style.display = showHazard ? 'flex' : 'none';
     }
   }, [map, hydrants, placement, selectedHydrantId, otwHydrant, otwRoute, nearRouteIds]);
 
