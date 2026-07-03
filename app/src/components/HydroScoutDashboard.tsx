@@ -251,6 +251,16 @@ export default function HydroScoutDashboard() {
     controllerRef.current?.fitRoute(otwRoute);
   }, [otwRoute]);
 
+  // Offline, Mapbox can't fetch styles/tiles (they aren't service-worker
+  // cached), so switch to Leaflet proactively — its CARTO tiles and chunk are
+  // cached, so the map keeps rendering instead of erroring out.
+  useEffect(() => {
+    if (connection === 'offline' && !userOverride) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setProvider('leaflet');
+    }
+  }, [connection, userOverride]);
+
   const handleMapboxError = useCallback(
     (error: unknown) => {
       console.warn('Mapbox failed to load, falling back to Leaflet/OSM:', error);
@@ -967,11 +977,13 @@ export default function HydroScoutDashboard() {
         </div>
       )}
 
-      {/* Connectivity toast — offline/weak signal, or a brief "back online" flash */}
+      {/* Connectivity toast — offline/weak signal, or a brief "back online" flash.
+          When the OTW banner is up it occupies the same top-center spot, so
+          shift the toast below it instead of covering it. */}
       {(connection === 'offline' || connection === 'weak') && (
         <div
-          className="pointer-events-none absolute left-1/2 top-[4.25rem] z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)]"
-          style={isMobile ? { top: 'calc(6.5rem + env(safe-area-inset-top, 0px))' } : undefined}
+          className={`pointer-events-none absolute left-1/2 z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)] ${otwHydrant ? 'top-[7.75rem]' : 'top-[4.25rem]'}`}
+          style={isMobile ? { top: `calc(${otwHydrant ? '11.25rem' : '6.5rem'} + env(safe-area-inset-top, 0px))` } : undefined}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={connection === 'offline' ? '#f87171' : '#fbbf24'} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
@@ -985,8 +997,8 @@ export default function HydroScoutDashboard() {
       )}
       {showReconnected && (
         <div
-          className="pointer-events-none absolute left-1/2 top-[4.25rem] z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)]"
-          style={isMobile ? { top: 'calc(6.5rem + env(safe-area-inset-top, 0px))' } : undefined}
+          className={`pointer-events-none absolute left-1/2 z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)] ${otwHydrant ? 'top-[7.75rem]' : 'top-[4.25rem]'}`}
+          style={isMobile ? { top: `calc(${otwHydrant ? '11.25rem' : '6.5rem'} + env(safe-area-inset-top, 0px))` } : undefined}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>

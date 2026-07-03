@@ -16,7 +16,7 @@
  * pick up a new version on the next load.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const SHELL_CACHE = `hs-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `hs-assets-${CACHE_VERSION}`;
 const TILE_CACHE = `hs-tiles-${CACHE_VERSION}`;
@@ -27,7 +27,15 @@ const TILE_CACHE_LIMIT = 500;
 self.addEventListener('install', (event) => {
   // Activate this version immediately rather than waiting for old tabs to close.
   self.skipWaiting();
-  event.waitUntil(caches.open(SHELL_CACHE));
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE);
+      // Precache the shell so navigations work offline even if the user never
+      // revisited '/' after the SW installed. Non-fatal if it fails (offline
+      // install) — navigations still populate the cache network-first.
+      await cache.add('/').catch(() => {});
+    })(),
+  );
 });
 
 self.addEventListener('activate', (event) => {
