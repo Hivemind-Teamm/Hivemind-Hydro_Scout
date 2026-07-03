@@ -31,7 +31,13 @@ class MapErrorBoundary extends Component<{ children: ReactNode }, { failed: bool
             The map couldn&apos;t be displayed. Check your connection and try again.
           </p>
           <button
-            onClick={() => this.setState({ failed: false })}
+            onClick={() => {
+              // A ChunkLoadError is sticky — the browser caches the failed chunk
+              // fetch, so just re-rendering fails again. A full reload re-requests
+              // everything (and succeeds once the connection is back).
+              if (typeof window !== 'undefined') window.location.reload();
+              else this.setState({ failed: false });
+            }}
             className="rounded-full bg-neutral-900 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
           >
             Reload map

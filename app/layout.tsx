@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import ScrollBehavior from "./src/components/ScrollBehavior";
+import ServiceWorkerRegister from "./src/components/ServiceWorkerRegister";
 
 // Runs before first paint to set the `.dark` class from the stored choice (or
 // the OS preference), preventing a flash of the wrong theme on load/reload.
@@ -56,6 +57,7 @@ export default function RootLayout({
      <body className="h-dvh w-screen flex flex-col bg-white text-neutral-900 dark:bg-[#0b0f14] dark:text-neutral-100" style={{ margin: 0 }}>
   <ThemeProvider>
     <ScrollBehavior />
+    <ServiceWorkerRegister />
     <AuthProvider>{children}</AuthProvider>
   </ThemeProvider>
 </body>
