@@ -16,7 +16,9 @@
  * pick up a new version on the next load.
  */
 
-const CACHE_VERSION = 'v3';
+// v4: cache-bust after the mobile perf work — guarantees no device keeps
+// serving pre-fix chunks (or a stale offline shell pointing at them).
+const CACHE_VERSION = 'v4';
 const SHELL_CACHE = `hs-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `hs-assets-${CACHE_VERSION}`;
 const TILE_CACHE = `hs-tiles-${CACHE_VERSION}`;
