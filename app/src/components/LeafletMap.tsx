@@ -42,23 +42,43 @@ function installCrispVectorZoom(Lref: any) {
 }
 installCrispVectorZoom(L);
 
+// ── "Is one of our per-frame zoom loops mid-flight?" ────────────────────────
+// The rounding-drop patches below and the eased zoom loops further down must
+// agree on this one bit, but they can't share a module `let`: the patches are
+// installed ONCE on Leaflet's `L` singleton (guarded so Fast Refresh doesn't
+// double-install), so their closure is frozen to the *first* module instance —
+// while `animateView`/`SmoothWheelZoom` re-evaluate on every hot reload and set
+// a *different* binding. The frozen patch would forever read the original
+// (stuck `false`) flag and never drop rounding, so the map keeps shivering in
+// dev until a hard reload. Parking the flag ON the singleton (which both the
+// frozen patches and the live loops reach through `L`) keeps them in sync. See
+// the file-top note on why globals-on-`L` are the correct pattern here.
+type SmoothL = { _hsZoomActive?: boolean };
+const setSmoothZoom = (v: boolean) => { (L as unknown as SmoothL)._hsZoomActive = v; };
+const isSmoothZoom = () => !!(L as unknown as SmoothL)._hsZoomActive;
+
 // ── Sub-pixel marker positions during continuous zoom ──────────────────────
-// `Marker.update()` (fired on every `zoom` event) *rounds* the marker's layer
-// point to a whole pixel. Native Leaflet zoom/pan never notices because it
-// moves the entire pane with one CSS transform — markers aren't re-projected
-// per frame. Our eased click-to-zoom and wheel-zoom drive `_move` every frame,
-// so each frame re-projects and re-*rounds* every marker while the tiles scale
-// sub-pixel-smoothly: the ±0.5px snapping reads as the pins shivering for the
-// whole zoom (but not while panning, which is a pure pane translate). Drop the
-// rounding so pins track the map at sub-pixel precision, exactly like the
-// Mapbox markers. translate3d keeps them GPU-crisp at rest. Patched once.
+// `Marker.update()` (fired on every `zoom` event) rounds the marker's layer
+// point to a whole pixel — TWICE: `latLngToLayerPoint` itself rounds the
+// projected point, and stock `update` rounds again. Native Leaflet zoom/pan
+// never notices because it moves the whole pane with one CSS transform, so
+// markers aren't re-projected per frame. Our eased click-/wheel-zoom drives
+// `_move` every frame, so each frame re-projects and re-rounds every pin while
+// the tiles scale sub-pixel-smoothly: the ±0.5px snap reads as the pins
+// shivering for the whole zoom (but not while panning — a pure pane translate).
+// Mid-gesture, position pins from the UNrounded projection so they track the
+// map exactly like the Mapbox markers; at rest fall back to Leaflet's rounded
+// path so icons stay GPU-crisp on whole pixels. Patched once on the singleton.
 function installSmoothMarkerZoom(Lref: any) {
   if (Lref.Marker._hsSmoothZoom) return;
   Lref.Marker._hsSmoothZoom = true;
   Lref.Marker.prototype.update = function () {
-    if (this._icon && this._map) {
-      this._setPos(this._map.latLngToLayerPoint(this._latlng));
-    }
+    if (!this._icon || !this._map) return this;
+    const map = this._map;
+    const pos = isSmoothZoom()
+      ? map.project(this._latlng, map.getZoom())._subtract(map.getPixelOrigin())
+      : map.latLngToLayerPoint(this._latlng).round();
+    this._setPos(pos);
     return this;
   };
 }
@@ -73,17 +93,16 @@ installSmoothMarkerZoom(L);
 // frame — so the entire basemap vibrates for the whole gesture even with no
 // hydrants on screen (but not while panning, which is a pure pane translate that
 // never re-rounds). Drop the rounding *only while one of our loops is running*
-// (`smoothZoomActive`), so the map glides at sub-pixel precision mid-gesture and
+// (`isSmoothZoom()`), so the map glides at sub-pixel precision mid-gesture and
 // snaps back to crisp, seam-free whole-pixel alignment the instant it settles.
 // Patched once, globally.
-let smoothZoomActive = false;
 function installSmoothTileZoom(Lref: any) {
   if (Lref.GridLayer._hsSmoothZoom) return;
   Lref.GridLayer._hsSmoothZoom = true;
 
   const origGetPixelOrigin = Lref.Map.prototype._getNewPixelOrigin;
   Lref.Map.prototype._getNewPixelOrigin = function (center: any, zoom: any) {
-    if (!smoothZoomActive) return origGetPixelOrigin.call(this, center, zoom);
+    if (!isSmoothZoom()) return origGetPixelOrigin.call(this, center, zoom);
     // Identical to Leaflet's, minus the trailing `._round()`.
     return this.project(center, zoom)
       ._subtract(this.getSize()._divideBy(2))
@@ -92,7 +111,7 @@ function installSmoothTileZoom(Lref: any) {
 
   const origSetZoomTransform = Lref.GridLayer.prototype._setZoomTransform;
   Lref.GridLayer.prototype._setZoomTransform = function (level: any, center: any, zoom: any) {
-    if (!smoothZoomActive) return origSetZoomTransform.call(this, level, center, zoom);
+    if (!isSmoothZoom()) return origSetZoomTransform.call(this, level, center, zoom);
     const scale = this._map.getZoomScale(zoom, level.zoom);
     // No `.round()` — pair with the unrounded `_getNewPixelOrigin` above.
     const translate = level.origin.multiplyBy(scale)._subtract(this._map._getNewPixelOrigin(center, zoom));
@@ -144,7 +163,7 @@ function cancelViewAnimation(map: L.Map) {
   m._hsCleanup = undefined;
   // Interrupted mid-flight: restore crisp whole-pixel rounding so the tiles the
   // handoff (a drag, a fresh animation) lands on aren't left sub-pixel-soft.
-  smoothZoomActive = false;
+  setSmoothZoom(false);
 }
 
 const easeOutQuint = (t: number) => 1 - Math.pow(1 - t, 5);
@@ -178,7 +197,7 @@ function animateView(map: L.Map, target: L.LatLng, targetZoom: number, duration:
     const center = map.unproject(p0.add(p1.subtract(p0).multiplyBy(e)), zoom);
     if (t < 1) {
       // Mid-flight: lightweight GPU-transform tile path (no shiver).
-      smoothZoomActive = true;
+      setSmoothZoom(true);
       const zoomBefore = m.getZoom();
       m._move(center, zoom, SMOOTH_MOVE);
       // `_move` only fires `zoom` (which reprojects markers, tiles and vector
@@ -195,7 +214,7 @@ function animateView(map: L.Map, target: L.LatLng, targetZoom: number, duration:
       m._hsAnim = undefined;
       m._hsCleanup?.();
       m._hsCleanup = undefined;
-      smoothZoomActive = false;
+      setSmoothZoom(false);
       const zoomBefore = m.getZoom();
       m._move(center, zoom);
       // Same pure-pan case: reproject to the exact target before settling.
@@ -445,7 +464,7 @@ function SmoothWheelZoom() {
     // still can't chase tiny cursor drifts.
     const REANCHOR_MS = 180;
 
-    const stop = () => { active = false; gesture = false; smoothZoomActive = false; cancelAnimationFrame(rafId); };
+    const stop = () => { active = false; gesture = false; setSmoothZoom(false); cancelAnimationFrame(rafId); };
 
     const frame = (now: number) => {
       // Bail if some other interaction moved the map out from under us.
@@ -465,7 +484,7 @@ function SmoothWheelZoom() {
       // Mid-gesture uses the lightweight GPU-transform tile path so the map
       // doesn't shiver; the final frame settles with a full `_move`. Drop the
       // whole-pixel rounding (tiles + pixel origin) only while gliding.
-      smoothZoomActive = !done;
+      setSmoothZoom(!done);
       m._move(center, zoom, done ? undefined : SMOOTH_MOVE);
       prevCenter = map.getCenter();
       prevZoom = map.getZoom();

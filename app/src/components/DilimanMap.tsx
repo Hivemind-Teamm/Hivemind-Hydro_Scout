@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapGL, { Marker, Layer, type MapRef, type MarkerEvent } from 'react-map-gl/mapbox';
+import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import Supercluster from 'supercluster';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
@@ -14,6 +15,58 @@ const CLUSTER_MAX_ZOOM = 15;
 const WORLD_BBOX: [number, number, number, number] = [-180, -85, 180, 85];
 const clusterLevel = (zoom: number) => Math.round(zoom);
 const PIN_GLIDE = '0.35s cubic-bezier(0.4, 0, 0.2, 1)';
+
+// ── Continuous, eased wheel zoom (ported from the OSM/Leaflet SmoothWheelZoom) ─
+// Mapbox's stock scroll zoom reads as one short animation per wheel event; the
+// OSM map instead accumulates wheel delta into a goal zoom and glides toward it
+// every frame with a frame-rate-independent exponential curve, keeping the point
+// under the cursor at gesture start pinned and continuing to glide after the
+// wheel stops. These constants mirror LeafletMap's SmoothWheelZoom 1:1 so both
+// providers accelerate identically.
+const WHEEL_ZOOM_RATE = 0.0035;  // zoom levels per wheel-delta pixel
+const GLIDE_K = 9;               // exponential glide stiffness (per second)
+const WHEEL_REANCHOR_MS = 180;   // a gap this long re-pins the cursor anchor
+const WHEEL_IDLE_MS = 180;       // wheel considered idle after this quiet gap
+const WHEEL_CONVERGE = 0.003;    // snap to goal once within this many levels
+// easeOutQuint: drastic attack, long silky settle — the same curve the OSM
+// eased button/click zoom uses, applied here to the +/- zoom controls.
+const easeOutQuint = (t: number) => 1 - Math.pow(1 - t, 5);
+
+// ── Sub-pixel markers during our continuous wheel zoom ─────────────────────
+// react-map-gl wraps mapbox-gl's native Marker, whose `_update()` snaps the
+// projected position to a whole pixel (`this._pos = this._pos.round()`). Native
+// zoom animations don't shiver because Mapbox renders them via WebGL and the
+// marker's per-frame ±0.5px rounding is masked by the animation; but our custom
+// wheel loop drives `easeTo({duration:0})` every frame, so the sub-pixel
+// projection crosses pixel boundaries frame to frame and each pin visibly
+// shivers (the WebGL basemap, rendered sub-pixel, stays smooth — matching what
+// you see). Mirror the fix on the OSM/Leaflet side: while one of our zoom loops
+// is mid-flight, position pins from the UNrounded projection; at rest and during
+// native animations fall back to Mapbox's rounded path so icons stay crisp.
+//
+// The active flag lives on the mapbox-gl singleton (not a module `let`) so the
+// once-installed, Fast-Refresh-frozen patch below and the live loop that sets it
+// read the same source of truth — the same reasoning as the LeafletMap patches.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type SmoothMB = { _hsZoomActive?: boolean };
+const setMbSmoothZoom = (v: boolean) => { (mapboxgl as unknown as SmoothMB)._hsZoomActive = v; };
+const isMbSmoothZoom = () => !!(mapboxgl as unknown as SmoothMB)._hsZoomActive;
+
+function installSmoothMarkerZoom(MB: any) {
+  if (!MB?.Marker || MB.Marker._hsSmoothZoom) return;
+  MB.Marker._hsSmoothZoom = true;
+  const orig = MB.Marker.prototype._update;
+  MB.Marker.prototype._update = function (delaySnap: unknown) {
+    if (!isMbSmoothZoom()) return orig.call(this, delaySnap);
+    const map = this._map;
+    if (!map || !this._element || !this._anchor) return;
+    // Unrounded projection → sub-pixel tracking, then place the element now.
+    this._pos = map.project(this._lngLat, this._altitude);
+    this._updateDOM();
+  };
+}
+installSmoothMarkerZoom(mapboxgl);
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 type HydrantProps = { hydrantId: string; status: HydrantStatus };
 
@@ -233,8 +286,10 @@ export default function DilimanMap({
     map.resize();
     setClusterZoom(clusterLevel(map.getZoom()));
     onMapReady?.({
-      zoomIn: () => map.zoomIn(),
-      zoomOut: () => map.zoomOut(),
+      // Eased +/- zoom that matches the OSM feel (slow silky settle) rather than
+      // Mapbox's default 300ms step.
+      zoomIn: () => map.easeTo({ zoom: map.getZoom() + 1, duration: 700, easing: easeOutQuint }),
+      zoomOut: () => map.easeTo({ zoom: map.getZoom() - 1, duration: 700, easing: easeOutQuint }),
       flyTo: (lat, lng, zoom = 17) => map.flyTo({ center: [lng, lat], zoom, speed: 1.4 }),
       setPitch: (pitch) => map.easeTo({ pitch, duration: 600 }),
       fitRoute: (coords, padding = 60) => {
@@ -272,6 +327,92 @@ export default function DilimanMap({
     const handler = () => onMapMoveRef.current?.();
     mapInstance.on('move', handler);
     return () => { if (mapInstance.loaded()) mapInstance.off('move', handler); };
+  }, [mapInstance]);
+
+  // ── OSM-parity continuous wheel zoom ──────────────────────────────────────
+  // Replace Mapbox's stock scroll zoom with the exact accumulate-goal +
+  // exponential-glide loop from LeafletMap's SmoothWheelZoom, so the two
+  // providers accelerate and settle identically. We drive the camera each frame
+  // with `easeTo({ around, duration: 0 })` — an instantaneous zoom pinned to the
+  // geographic point under the cursor at gesture start (Mapbox's `around`
+  // keeps that lng/lat fixed on screen while zooming).
+  useEffect(() => {
+    if (!mapInstance) return;
+    const map = mapInstance;
+    const canvas = map.getCanvas();
+    // Our loop owns the wheel now; Mapbox's discrete handler must stand down.
+    map.scrollZoom.disable();
+
+    let active = false;   // rAF loop running
+    let gesture = false;  // wheel still spinning
+    let goalZoom = map.getZoom();
+    let anchor = map.getCenter();   // lng/lat under the cursor, FROZEN at start
+    let lastTs = 0;
+    let rafId = 0;
+    let idleTimer = 0;
+    let lastWheelTs = 0;
+
+    const stop = () => { active = false; gesture = false; setMbSmoothZoom(false); cancelAnimationFrame(rafId); };
+
+    const frame = (now: number) => {
+      // Frame-rate-independent exponential glide toward the goal — no steps.
+      const dt = lastTs ? now - lastTs : 16.7;
+      lastTs = now;
+      const k = 1 - Math.exp((-dt / 1000) * GLIDE_K);
+      const cur = map.getZoom();
+      let zoom = cur + (goalZoom - cur) * k;
+      // Keep gliding until fully converged once the wheel is idle; ending early
+      // is what makes the tail of a scroll feel like a jump.
+      const done = !gesture && Math.abs(goalZoom - zoom) < WHEEL_CONVERGE;
+      if (done) zoom = goalZoom;
+      // Sub-pixel markers mid-flight; let the settling frame round them crisp.
+      setMbSmoothZoom(!done);
+      map.easeTo({ zoom, around: anchor, duration: 0 });
+      if (done) { active = false; return; }
+      rafId = requestAnimationFrame(frame);
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Start a fresh gesture on the first tick, or after a pause — both re-pin
+      // the cursor anchor so the next scroll zooms toward the new spot.
+      const reanchor = !active || e.timeStamp - lastWheelTs > WHEEL_REANCHOR_MS;
+      lastWheelTs = e.timeStamp;
+      if (reanchor) {
+        const rect = canvas.getBoundingClientRect();
+        anchor = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+        goalZoom = map.getZoom();  // rebase so re-anchoring hands off with no jump
+        if (!active) {
+          active = true;
+          map.stop();  // cancel any in-flight camera animation
+          lastTs = 0;
+          rafId = requestAnimationFrame(frame);
+        }
+      }
+      // Normalise line-mode deltas (Firefox) to ~pixel scale.
+      const dy = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY;
+      goalZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), goalZoom - dy * WHEEL_ZOOM_RATE));
+      gesture = true;
+      clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => { gesture = false; }, WHEEL_IDLE_MS);
+    };
+
+    // Any drag/tap hands the map back to native interaction — bail the glide so
+    // our per-frame re-anchoring can't fight a pan (mirrors the Leaflet loop's
+    // "someone else moved the map" bail-out).
+    const onPointerDown = () => stop();
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('mousedown', onPointerDown);
+    canvas.addEventListener('touchstart', onPointerDown, { passive: true });
+    return () => {
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('mousedown', onPointerDown);
+      canvas.removeEventListener('touchstart', onPointerDown);
+      clearTimeout(idleTimer);
+      stop();
+      if (map.loaded()) map.scrollZoom.enable();
+    };
   }, [mapInstance]);
 
   const handleClusterClick = useCallback((cluster: ClusterMarker) => {
