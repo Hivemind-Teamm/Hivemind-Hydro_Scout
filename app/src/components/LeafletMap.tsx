@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import Supercluster from 'supercluster';
@@ -545,7 +545,10 @@ interface HydrantLayerProps {
 }
 
 // Supercluster-driven hydrant + cluster markers with Mapbox-style glide.
-function HydrantLayer({ hydrants, selectedHydrantId, onSelectHydrant, addHydrantMode, otwHydrant, otwRoute, nearRouteIds }: HydrantLayerProps) {
+// Memoized: LeafletMap re-renders on every GPS fix (the user-location marker),
+// but the ~50 hydrant/cluster markers only depend on these props — skipping
+// them avoids reconciling every <Marker> once a second while tracking.
+const HydrantLayer = memo(function HydrantLayer({ hydrants, selectedHydrantId, onSelectHydrant, addHydrantMode, otwHydrant, otwRoute, nearRouteIds }: HydrantLayerProps) {
   const map = useMap();
   const markerRefs = useRef(new Map<string, L.Marker>());
   // Cluster in Mapbox zoom units so bubbles form/split at the same visual
@@ -687,7 +690,7 @@ function HydrantLayer({ hydrants, selectedHydrantId, onSelectHydrant, addHydrant
       ))}
     </>
   );
-}
+});
 
 interface LeafletMapProps {
   hydrants: Hydrant[];

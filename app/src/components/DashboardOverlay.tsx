@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -47,7 +47,7 @@ interface DashboardOverlayProps {
   onHazardPanelMinimizedChange?: (minimized: boolean) => void;
 }
 
-export default function DashboardOverlay({
+function DashboardOverlay({
   activeStatus,
   onSelectStatus,
   counts,
@@ -596,6 +596,12 @@ export default function DashboardOverlay({
     </div>
   );
 }
+
+// Memoized: the dashboard re-renders on every GPS fix and, during OTW, on
+// every map-move frame (edge indicator). All props are stable identities
+// (useCallback/useMemo in HydroScoutDashboard), so this skips a ~950-line
+// overlay tree on those renders.
+export default memo(DashboardOverlay);
 
 /* ---------------------------------------------------------------- */
 /* Location search                                                   */

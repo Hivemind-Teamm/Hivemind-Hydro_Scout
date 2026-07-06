@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapGL, { Marker, Layer, type MapRef, type MarkerEvent } from 'react-map-gl/mapbox';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -113,6 +113,199 @@ interface DilimanMapProps {
 
 const MAP_STYLE_LIGHT = 'mapbox://styles/mapbox/streets-v12';
 const MAP_STYLE_DARK = 'mapbox://styles/mapbox/dark-v11';
+
+interface HydrantMarkersProps {
+  map: ReturnType<MapRef['getMap']>;
+  hydrants: Hydrant[];
+  placement: HydrantPlacement;
+  clusters: ClusterMarker[];
+  clusterZoom: number;
+  selectedHydrantId: string | null;
+  otwHydrantId: string | null;
+  inOtwMode: boolean;
+  nearRouteIds?: Set<string> | null;
+  addHydrantMode: boolean;
+  onHydrantClick: (e: MarkerEvent<MouseEvent>, h: Hydrant) => void;
+  onClusterClick: (cluster: ClusterMarker) => void;
+}
+
+// The full hydrant + cluster marker set, memoized. DilimanMap re-renders on
+// every GPS fix (user-location marker) and other dashboard churn; the ~50
+// markers here only depend on these props, so memoization skips reconciling
+// them all on renders that didn't change hydrant/cluster state. Positions are
+// projected when cluster state changes (clusterZoom is a prop), matching the
+// previous behaviour — clustered pins are invisible, so a slightly stale
+// offset between integer zooms is never seen.
+const HydrantMarkers = memo(function HydrantMarkers({
+  map, hydrants, placement, clusters, clusterZoom, selectedHydrantId,
+  otwHydrantId, inOtwMode, nearRouteIds, addHydrantMode, onHydrantClick, onClusterClick,
+}: HydrantMarkersProps) {
+  return (
+    <>
+      {hydrants.map((h) => {
+        const centroid = placement.get(h.id);
+        // OTW target is always shown as individual marker, never absorbed into a cluster
+        const isOtwTarget = otwHydrantId === h.id;
+        const clustered = !isOtwTarget && !!centroid;
+
+        let dx = 0;
+        let dy = 0;
+        if (centroid) {
+          const here = map.project([h.lng, h.lat]);
+          const there = map.project([centroid.lng, centroid.lat]);
+          dx = there.x - here.x;
+          dy = there.y - here.y;
+        }
+
+        const selected = selectedHydrantId === h.id;
+        const meta = STATUS_META[h.status];
+
+        // OTW mode visual states
+        const nearRoute = nearRouteIds?.has(h.id) ?? false;
+        const offRoute = inOtwMode && !nearRoute && !isOtwTarget;
+
+        return (
+          <Marker
+            key={h.id}
+            longitude={h.lng}
+            latitude={h.lat}
+            anchor="bottom"
+            onClick={(e) => onHydrantClick(e, h)}
+          >
+            <div
+              style={{
+                position: 'relative',
+                transform: `translate(${dx}px, ${dy}px)`,
+                opacity: clustered ? 0 : offRoute ? 0.25 : 1,
+                transition: `transform ${PIN_GLIDE}, opacity 0.3s ease`,
+                pointerEvents: clustered ? 'none' : 'auto',
+                cursor: addHydrantMode ? 'crosshair' : 'pointer',
+                willChange: 'transform, opacity',
+                filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : nearRoute ? `drop-shadow(0 0 5px ${meta.color})` : undefined,
+              }}
+            >
+              {/* Selected hydrant: yellow single pulse ring (only outside OTW mode) */}
+              {selected && !isOtwTarget && !clustered && !inOtwMode && (
+                <div style={{
+                  position: 'absolute', inset: -5, borderRadius: '50%',
+                  border: '2px solid #FED42E',
+                  animation: 'route-ring-pulse 2s ease-out infinite',
+                  pointerEvents: 'none',
+                }} />
+              )}
+              {/* OTW target: triple emergency beacon rings */}
+              {isOtwTarget && !clustered && (
+                <>
+                  {[0, 0.33, 0.66].map((delay) => (
+                    <div key={delay} style={{
+                      position: 'absolute', inset: -5, borderRadius: '50%',
+                      border: '2.5px solid #ef4444',
+                      animation: `emergency-beacon-pulse 1s ease-out ${delay}s infinite`,
+                      pointerEvents: 'none',
+                    }} />
+                  ))}
+                </>
+              )}
+              {h.status === 'out' ? (
+                /* Out of service → sliced hydrant (two clipped halves + glint). */
+                <div className="hydrant-slice" style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="half top"
+                    src={meta.iconUrl}
+                    alt={`${h.name} — ${meta.legendLabel}`}
+                    title={`${h.name} — ${meta.legendLabel}`}
+                    width={HYDRANT_ICON_WIDTH}
+                    height={HYDRANT_ICON_HEIGHT}
+                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
+                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="half bot"
+                    src={meta.iconUrl}
+                    alt=""
+                    aria-hidden
+                    width={HYDRANT_ICON_WIDTH}
+                    height={HYDRANT_ICON_HEIGHT}
+                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
+                  />
+                  <span className="cut" />
+                </div>
+              ) : (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={meta.iconUrl}
+                    alt={`${h.name} — ${meta.legendLabel}`}
+                    title={`${h.name} — ${meta.legendLabel}`}
+                    width={HYDRANT_ICON_WIDTH}
+                    height={HYDRANT_ICON_HEIGHT}
+                    style={{
+                      display: 'block',
+                      width: HYDRANT_ICON_WIDTH,
+                      height: HYDRANT_ICON_HEIGHT,
+                      objectFit: 'contain',
+                      filter: HYDRANT_PIN_FILTER,
+                    }}
+                  />
+                  {/* Water only spouts from the focused pin — the selected
+                      hydrant or the OTW routing target — so the map isn't a
+                      field of spraying water at rest. Operational → strong
+                      jet · reduced pressure → weak dribble. */}
+                  {(selected || isOtwTarget) && !clustered && (
+                    <div className="hydrant-fx">
+                      <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
+                        <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* While routing, flag nearby non-operational hydrants as hazards. */}
+              {inOtwMode && !clustered && h.status !== 'operational' && (
+                <div className="hydrant-hazard-badge">!</div>
+              )}
+            </div>
+          </Marker>
+        );
+      })}
+
+      {clusters.map((cluster) => (
+        <Marker
+          key={`cluster-${clusterZoom}-${cluster.id}`}
+          longitude={cluster.lng}
+          latitude={cluster.lat}
+          anchor="center"
+          onClick={(e) => { e.originalEvent.stopPropagation(); onClusterClick(cluster); }}
+        >
+          <div
+            className="anim-fade-scale"
+            style={{
+              width: 42,
+              height: 42,
+              background: 'linear-gradient(135deg, rgba(254,212,46,0.38) 0%, rgba(254,212,46,0.16) 100%)',
+              border: '1.5px solid rgba(254,212,46,0.55)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 0 12px rgba(254,212,46,0.35), 0 3px 8px rgba(0,0,0,0.4)',
+              color: '#e0353b',
+              fontSize: 13,
+              fontWeight: 800,
+              fontFamily: 'Arial, sans-serif',
+              textShadow: '0 1px 2px rgba(255,255,255,0.4)',
+              cursor: addHydrantMode ? 'crosshair' : 'pointer',
+            }}
+          >
+            {cluster.count}
+          </div>
+        </Marker>
+      ))}
+    </>
+  );
+});
 
 const OTW_SOURCE = 'otw-route';
 const OTW_GLOW_LAYER = 'otw-route-glow';
@@ -509,168 +702,22 @@ export default function DilimanMap({
           />
         )}
 
-        {map && hydrants.map((h) => {
-          const centroid = layout.placement.get(h.id);
-          // OTW target is always shown as individual marker, never absorbed into a cluster
-          const isOtwTarget = otwHydrant?.id === h.id;
-          const clustered = !isOtwTarget && !!centroid;
-
-          let dx = 0;
-          let dy = 0;
-          if (centroid) {
-            const here = map.project([h.lng, h.lat]);
-            const there = map.project([centroid.lng, centroid.lat]);
-            dx = there.x - here.x;
-            dy = there.y - here.y;
-          }
-
-          const selected = selectedHydrantId === h.id;
-          const meta = STATUS_META[h.status];
-
-          // OTW mode visual states
-          const nearRoute = nearRouteIds?.has(h.id) ?? false;
-          const inOtwMode = !!otwRoute;
-          const offRoute = inOtwMode && !nearRoute && !isOtwTarget;
-
-          return (
-            <Marker
-              key={h.id}
-              longitude={h.lng}
-              latitude={h.lat}
-              anchor="bottom"
-              onClick={(e) => handleHydrantClick(e, h)}
-            >
-              <div
-                style={{
-                  position: 'relative',
-                  transform: `translate(${dx}px, ${dy}px)`,
-                  opacity: clustered ? 0 : offRoute ? 0.25 : 1,
-                  transition: `transform ${PIN_GLIDE}, opacity 0.3s ease`,
-                  pointerEvents: clustered ? 'none' : 'auto',
-                  cursor: addHydrantMode ? 'crosshair' : 'pointer',
-                  willChange: 'transform, opacity',
-                  filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : nearRoute ? `drop-shadow(0 0 5px ${meta.color})` : undefined,
-                }}
-              >
-                {/* Selected hydrant: yellow single pulse ring (only outside OTW mode) */}
-                {selected && !isOtwTarget && !clustered && !inOtwMode && (
-                  <div style={{
-                    position: 'absolute', inset: -5, borderRadius: '50%',
-                    border: '2px solid #FED42E',
-                    animation: 'route-ring-pulse 2s ease-out infinite',
-                    pointerEvents: 'none',
-                  }} />
-                )}
-                {/* OTW target: triple emergency beacon rings */}
-                {isOtwTarget && !clustered && (
-                  <>
-                    {[0, 0.33, 0.66].map((delay) => (
-                      <div key={delay} style={{
-                        position: 'absolute', inset: -5, borderRadius: '50%',
-                        border: '2.5px solid #ef4444',
-                        animation: `emergency-beacon-pulse 1s ease-out ${delay}s infinite`,
-                        pointerEvents: 'none',
-                      }} />
-                    ))}
-                  </>
-                )}
-                {h.status === 'out' ? (
-                  /* Out of service → sliced hydrant (two clipped halves + glint). */
-                  <div className="hydrant-slice" style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      className="half top"
-                      src={meta.iconUrl}
-                      alt={`${h.name} — ${meta.legendLabel}`}
-                      title={`${h.name} — ${meta.legendLabel}`}
-                      width={HYDRANT_ICON_WIDTH}
-                      height={HYDRANT_ICON_HEIGHT}
-                      style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
-                    />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      className="half bot"
-                      src={meta.iconUrl}
-                      alt=""
-                      aria-hidden
-                      width={HYDRANT_ICON_WIDTH}
-                      height={HYDRANT_ICON_HEIGHT}
-                      style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
-                    />
-                    <span className="cut" />
-                  </div>
-                ) : (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={meta.iconUrl}
-                      alt={`${h.name} — ${meta.legendLabel}`}
-                      title={`${h.name} — ${meta.legendLabel}`}
-                      width={HYDRANT_ICON_WIDTH}
-                      height={HYDRANT_ICON_HEIGHT}
-                      style={{
-                        display: 'block',
-                        width: HYDRANT_ICON_WIDTH,
-                        height: HYDRANT_ICON_HEIGHT,
-                        objectFit: 'contain',
-                        filter: HYDRANT_PIN_FILTER,
-                      }}
-                    />
-                    {/* Water only spouts from the focused pin — the selected
-                        hydrant or the OTW routing target — so the map isn't a
-                        field of spraying water at rest. Operational → strong
-                        jet · reduced pressure → weak dribble. */}
-                    {(selected || isOtwTarget) && !clustered && (
-                      <div className="hydrant-fx">
-                        <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
-                          <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-                {/* While routing, flag nearby non-operational hydrants as hazards. */}
-                {inOtwMode && !clustered && h.status !== 'operational' && (
-                  <div className="hydrant-hazard-badge">!</div>
-                )}
-              </div>
-            </Marker>
-          );
-        })}
-
-        {map && layout.clusters.map((cluster) => (
-          <Marker
-            key={`cluster-${clusterZoom}-${cluster.id}`}
-            longitude={cluster.lng}
-            latitude={cluster.lat}
-            anchor="center"
-            onClick={(e) => { e.originalEvent.stopPropagation(); handleClusterClick(cluster); }}
-          >
-            <div
-              className="anim-fade-scale"
-              style={{
-                width: 42,
-                height: 42,
-                background: 'linear-gradient(135deg, rgba(254,212,46,0.38) 0%, rgba(254,212,46,0.16) 100%)',
-                border: '1.5px solid rgba(254,212,46,0.55)',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(8px)',
-                boxShadow: '0 0 12px rgba(254,212,46,0.35), 0 3px 8px rgba(0,0,0,0.4)',
-                color: '#e0353b',
-                fontSize: 13,
-                fontWeight: 800,
-                fontFamily: 'Arial, sans-serif',
-                textShadow: '0 1px 2px rgba(255,255,255,0.4)',
-                cursor: addHydrantMode ? 'crosshair' : 'pointer',
-              }}
-            >
-              {cluster.count}
-            </div>
-          </Marker>
-        ))}
+        {map && (
+          <HydrantMarkers
+            map={map}
+            hydrants={hydrants}
+            placement={layout.placement}
+            clusters={layout.clusters}
+            clusterZoom={clusterZoom}
+            selectedHydrantId={selectedHydrantId}
+            otwHydrantId={otwHydrant?.id ?? null}
+            inOtwMode={!!otwRoute}
+            nearRouteIds={nearRouteIds}
+            addHydrantMode={addHydrantMode}
+            onHydrantClick={handleHydrantClick}
+            onClusterClick={handleClusterClick}
+          />
+        )}
 
         {pendingPin && (
           <Marker longitude={pendingPin.lng} latitude={pendingPin.lat} anchor="center">

@@ -247,7 +247,7 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
                 {photos.map((url, i) => (
                   <div key={url} className="group relative h-14 w-14 overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={proxiedPhotoUrl(url)} alt={`Evidence ${i + 1}`} className="h-full w-full object-cover" />
+                    <img src={proxiedPhotoUrl(url, 160)} alt={`Evidence ${i + 1}`} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                     <button
                       type="button"
                       onClick={() => handlePhotoRemove(i)}
