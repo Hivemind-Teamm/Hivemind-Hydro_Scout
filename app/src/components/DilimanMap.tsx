@@ -28,6 +28,11 @@ const GLIDE_K = 9;               // exponential glide stiffness (per second)
 const WHEEL_REANCHOR_MS = 180;   // a gap this long re-pins the cursor anchor
 const WHEEL_IDLE_MS = 180;       // wheel considered idle after this quiet gap
 const WHEEL_CONVERGE = 0.003;    // snap to goal once within this many levels
+// Below this zoom Mapbox renders the `globe` projection (and animates the
+// globe↔mercator transition around 5–6). Cursor-anchoring there means rotating
+// the sphere, which both spins the map and fights the transition — so on the
+// globe we zoom about the center instead and only pin the cursor once flat.
+const GLOBE_ANCHOR_MIN_ZOOM = 6;
 // easeOutQuint: drastic attack, long silky settle — the same curve the OSM
 // eased button/click zoom uses, applied here to the +/- zoom controls.
 const easeOutQuint = (t: number) => 1 - Math.pow(1 - t, 5);
@@ -339,14 +344,28 @@ export default function DilimanMap({
   useEffect(() => {
     if (!mapInstance) return;
     const map = mapInstance;
-    const canvas = map.getCanvas();
+    // Listen on the CONTAINER, not the canvas. Cluster markers and the location
+    // orb are absolutely-positioned DOM elements stacked ON TOP of the canvas;
+    // a wheel over one of them targets that div and bubbles to the container but
+    // never reaches the canvas (a sibling), so canvas-bound zoom "locks" over a
+    // cluster. The container is an ancestor of every overlay, and we listen in
+    // the CAPTURE phase so we still fire even if a marker stops propagation.
+    const container = map.getContainer();
     // Our loop owns the wheel now; Mapbox's discrete handler must stand down.
     map.scrollZoom.disable();
 
     let active = false;   // rAF loop running
     let gesture = false;  // wheel still spinning
     let goalZoom = map.getZoom();
-    let anchor = map.getCenter();   // lng/lat under the cursor, FROZEN at start
+    // Our own authoritative animated zoom. We integrate this ourselves each
+    // frame instead of reading map.getZoom() back — critical, because while the
+    // globe↔mercator projection transition (~zoom 5–6) animates, easeTo can't
+    // set the exact zoom we ask for, so map.getZoom() keeps disagreeing with the
+    // goal, the glide never converges, and the rAF loop spins hot forever while
+    // the camera sits pinned by the transition. That is the "freeze". Tracking
+    // renderZoom ourselves guarantees convergence regardless of map state.
+    let renderZoom = goalZoom;
+    let anchor: mapboxgl.LngLat | null = null;   // lng/lat under the cursor, FROZEN at start (null → zoom about center)
     let lastTs = 0;
     let rafId = 0;
     let idleTimer = 0;
@@ -359,15 +378,21 @@ export default function DilimanMap({
       const dt = lastTs ? now - lastTs : 16.7;
       lastTs = now;
       const k = 1 - Math.exp((-dt / 1000) * GLIDE_K);
-      const cur = map.getZoom();
-      let zoom = cur + (goalZoom - cur) * k;
+      renderZoom += (goalZoom - renderZoom) * k;
       // Keep gliding until fully converged once the wheel is idle; ending early
       // is what makes the tail of a scroll feel like a jump.
-      const done = !gesture && Math.abs(goalZoom - zoom) < WHEEL_CONVERGE;
-      if (done) zoom = goalZoom;
+      const done = !gesture && Math.abs(goalZoom - renderZoom) < WHEEL_CONVERGE;
+      if (done) renderZoom = goalZoom;
       // Sub-pixel markers mid-flight; let the settling frame round them crisp.
       setMbSmoothZoom(!done);
-      map.easeTo({ zoom, around: anchor, duration: 0 });
+      // On the globe (or crossing the projection transition) cursor-anchoring
+      // rotates the sphere and fights Mapbox's transition — the spin/jump when
+      // zooming out past Luzon. Below the flat threshold we zoom about center;
+      // above it we pin the cursor. Keyed off renderZoom (not map.getZoom) so
+      // the switch is deterministic and can't stall a gesture that started
+      // anchored and then crossed the threshold on its way out.
+      const pin = anchor && renderZoom >= GLOBE_ANCHOR_MIN_ZOOM ? anchor : null;
+      map.easeTo(pin ? { zoom: renderZoom, around: pin, duration: 0 } : { zoom: renderZoom, duration: 0 });
       if (done) { active = false; return; }
       rafId = requestAnimationFrame(frame);
     };
@@ -379,9 +404,19 @@ export default function DilimanMap({
       const reanchor = !active || e.timeStamp - lastWheelTs > WHEEL_REANCHOR_MS;
       lastWheelTs = e.timeStamp;
       if (reanchor) {
-        const rect = canvas.getBoundingClientRect();
-        anchor = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
-        goalZoom = map.getZoom();  // rebase so re-anchoring hands off with no jump
+        // Resync to the map's real zoom in case a flyTo/pan moved it while we
+        // were idle, then rebase the goal so re-anchoring hands off with no jump.
+        renderZoom = map.getZoom();
+        goalZoom = renderZoom;
+        const rect = container.getBoundingClientRect();
+        // On the globe a cursor over empty space (off-sphere) unprojects to
+        // garbage; only pin an anchor once we're flat, else zoom about center.
+        if (renderZoom >= GLOBE_ANCHOR_MIN_ZOOM) {
+          const p = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+          anchor = Number.isFinite(p.lng) && Number.isFinite(p.lat) ? p : null;
+        } else {
+          anchor = null;
+        }
         if (!active) {
           active = true;
           map.stop();  // cancel any in-flight camera animation
@@ -402,13 +437,15 @@ export default function DilimanMap({
     // "someone else moved the map" bail-out).
     const onPointerDown = () => stop();
 
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    canvas.addEventListener('mousedown', onPointerDown);
-    canvas.addEventListener('touchstart', onPointerDown, { passive: true });
+    // Capture phase (third arg true) so a marker or the orb can't swallow the
+    // wheel before we see it; passive:false so preventDefault stops page scroll.
+    container.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    container.addEventListener('mousedown', onPointerDown);
+    container.addEventListener('touchstart', onPointerDown, { passive: true });
     return () => {
-      canvas.removeEventListener('wheel', onWheel);
-      canvas.removeEventListener('mousedown', onPointerDown);
-      canvas.removeEventListener('touchstart', onPointerDown);
+      container.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions);
+      container.removeEventListener('mousedown', onPointerDown);
+      container.removeEventListener('touchstart', onPointerDown);
       clearTimeout(idleTimer);
       stop();
       if (map.loaded()) map.scrollZoom.enable();
@@ -440,6 +477,13 @@ export default function DilimanMap({
         }}
         style={{ position: 'absolute', inset: 0 }}
         mapStyle={isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT}
+        // Globe (Mapbox GL v3 default). The old "freeze then jump then spin"
+        // when zooming out toward Luzon was our per-frame easeTo wheel loop
+        // fighting the globe↔mercator transition and rotating the sphere via
+        // `around`. The wheel loop now drops cursor-anchoring below
+        // GLOBE_ANCHOR_MIN_ZOOM and zooms about center, so the globe zooms out
+        // smoothly with no transition fight and no spin.
+        projection={{ name: 'globe' }}
         fadeDuration={400}
         onLoad={handleLoad}
         onError={(e: unknown) => onError?.(e)}
