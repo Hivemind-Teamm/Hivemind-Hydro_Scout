@@ -14,6 +14,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
+  updateProfile,
   User,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -71,23 +72,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-
       if (firebaseUser) {
         try {
           const [snap, idToken] = await Promise.all([
             getDoc(doc(db, "users", firebaseUser.uid)),
             firebaseUser.getIdToken(),
           ]);
-          setRole((snap.exists() ? snap.data().role ?? null : null) as Role);
+          const data = snap.exists() ? snap.data() : null;
+
+          // The person's real name is stored on the Firestore user doc at signup;
+          // the Firebase Auth profile starts blank. Backfill it here so
+          // `user.displayName` carries the personal name everywhere (top bar,
+          // account center) instead of an email-prefix guess. Runs at most once
+          // per account — skipped as soon as the Auth profile has a name — and
+          // fixes accounts created before this backfill existed, on next load.
+          const fsName = typeof data?.displayName === "string" ? data.displayName.trim() : "";
+          if (fsName && firebaseUser.displayName !== fsName) {
+            try { await updateProfile(firebaseUser, { displayName: fsName }); } catch { /* non-fatal */ }
+          }
+
+          setUser(firebaseUser);
+          setRole((data?.role ?? null) as Role);
           // Re-issue the session cookie on every auth state change (including
           // page reload) so server routes like /api/upload can always verify the user.
           await syncSessionCookie(idToken);
         } catch (err) {
           console.error("Failed to load user role:", err);
+          setUser(firebaseUser);
           setRole(null);
         }
       } else {
+        setUser(null);
         setRole(null);
         await syncSessionCookie(null);
       }
@@ -140,6 +155,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       createdAt: serverTimestamp(),
       lastLoginAt: serverTimestamp(),
     });
+
+    // Also stamp the personal name onto the Firebase Auth profile so
+    // `user.displayName` is populated immediately (the app reads it for the top
+    // bar, account center, report attribution, etc.) rather than falling back
+    // to the email prefix.
+    try { await updateProfile(cred.user, { displayName }); } catch { /* non-fatal */ }
 
     // onAuthStateChanged fires after createUserWithEmailAndPassword and handles
     // syncSessionCookie — no need to call it again here.

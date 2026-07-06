@@ -431,12 +431,17 @@ export default function DilimanMap({
                         filter: HYDRANT_PIN_FILTER,
                       }}
                     />
-                    {/* Operational → strong jet · reduced pressure → weak dribble. */}
-                    <div className="hydrant-fx">
-                      <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
-                        <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
+                    {/* Water only spouts from the focused pin — the selected
+                        hydrant or the OTW routing target — so the map isn't a
+                        field of spraying water at rest. Operational → strong
+                        jet · reduced pressure → weak dribble. */}
+                    {(selected || isOtwTarget) && !clustered && (
+                      <div className="hydrant-fx">
+                        <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
+                          <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
                 {/* While routing, flag nearby non-operational hydrants as hazards. */}

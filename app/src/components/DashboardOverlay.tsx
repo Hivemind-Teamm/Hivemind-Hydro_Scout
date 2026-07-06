@@ -86,7 +86,10 @@ export default function DashboardOverlay({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const setHazardPanelMinimized = onHazardPanelMinimizedChange ?? (() => {});
 
-  const displayName = user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest';
+  // Prefer the personal name entered at sign-up (Firebase Auth profile); only
+  // fall back to a prettified email prefix when no name is set.
+  const displayName = user?.displayName?.trim()
+    || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
   const roleLabel: Record<string, string> = { admin: 'Admin', head: 'Head Inspector', authorized: 'Authorized', general: 'General' };
   const displayRole = roleLabel[role ?? ''] ?? 'Guest';
 
