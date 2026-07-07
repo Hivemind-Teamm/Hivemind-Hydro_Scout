@@ -113,22 +113,35 @@ export default function HydroScoutDashboard() {
   // hydrant locations they still see are coming from cache.
   const connection = useOnlineStatus();
   const [showReconnected, setShowReconnected] = useState(false);
+  // Offline/weak toast auto-dismisses after a few seconds instead of sitting
+  // on screen the whole time the connection is degraded.
+  const [showConnectionToast, setShowConnectionToast] = useState(false);
   const wasOfflineRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (connection === 'offline' || connection === 'weak') {
       wasOfflineRef.current = true;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowReconnected(false);
+      // Flash the offline/weak notice, then auto-dismiss after 3s. Re-runs on
+      // each state change (e.g. offline→weak) so the message stays accurate.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowConnectionToast(true);
+      if (connectionTimerRef.current) clearTimeout(connectionTimerRef.current);
+      connectionTimerRef.current = setTimeout(() => setShowConnectionToast(false), 3000);
     } else if (wasOfflineRef.current) {
       // Just came back — flash a brief confirmation, then auto-dismiss.
       wasOfflineRef.current = false;
+      setShowConnectionToast(false);
+      if (connectionTimerRef.current) clearTimeout(connectionTimerRef.current);
       setShowReconnected(true);
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = setTimeout(() => setShowReconnected(false), 3500);
     }
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      if (connectionTimerRef.current) clearTimeout(connectionTimerRef.current);
     };
   }, [connection]);
 
@@ -1085,10 +1098,10 @@ export default function HydroScoutDashboard() {
       {/* Connectivity toast — offline/weak signal, or a brief "back online" flash.
           Anchored bottom-center so it never covers the header, legend chips or
           OTW banner (it used to sit top-center and block those icons). */}
-      {(connection === 'offline' || connection === 'weak') && (
+      {showConnectionToast && (connection === 'offline' || connection === 'weak') && (
         <div
           className="pointer-events-none absolute left-1/2 z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)]"
-          style={{ bottom: `calc(${isMobile ? '5.5rem' : '1.25rem'} + env(safe-area-inset-bottom, 0px))` }}
+          style={{ bottom: `calc(${isMobile ? '9rem' : '1.25rem'} + env(safe-area-inset-bottom, 0px))` }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={connection === 'offline' ? '#f87171' : '#fbbf24'} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
@@ -1103,7 +1116,7 @@ export default function HydroScoutDashboard() {
       {showReconnected && (
         <div
           className="pointer-events-none absolute left-1/2 z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)]"
-          style={{ bottom: `calc(${isMobile ? '5.5rem' : '1.25rem'} + env(safe-area-inset-bottom, 0px))` }}
+          style={{ bottom: `calc(${isMobile ? '9rem' : '1.25rem'} + env(safe-area-inset-bottom, 0px))` }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
