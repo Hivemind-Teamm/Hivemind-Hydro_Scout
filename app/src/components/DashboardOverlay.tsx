@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -47,7 +47,7 @@ interface DashboardOverlayProps {
   onHazardPanelMinimizedChange?: (minimized: boolean) => void;
 }
 
-export default function DashboardOverlay({
+function DashboardOverlay({
   activeStatus,
   onSelectStatus,
   counts,
@@ -86,7 +86,10 @@ export default function DashboardOverlay({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const setHazardPanelMinimized = onHazardPanelMinimizedChange ?? (() => {});
 
-  const displayName = user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest';
+  // Prefer the personal name entered at sign-up (Firebase Auth profile); only
+  // fall back to a prettified email prefix when no name is set.
+  const displayName = user?.displayName?.trim()
+    || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
   const roleLabel: Record<string, string> = { admin: 'Admin', head: 'Head Inspector', authorized: 'Authorized', general: 'General' };
   const displayRole = roleLabel[role ?? ''] ?? 'Guest';
 
@@ -593,6 +596,12 @@ export default function DashboardOverlay({
     </div>
   );
 }
+
+// Memoized: the dashboard re-renders on every GPS fix and, during OTW, on
+// every map-move frame (edge indicator). All props are stable identities
+// (useCallback/useMemo in HydroScoutDashboard), so this skips a ~950-line
+// overlay tree on those renders.
+export default memo(DashboardOverlay);
 
 /* ---------------------------------------------------------------- */
 /* Location search                                                   */

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import Supercluster from 'supercluster';
@@ -11,102 +11,115 @@ import type { MapController, PendingPin } from './MapView';
 
 // ── Smooth, continuous wheel zoom ──────────────────────────────────────────
 // Leaflet's stock scroll-wheel zoom fires one short, discrete zoom animation
-// per wheel notch, so fast scrolling reads as a fragmented stair-step. This
-// handler (a compact port of the well-known Leaflet.SmoothWheelZoom technique)
-// accumulates wheel delta into a target zoom and eases toward it every frame
-// via the internal `map._move`, giving Mapbox-like continuous zoom that keeps
-// the point under the cursor fixed. Registered once, globally, at module load
-// (before any MapContainer mounts). The dynamic import is SSR-disabled, so `L`
-// is always the browser build here.
+// per wheel notch, so fast scrolling reads as a fragmented stair-step. We
+// replace it with a continuous, eased zoom (the well-known SmoothWheelZoom
+// technique) that keeps the point under the cursor *at gesture start* pinned —
+// Mapbox-like. It lives in the <SmoothWheelZoom/> map child at the bottom of
+// this file, NOT as a global `L.Map.addInitHook`: Leaflet's `L` is a singleton
+// that survives Next.js Fast Refresh, so a module-level install patches it once
+// and never updates on edit (tweaks silently did nothing until a hard reload),
+// and a stale install could double up with a new one. Keeping the whole
+// algorithm in component code makes it hot-reloadable and collision-free.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function installSmoothWheelZoom(Lref: any) {
-  if (Lref.Map.SmoothWheelZoom) return;
-  Lref.Map.mergeOptions({ smoothWheelZoom: true, smoothSensitivity: 1 });
-  Lref.Map.SmoothWheelZoom = Lref.Handler.extend({
-    addHooks() {
-      Lref.DomEvent.on(this._map._container, 'wheel', this._onWheelScroll, this);
-    },
-    removeHooks() {
-      Lref.DomEvent.off(this._map._container, 'wheel', this._onWheelScroll, this);
-      clearTimeout(this._timeoutId);
-      this._stopWheelAnim();
-    },
-    _onWheelScroll(e: any) {
-      if (!this._active) this._onWheelStart(e);
-      this._onWheeling(e);
-    },
-    _onWheelStart(e: any) {
-      const map = this._map;
-      this._active = true;   // rAF loop running
-      this._gesture = true;  // fingers still on the wheel
-      this._wheelMousePosition = map.mouseEventToContainerPoint(e);
-      this._centerPoint = map.getSize()._divideBy(2);
-      this._wheelStartLatLng = map.containerPointToLatLng(this._wheelMousePosition);
-      map._stop();
-      if (map._panAnim) map._panAnim.stop();
-      this._goalZoom = map.getZoom();
-      this._prevCenter = map.getCenter();
-      this._prevZoom = map.getZoom();
-      this._lastFrameTs = 0;
-      this._zoomAnimationId = requestAnimationFrame(this._updateWheelZoom.bind(this));
-    },
-    _onWheeling(e: any) {
-      const map = this._map;
-      // Normalise line-mode deltas (Firefox) to ~pixel scale.
-      const dy = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY;
-      this._goalZoom = this._goalZoom - dy * 0.0035 * map.options.smoothSensitivity;
-      if (this._goalZoom < map.getMinZoom() || this._goalZoom > map.getMaxZoom()) {
-        this._goalZoom = map._limitZoom(this._goalZoom);
-      }
-      this._wheelMousePosition = map.mouseEventToContainerPoint(e);
-      this._gesture = true;
-      clearTimeout(this._timeoutId);
-      this._timeoutId = setTimeout(() => { this._gesture = false; }, 180);
-      Lref.DomEvent.preventDefault(e);
-      Lref.DomEvent.stopPropagation(e);
-    },
-    _stopWheelAnim() {
-      this._active = false;
-      this._gesture = false;
-      cancelAnimationFrame(this._zoomAnimationId);
-    },
-    _updateWheelZoom(now: number) {
-      const map = this._map;
-      // Bail if some other interaction moved the map out from under us.
-      if (!map.getCenter().equals(this._prevCenter) || map.getZoom() !== this._prevZoom) {
-        this._stopWheelAnim();
-        return;
-      }
-      // Time-based exponential glide toward the goal zoom — frame-rate
-      // independent and with no quantisation, so there are no visible steps.
-      const dt = this._lastFrameTs ? now - this._lastFrameTs : 16.7;
-      this._lastFrameTs = now;
-      const k = 1 - Math.exp((-dt / 1000) * 9);
-      let zoom = map.getZoom() + (this._goalZoom - map.getZoom()) * k;
-      // Once the wheel is idle, keep gliding until we've fully converged —
-      // ending early is what made the tail of each scroll feel like a jump.
-      const done = !this._gesture && Math.abs(this._goalZoom - zoom) < 0.003;
-      if (done) zoom = this._goalZoom;
-      // Recentre so the pixel under the cursor stays pinned as the zoom eases.
-      const delta = this._wheelMousePosition.subtract(this._centerPoint);
-      const center = map.unproject(
-        map.project(this._wheelStartLatLng, zoom).subtract(delta),
-        zoom,
-      );
-      map._move(center, zoom);
-      this._prevCenter = map.getCenter();
-      this._prevZoom = map.getZoom();
-      if (done) {
-        this._active = false;
-        map._moveEnd(true);
-        return;
-      }
-      this._zoomAnimationId = requestAnimationFrame(this._updateWheelZoom.bind(this));
-    },
-  });
-  Lref.Map.addInitHook('addHandler', 'smoothWheelZoom', Lref.Map.SmoothWheelZoom);
+
+// ── Crisp vector paths during continuous zoom ──────────────────────────────
+// On the `zoom` event Leaflet's SVG renderer only CSS-*scales* its whole <svg>
+// container (`_updateTransform`) and re-projects the actual path geometry just
+// once, on `moveend`. Our smooth-wheel and eased animations drive zoom every
+// frame via `map._move` (which fires `zoom` continuously but never `moveend`
+// until the very end), so the OTW route polyline gets scaled up for the entire
+// gesture — it "stays big" and only snaps to the right size a beat after you
+// stop. Markers already re-project on every `zoom` (that's why they track the
+// map perfectly); make vector paths do the same by fully re-projecting
+// (`_reset`) on each `zoom` instead of scaling. The route now tracks the map
+// crisply and instantly, exactly like the Mapbox GL line. Native CSS zoom
+// animations (e.g. fitBounds) still use `zoomanim` for their smooth tween and
+// only hit this at the end, so they're unaffected. Patched once, globally.
+function installCrispVectorZoom(Lref: any) {
+  if (Lref.SVG._hsCrispZoom) return;
+  Lref.SVG._hsCrispZoom = true;
+  Lref.SVG.prototype._onZoom = function () { this._reset(); };
 }
-installSmoothWheelZoom(L);
+installCrispVectorZoom(L);
+
+// ── "Is one of our per-frame zoom loops mid-flight?" ────────────────────────
+// The rounding-drop patches below and the eased zoom loops further down must
+// agree on this one bit, but they can't share a module `let`: the patches are
+// installed ONCE on Leaflet's `L` singleton (guarded so Fast Refresh doesn't
+// double-install), so their closure is frozen to the *first* module instance —
+// while `animateView`/`SmoothWheelZoom` re-evaluate on every hot reload and set
+// a *different* binding. The frozen patch would forever read the original
+// (stuck `false`) flag and never drop rounding, so the map keeps shivering in
+// dev until a hard reload. Parking the flag ON the singleton (which both the
+// frozen patches and the live loops reach through `L`) keeps them in sync. See
+// the file-top note on why globals-on-`L` are the correct pattern here.
+type SmoothL = { _hsZoomActive?: boolean };
+const setSmoothZoom = (v: boolean) => { (L as unknown as SmoothL)._hsZoomActive = v; };
+const isSmoothZoom = () => !!(L as unknown as SmoothL)._hsZoomActive;
+
+// ── Sub-pixel marker positions during continuous zoom ──────────────────────
+// `Marker.update()` (fired on every `zoom` event) rounds the marker's layer
+// point to a whole pixel — TWICE: `latLngToLayerPoint` itself rounds the
+// projected point, and stock `update` rounds again. Native Leaflet zoom/pan
+// never notices because it moves the whole pane with one CSS transform, so
+// markers aren't re-projected per frame. Our eased click-/wheel-zoom drives
+// `_move` every frame, so each frame re-projects and re-rounds every pin while
+// the tiles scale sub-pixel-smoothly: the ±0.5px snap reads as the pins
+// shivering for the whole zoom (but not while panning — a pure pane translate).
+// Mid-gesture, position pins from the UNrounded projection so they track the
+// map exactly like the Mapbox markers; at rest fall back to Leaflet's rounded
+// path so icons stay GPU-crisp on whole pixels. Patched once on the singleton.
+function installSmoothMarkerZoom(Lref: any) {
+  if (Lref.Marker._hsSmoothZoom) return;
+  Lref.Marker._hsSmoothZoom = true;
+  Lref.Marker.prototype.update = function () {
+    if (!this._icon || !this._map) return this;
+    const map = this._map;
+    const pos = isSmoothZoom()
+      ? map.project(this._latlng, map.getZoom())._subtract(map.getPixelOrigin())
+      : map.latLngToLayerPoint(this._latlng).round();
+    this._setPos(pos);
+    return this;
+  };
+}
+installSmoothMarkerZoom(L);
+
+// ── Sub-pixel basemap during continuous zoom ───────────────────────────────
+// Same shiver as the markers above, but for the *tiles*. Every frame our zoom
+// loops call `map._move`, which recomputes `_pixelOrigin` via `_getNewPixelOrigin`
+// (rounded to a whole pixel) and re-lays the tile grid through `_setZoomTransform`
+// (whose per-level `translate` is *also* rounded). The tile scale grows sub-pixel-
+// smoothly frame to frame, but that rounded translate/origin snaps by ±0.5px each
+// frame — so the entire basemap vibrates for the whole gesture even with no
+// hydrants on screen (but not while panning, which is a pure pane translate that
+// never re-rounds). Drop the rounding *only while one of our loops is running*
+// (`isSmoothZoom()`), so the map glides at sub-pixel precision mid-gesture and
+// snaps back to crisp, seam-free whole-pixel alignment the instant it settles.
+// Patched once, globally.
+function installSmoothTileZoom(Lref: any) {
+  if (Lref.GridLayer._hsSmoothZoom) return;
+  Lref.GridLayer._hsSmoothZoom = true;
+
+  const origGetPixelOrigin = Lref.Map.prototype._getNewPixelOrigin;
+  Lref.Map.prototype._getNewPixelOrigin = function (center: any, zoom: any) {
+    if (!isSmoothZoom()) return origGetPixelOrigin.call(this, center, zoom);
+    // Identical to Leaflet's, minus the trailing `._round()`.
+    return this.project(center, zoom)
+      ._subtract(this.getSize()._divideBy(2))
+      ._add(this._getMapPanePos());
+  };
+
+  const origSetZoomTransform = Lref.GridLayer.prototype._setZoomTransform;
+  Lref.GridLayer.prototype._setZoomTransform = function (level: any, center: any, zoom: any) {
+    if (!isSmoothZoom()) return origSetZoomTransform.call(this, level, center, zoom);
+    const scale = this._map.getZoomScale(zoom, level.zoom);
+    // No `.round()` — pair with the unrounded `_getNewPixelOrigin` above.
+    const translate = level.origin.multiplyBy(scale)._subtract(this._map._getNewPixelOrigin(center, zoom));
+    if (Lref.Browser.any3d) Lref.DomUtil.setTransform(level.el, translate, scale);
+    else Lref.DomUtil.setPosition(level.el, translate);
+  };
+}
+installSmoothTileZoom(L);
 
 // ── Mapbox-parity zoom scale ───────────────────────────────────────────────
 // mapbox-gl renders 512px tiles, Leaflet 256px — so Mapbox zoom N covers the
@@ -128,10 +141,17 @@ const fromLeafletZoom = (z: number) => z - OSM_ZOOM_OFFSET;
 type AnimatableMap = L.Map & {
   _hsAnim?: number;
   _hsCleanup?: () => void;
-  _move: (center: L.LatLng, zoom: number) => void;
+  // The `data` arg matters: passing `{ flyTo: true }` routes the tile layer
+  // through its lightweight, GPU-transform-only zoom path (no per-frame grid
+  // rebuild against a rounded pixel origin), exactly like Leaflet's own flyTo.
+  // Without it the whole map shivers for the duration of a programmatic zoom.
+  _move: (center: L.LatLng, zoom: number, data?: { flyTo?: boolean; pinch?: boolean }) => void;
   _moveEnd: (zoomChanged: boolean) => void;
   _stop: () => void;
 };
+
+// Passed as `_move`'s data during eased frames — see the comment above.
+const SMOOTH_MOVE = { flyTo: true } as const;
 
 function cancelViewAnimation(map: L.Map) {
   const m = map as AnimatableMap;
@@ -141,6 +161,9 @@ function cancelViewAnimation(map: L.Map) {
   }
   m._hsCleanup?.();
   m._hsCleanup = undefined;
+  // Interrupted mid-flight: restore crisp whole-pixel rounding so the tiles the
+  // handoff (a drag, a fresh animation) lands on aren't left sub-pixel-soft.
+  setSmoothZoom(false);
 }
 
 const easeOutQuint = (t: number) => 1 - Math.pow(1 - t, 5);
@@ -172,13 +195,30 @@ function animateView(map: L.Map, target: L.LatLng, targetZoom: number, duration:
     const p0 = map.project(startCenter, zoom);
     const p1 = map.project(target, zoom);
     const center = map.unproject(p0.add(p1.subtract(p0).multiplyBy(e)), zoom);
-    m._move(center, zoom);
     if (t < 1) {
+      // Mid-flight: lightweight GPU-transform tile path (no shiver).
+      setSmoothZoom(true);
+      const zoomBefore = m.getZoom();
+      m._move(center, zoom, SMOOTH_MOVE);
+      // `_move` only fires `zoom` (which reprojects markers, tiles and vector
+      // paths) when the zoom level actually changes. A same-zoom flyTo — picking
+      // a new hydrant while already at its zoom — is a pure pan: no frame ever
+      // fires `zoom`, and our `_move` shifts the pixel origin rather than the
+      // pane, so nothing reprojects and the map looks frozen until it snaps at
+      // moveend (the "second click doesn't pan / everything teleports" bug).
+      // Force the per-frame reproject ourselves whenever `_move` skipped it.
+      if (zoom === zoomBefore) m.fire('zoom', SMOOTH_MOVE);
       m._hsAnim = requestAnimationFrame(frame);
     } else {
+      // Settle with a full `_move` so the tile grid rebuilds/prunes cleanly.
       m._hsAnim = undefined;
       m._hsCleanup?.();
       m._hsCleanup = undefined;
+      setSmoothZoom(false);
+      const zoomBefore = m.getZoom();
+      m._move(center, zoom);
+      // Same pure-pan case: reproject to the exact target before settling.
+      if (zoom === zoomBefore) m.fire('zoom', SMOOTH_MOVE);
       m._moveEnd(true);
     }
   };
@@ -237,9 +277,11 @@ function hydrantIcon(status: HydrantStatus): L.DivIcon {
   } else {
     // Operational → strong jet · reduced pressure → weak dribble.
     const power = status === 'operational' ? 'strong' : 'weak';
+    // Spout is baked in hidden; the positioner reveals it only for the selected
+    // (or OTW-target) pin, so at rest the map isn't a field of spraying water.
     content =
       `<img src="${iconUrl}" width="${W}" height="${H}" style="${imgStyle}" />` +
-      `<div class="hydrant-fx"><div class="hydrant-spout ${power}">` +
+      `<div class="hydrant-fx" style="display:none;"><div class="hydrant-spout ${power}">` +
         `<span class="drop"></span><span class="drop"></span><span class="drop"></span><span class="drop"></span><span class="drop"></span>` +
       `</div></div>`;
   }
@@ -383,6 +425,115 @@ function MapMoveHandler({ onMapMove }: { onMapMove?: () => void }) {
   return null;
 }
 
+// Mapbox-parity continuous wheel zoom (see the note at the top of the file for
+// why this is a component and not a global L.Handler). Accumulates wheel delta
+// into a goal zoom and eases the map toward it each frame via the internal
+// `_move`, keeping the point that was under the cursor WHEN THE GESTURE BEGAN
+// pinned for the whole gesture — moving the mouse mid-scroll can't drag the map
+// toward the cursor, which is what made the old handler feel jittery / like it
+// "zoomed to the cursor". Requires `scrollWheelZoom={false}` on the container
+// so Leaflet's discrete native handler doesn't also fire.
+function SmoothWheelZoom() {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    const m = map as AnimatableMap;
+
+    // Defensive: if an earlier dev session installed the old *global* handler on
+    // Leaflet's singleton, disable it so two zoomers don't run at once.
+    const legacy = (map as unknown as { smoothWheelZoom?: { disable?: () => void } }).smoothWheelZoom;
+    legacy?.disable?.();
+
+    let active = false;                    // rAF loop running
+    let gesture = false;                   // wheel still spinning
+    let goalZoom = 0;
+    let wheelMouse = L.point(0, 0);        // cursor px, FROZEN at gesture start
+    let centerPoint = L.point(0, 0);
+    let startLatLng = map.getCenter();     // latlng under the cursor at start
+    let prevCenter = map.getCenter();
+    let prevZoom = 0;
+    let lastTs = 0;
+    let rafId = 0;
+    let idleTimer = 0;
+    let lastWheelTs = 0;
+    // A gap longer than this between wheel ticks starts a fresh gesture and
+    // re-pins the anchor to the current cursor — so after you pause and move the
+    // mouse, the next scroll zooms toward the new spot immediately instead of
+    // waiting ~1s for the previous glide to fully settle (Mapbox-like). Ticks
+    // closer than this stay pinned to the original point, so a continuous scroll
+    // still can't chase tiny cursor drifts.
+    const REANCHOR_MS = 180;
+
+    const stop = () => { active = false; gesture = false; setSmoothZoom(false); cancelAnimationFrame(rafId); };
+
+    const frame = (now: number) => {
+      // Bail if some other interaction moved the map out from under us.
+      if (!map.getCenter().equals(prevCenter) || map.getZoom() !== prevZoom) { stop(); return; }
+      // Frame-rate-independent exponential glide toward the goal — no steps.
+      const dt = lastTs ? now - lastTs : 16.7;
+      lastTs = now;
+      const k = 1 - Math.exp((-dt / 1000) * 9);
+      let zoom = map.getZoom() + (goalZoom - map.getZoom()) * k;
+      // Keep gliding until fully converged once the wheel is idle; ending early
+      // is what made the tail of each scroll feel like a jump.
+      const done = !gesture && Math.abs(goalZoom - zoom) < 0.003;
+      if (done) zoom = goalZoom;
+      // Recentre so the frozen cursor pixel stays pinned as the zoom eases.
+      const delta = wheelMouse.subtract(centerPoint);
+      const center = map.unproject(map.project(startLatLng, zoom).subtract(delta), zoom);
+      // Mid-gesture uses the lightweight GPU-transform tile path so the map
+      // doesn't shiver; the final frame settles with a full `_move`. Drop the
+      // whole-pixel rounding (tiles + pixel origin) only while gliding.
+      setSmoothZoom(!done);
+      m._move(center, zoom, done ? undefined : SMOOTH_MOVE);
+      prevCenter = map.getCenter();
+      prevZoom = map.getZoom();
+      if (done) { active = false; m._moveEnd(true); return; }
+      rafId = requestAnimationFrame(frame);
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      // Start a fresh gesture on the first tick, or when there's been a pause
+      // since the last one — both re-pin the anchor to the current cursor.
+      const reanchor = !active || e.timeStamp - lastWheelTs > REANCHOR_MS;
+      lastWheelTs = e.timeStamp;
+      if (reanchor) {
+        // Freeze the anchor: cursor pixel + the latlng under it, captured once
+        // per gesture. Rebase the goal onto the current (maybe mid-glide) zoom
+        // so re-anchoring hands off smoothly with no jump.
+        wheelMouse = map.mouseEventToContainerPoint(e);
+        centerPoint = map.getSize().divideBy(2);
+        startLatLng = map.containerPointToLatLng(wheelMouse);
+        goalZoom = map.getZoom();
+        if (!active) {
+          active = true;
+          m._stop();
+          prevCenter = map.getCenter();
+          prevZoom = map.getZoom();
+          lastTs = 0;
+          rafId = requestAnimationFrame(frame);
+        }
+      }
+      // Normalise line-mode deltas (Firefox) to ~pixel scale.
+      const dy = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY;
+      goalZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), goalZoom - dy * 0.0035));
+      gesture = true;
+      clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => { gesture = false; }, 180);
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', onWheel);
+      clearTimeout(idleTimer);
+      stop();
+    };
+  }, [map]);
+  return null;
+}
+
 interface HydrantLayerProps {
   hydrants: Hydrant[];
   selectedHydrantId: string | null;
@@ -394,7 +545,10 @@ interface HydrantLayerProps {
 }
 
 // Supercluster-driven hydrant + cluster markers with Mapbox-style glide.
-function HydrantLayer({ hydrants, selectedHydrantId, onSelectHydrant, addHydrantMode, otwHydrant, otwRoute, nearRouteIds }: HydrantLayerProps) {
+// Memoized: LeafletMap re-renders on every GPS fix (the user-location marker),
+// but the ~50 hydrant/cluster markers only depend on these props — skipping
+// them avoids reconciling every <Marker> once a second while tracking.
+const HydrantLayer = memo(function HydrantLayer({ hydrants, selectedHydrantId, onSelectHydrant, addHydrantMode, otwHydrant, otwRoute, nearRouteIds }: HydrantLayerProps) {
   const map = useMap();
   const markerRefs = useRef(new Map<string, L.Marker>());
   // Cluster in Mapbox zoom units so bubbles form/split at the same visual
@@ -485,6 +639,12 @@ function HydrantLayer({ hydrants, selectedHydrantId, onSelectHydrant, addHydrant
       const selRing = wrapper.querySelector('.sel-ring') as HTMLElement | null;
       if (selRing) selRing.style.display = showSel ? 'block' : 'none';
 
+      // Water only spouts from the pin the user is focused on — the selected
+      // hydrant, or the OTW routing target. Everything else sits dry.
+      const showSpout = !clustered && (selectedHydrantId === h.id || isOtwTarget);
+      const fx = wrapper.querySelector('.hydrant-fx') as HTMLElement | null;
+      if (fx) fx.style.display = showSpout ? 'block' : 'none';
+
       const showOtw = isOtwTarget && !clustered;
       wrapper.querySelectorAll('.otw-ring').forEach((r) => {
         (r as HTMLElement).style.display = showOtw ? 'block' : 'none';
@@ -530,7 +690,7 @@ function HydrantLayer({ hydrants, selectedHydrantId, onSelectHydrant, addHydrant
       ))}
     </>
   );
-}
+});
 
 interface LeafletMapProps {
   hydrants: Hydrant[];
@@ -593,8 +753,8 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
       // the eased button zoom both settle continuously instead of stair-stepping.
       zoomSnap={0}
       zoomControl={false}
-      // Native wheel zoom is the discrete/jumpy one — replaced by the smooth
-      // handler installed above (enabled via the smoothWheelZoom map option).
+      // Native wheel zoom is the discrete/jumpy one — disabled here and replaced
+      // by the continuous <SmoothWheelZoom/> child rendered below.
       scrollWheelZoom={false}
       style={{ height: '100%', width: '100%' }}
     >
@@ -654,6 +814,7 @@ export default function LeafletMap({ hydrants, selectedHydrantId, onMapReady, on
       <MapClickHandler addHydrantMode={addHydrantMode} onMapClick={onMapClick} onMapBackgroundClick={onMapBackgroundClick} />
       <ZoomBridge onMapReady={onMapReady} />
       <MapMoveHandler onMapMove={onMapMove} />
+      <SmoothWheelZoom />
     </MapContainer>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import MapView, { type MapProvider, type MapController } from './MapView';
 import DashboardOverlay from './DashboardOverlay';
 import HydrantInfoPanel from './HydrantInfoPanel';
@@ -10,11 +11,17 @@ import DamageReportModal from './DamageReportModal';
 import ReportsPanel from './ReportsPanel';
 import AccountCenterModal from './AccountCenterModal';
 import UserProfileModal, { type ViewingUser } from './UserProfileModal';
-import OperationsDashboard from './OperationsDashboard';
-import AdminDashboard from './AdminDashboard';
-import PinHydrantModal from './PinHydrantModal';
 import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
+
+// The three heaviest, rarely-open surfaces are split out of the initial
+// bundle so the first load parses/executes less JS on phones. They're warmed
+// right after the map is ready (see the effect below), which also lets the
+// service worker cache their chunks for offline use — same pattern MapView
+// uses for the Leaflet chunk.
+const OperationsDashboard = dynamic(() => import('./OperationsDashboard'), { ssr: false });
+const AdminDashboard      = dynamic(() => import('./AdminDashboard'),      { ssr: false });
+const PinHydrantModal     = dynamic(() => import('./PinHydrantModal'),     { ssr: false });
 import {
   countByStatus,
   STATUS_META,
@@ -85,11 +92,11 @@ export default function HydroScoutDashboard() {
   const geoErrorTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controllerRef         = useRef<MapController | null>(null);
   const panelScrollRef        = useRef<HTMLDivElement | null>(null);
-  const mapLongPressTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapScrollDragStartY   = useRef(0);
   const mapScrollDragStartTop = useRef(0);
-  const mapScrollCaptureEl    = useRef<HTMLDivElement | null>(null);
-  const mapScrollCaptureId    = useRef<number>(-1);
+  // Tears down the currently-armed long-press (timer + drift listeners). One
+  // pending long-press at a time: a second finger landing (pinch) voids it.
+  const longPressCleanupRef   = useRef<(() => void) | null>(null);
   const [mapScrollMode, setMapScrollMode] = useState(false);
   const otwFetchedForRef = useRef<string | null>(null);
   const otwRestoredRef  = useRef(false);
@@ -106,22 +113,35 @@ export default function HydroScoutDashboard() {
   // hydrant locations they still see are coming from cache.
   const connection = useOnlineStatus();
   const [showReconnected, setShowReconnected] = useState(false);
+  // Offline/weak toast auto-dismisses after a few seconds instead of sitting
+  // on screen the whole time the connection is degraded.
+  const [showConnectionToast, setShowConnectionToast] = useState(false);
   const wasOfflineRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (connection === 'offline' || connection === 'weak') {
       wasOfflineRef.current = true;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowReconnected(false);
+      // Flash the offline/weak notice, then auto-dismiss after 3s. Re-runs on
+      // each state change (e.g. offline→weak) so the message stays accurate.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowConnectionToast(true);
+      if (connectionTimerRef.current) clearTimeout(connectionTimerRef.current);
+      connectionTimerRef.current = setTimeout(() => setShowConnectionToast(false), 3000);
     } else if (wasOfflineRef.current) {
       // Just came back — flash a brief confirmation, then auto-dismiss.
       wasOfflineRef.current = false;
+      setShowConnectionToast(false);
+      if (connectionTimerRef.current) clearTimeout(connectionTimerRef.current);
       setShowReconnected(true);
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = setTimeout(() => setShowReconnected(false), 3500);
     }
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      if (connectionTimerRef.current) clearTimeout(connectionTimerRef.current);
     };
   }, [connection]);
 
@@ -145,6 +165,19 @@ export default function HydroScoutDashboard() {
       return () => clearTimeout(t);
     }
   }, [loading, mapReady]);
+
+  // Warm the split-out chunks once the map is up and idle: opening them later
+  // is instant, and the service worker caches the chunks so they still open
+  // when the device is offline in the field.
+  useEffect(() => {
+    if (!mapReady) return;
+    const t = setTimeout(() => {
+      import('./OperationsDashboard').catch(() => {});
+      import('./AdminDashboard').catch(() => {});
+      import('./PinHydrantModal').catch(() => {});
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [mapReady]);
 
   useEffect(() => {
     // Stamp the sync time whenever the live hydrant feed delivers new data —
@@ -244,15 +277,26 @@ export default function HydroScoutDashboard() {
     return () => { cancelled = true; };
   }, [otwHydrant, userLocation, ROUTE_FETCH_INTERVAL_MS]);
 
+  const lastFitTargetRef = useRef<string | null>(null);
   useEffect(() => {
     otwRouteRef.current = otwRoute;
     if (!otwRoute) {
+      lastFitTargetRef.current = null;
       controllerRef.current?.setZoomLimits(null, null);
       return;
     }
     controllerRef.current?.setZoomLimits(OTW_MIN_ZOOM, OTW_MAX_ZOOM);
-    controllerRef.current?.fitRoute(otwRoute);
-  }, [otwRoute]);
+    // Frame the route once per routing target. The route refreshes every ~10 s
+    // while en route (each refetch is a new array), and re-fitting on each one
+    // yanked the camera away from wherever the responder had panned and burned
+    // a full camera animation + tile fetch cycle each time. "Show full route"
+    // in the OTW banner re-frames on demand.
+    const targetId = otwHydrant?.id ?? null;
+    if (targetId && lastFitTargetRef.current !== targetId) {
+      lastFitTargetRef.current = targetId;
+      controllerRef.current?.fitRoute(otwRoute);
+    }
+  }, [otwRoute, otwHydrant]);
 
   // Offline, Mapbox can't fetch styles/tiles (they aren't service-worker
   // cached), so switch to Leaflet proactively — its CARTO tiles and chunk are
@@ -324,7 +368,15 @@ export default function HydroScoutDashboard() {
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         geoErrorRef.current = null;
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        // watchPosition streams a fix about once a second even when standing
+        // still, and every new object here re-renders the whole dashboard and
+        // both marker sets. Sub-2 m changes are GPS noise (well inside typical
+        // accuracy), not movement — keep the previous state for those.
+        setUserLocation((prev) =>
+          prev && haversineM(prev.lat, prev.lng, lat, lng) < 2 ? prev : { lat, lng },
+        );
       },
       (err) => {
         geoErrorRef.current = err;
@@ -669,14 +721,32 @@ export default function HydroScoutDashboard() {
     if (e.pointerType === 'mouse') return;
     const el  = e.currentTarget;
     const pid = e.pointerId;
+    const startX = e.clientX;
+    const startY = e.clientY;
     mapScrollDragStartY.current = e.clientY;
 
-    mapLongPressTimer.current = setTimeout(() => {
-      if (!panelScrollRef.current) return;
-      el.setPointerCapture(pid);
-      mapScrollCaptureEl.current  = el;
-      mapScrollCaptureId.current  = pid;
-      mapScrollDragStartTop.current = panelScrollRef.current.scrollTop;
+    // A new finger landing always voids any pending long-press: two fingers is
+    // a pinch, never a panel-scroll hold. Previously each pointerdown
+    // overwrote a *shared* timer id, so the first finger's timer could no
+    // longer be cancelled and fired 2 s into a pinch — stealing pointer
+    // capture from the map mid-gesture and freezing panning until every
+    // finger lifted. On real phones this read as the map "freezing for a few
+    // seconds" while the CSS water animations kept running.
+    longPressCleanupRef.current?.();
+
+    const timer = setTimeout(() => {
+      cleanup();
+      const panel = panelScrollRef.current;
+      // Only hijack the pointer when there is actually something to scroll —
+      // capturing over a non-scrollable panel blocked map panning with zero
+      // visible effect (another flavour of the "frozen map" report).
+      if (!panel || panel.scrollHeight <= panel.clientHeight + 1) return;
+      try {
+        el.setPointerCapture(pid);
+      } catch {
+        return; // pointer already ended — nothing to capture
+      }
+      mapScrollDragStartTop.current = panel.scrollTop;
       setMapScrollMode(true);
 
       const onMove = (ev: PointerEvent) => {
@@ -684,35 +754,42 @@ export default function HydroScoutDashboard() {
         const delta = mapScrollDragStartY.current - ev.clientY; // drag up → scroll down
         panelScrollRef.current.scrollTop = mapScrollDragStartTop.current + delta;
       };
-      const onUp = (ev: PointerEvent) => {
+      const onEnd = (ev: PointerEvent) => {
         if (ev.pointerId !== pid) return;
         setMapScrollMode(false);
-        mapScrollCaptureEl.current  = null;
-        mapScrollCaptureId.current  = -1;
         document.removeEventListener('pointermove', onMove);
-        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointerup', onEnd);
+        document.removeEventListener('pointercancel', onEnd);
       };
       document.addEventListener('pointermove', onMove);
-      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointerup', onEnd);
+      // iOS frequently ends touches with pointercancel (system gestures,
+      // incoming banners). Without it, scroll mode stuck on and its document
+      // listeners leaked.
+      document.addEventListener('pointercancel', onEnd);
     }, 2000);
 
-    const cancelTimer = () => {
-      if (mapLongPressTimer.current) { clearTimeout(mapLongPressTimer.current); mapLongPressTimer.current = null; }
-    };
-    // Cancel on pointer up / cancel. For move: only cancel if the finger drifted
-    // more than 10 px (small jitter is normal on touch — don't break the hold).
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const onMoveCancel = (ev: PointerEvent) => {
+    // Cancel the hold on pointer up / cancel, or when the finger drifts more
+    // than 10 px (small jitter is normal on touch — don't break the hold).
+    const onDriftOrEnd = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
-      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 10) {
-        cancelTimer();
-        el.removeEventListener('pointermove', onMoveCancel);
-      }
+      if (
+        ev.type === 'pointermove' &&
+        Math.hypot(ev.clientX - startX, ev.clientY - startY) <= 10
+      ) return;
+      cleanup();
     };
-    el.addEventListener('pointerup',     cancelTimer,    { once: true });
-    el.addEventListener('pointercancel', cancelTimer,    { once: true });
-    el.addEventListener('pointermove',   onMoveCancel);
+    const cleanup = () => {
+      clearTimeout(timer);
+      el.removeEventListener('pointermove',   onDriftOrEnd);
+      el.removeEventListener('pointerup',     onDriftOrEnd);
+      el.removeEventListener('pointercancel', onDriftOrEnd);
+      if (longPressCleanupRef.current === cleanup) longPressCleanupRef.current = null;
+    };
+    longPressCleanupRef.current = cleanup;
+    el.addEventListener('pointermove',   onDriftOrEnd);
+    el.addEventListener('pointerup',     onDriftOrEnd);
+    el.addEventListener('pointercancel', onDriftOrEnd);
   }, []);
 
   // Compute the off-screen edge indicator for the OTW hydrant
@@ -737,13 +814,29 @@ export default function HydroScoutDashboard() {
     const scaleX = Math.abs(dx) > 0 ? (cx - sideMargin) / Math.abs(dx) : Infinity;
     const scaleY = Math.abs(dy) > 0 ? (cy - sideMargin) / Math.abs(dy) : Infinity;
     const scale = Math.min(scaleX, scaleY);
-    const ex = cx + dx * scale;
-    const ey = Math.max(topMin, cy + dy * scale);
-    setOtwEdgePos({ x: ex, y: ey, angle });
+    // Round to whole pixels and bail when nothing changed: this runs on every
+    // map `move` event (per animation frame during pans/zooms), and each new
+    // object re-rendered the entire dashboard tree per frame.
+    const ex = Math.round(cx + dx * scale);
+    const ey = Math.round(Math.max(topMin, cy + dy * scale));
+    setOtwEdgePos((prev) =>
+      prev && prev.x === ex && prev.y === ey && Math.abs(prev.angle - angle) < 0.01
+        ? prev
+        : { x: ex, y: ey, angle },
+    );
   }, [otwHydrant, isMobile]);
 
   // Recompute when OTW hydrant changes (handleMapMove is recreated when otwHydrant changes)
   useEffect(() => { handleMapMove(); }, [handleMapMove]);
+
+  // Stable identities for the overlay props so the memoized DashboardOverlay
+  // (a ~950-line tree) isn't re-rendered by every GPS tick / map-move frame.
+  const handleZoomIn        = useCallback(() => controllerRef.current?.zoomIn(), []);
+  const handleZoomOut       = useCallback(() => controllerRef.current?.zoomOut(), []);
+  const handleOverlayFlyTo  = useCallback((lat: number, lng: number, zoom?: number) => controllerRef.current?.flyTo(lat, lng, zoom), []);
+  const handleToggleReports = useCallback(() => setShowReports((v) => !v), []);
+  const handleOpenDashboard = useCallback(() => setShowOpsDashboard(true), []);
+  const handleOpenAdmin     = useCallback(() => setShowAdminDashboard(true), []);
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden">
@@ -845,17 +938,17 @@ export default function HydroScoutDashboard() {
         provider={provider}
         autoFallback={autoFallback}
         onToggleProvider={handleToggleProvider}
-        onZoomIn={() => controllerRef.current?.zoomIn()}
-        onZoomOut={() => controllerRef.current?.zoomOut()}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
         onLocate={handleLocate}
-        onFlyTo={(lat, lng, zoom) => controllerRef.current?.flyTo(lat, lng, zoom)}
+        onFlyTo={handleOverlayFlyTo}
         onToggle3D={handleToggle3D}
         is3D={is3D}
         showReports={showReports}
-        onToggleReports={() => setShowReports((v) => !v)}
+        onToggleReports={handleToggleReports}
         onOpenAccount={handleOpenAccount}
-        onOpenDashboard={() => setShowOpsDashboard(true)}
-        onOpenAdmin={() => setShowAdminDashboard(true)}
+        onOpenDashboard={handleOpenDashboard}
+        onOpenAdmin={handleOpenAdmin}
         addHydrantMode={addHydrantMode}
         onToggleAddHydrant={handleToggleAddHydrant}
         hasPendingReports={hasPendingReports}
@@ -1005,10 +1098,10 @@ export default function HydroScoutDashboard() {
       {/* Connectivity toast — offline/weak signal, or a brief "back online" flash.
           Anchored bottom-center so it never covers the header, legend chips or
           OTW banner (it used to sit top-center and block those icons). */}
-      {(connection === 'offline' || connection === 'weak') && (
+      {showConnectionToast && (connection === 'offline' || connection === 'weak') && (
         <div
           className="pointer-events-none absolute left-1/2 z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)]"
-          style={{ bottom: `calc(${isMobile ? '5.5rem' : '1.25rem'} + env(safe-area-inset-bottom, 0px))` }}
+          style={{ bottom: `calc(${isMobile ? '9rem' : '1.25rem'} + env(safe-area-inset-bottom, 0px))` }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={connection === 'offline' ? '#f87171' : '#fbbf24'} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
@@ -1023,7 +1116,7 @@ export default function HydroScoutDashboard() {
       {showReconnected && (
         <div
           className="pointer-events-none absolute left-1/2 z-[2200] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-neutral-900/90 px-4 py-2 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(440px,92vw)]"
-          style={{ bottom: `calc(${isMobile ? '5.5rem' : '1.25rem'} + env(safe-area-inset-bottom, 0px))` }}
+          style={{ bottom: `calc(${isMobile ? '9rem' : '1.25rem'} + env(safe-area-inset-bottom, 0px))` }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>

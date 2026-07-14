@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Component, memo, useCallback, useEffect, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import DilimanMap from './DilimanMap';
 import { DILIMAN_CENTER } from './mapConfig';
@@ -138,7 +138,7 @@ interface MapViewProps {
   onMapMove?: () => void;
 }
 
-export default function MapView({ provider, hydrants, selectedHydrantId, onMapboxError, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, onMapMove }: MapViewProps) {
+function MapView({ provider, hydrants, selectedHydrantId, onMapboxError, onMapReady, onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, onMapMove }: MapViewProps) {
   const { isDark } = useTheme();
 
   // Warm the Leaflet chunk while online, even when Mapbox is the active
@@ -183,3 +183,9 @@ export default function MapView({ provider, hydrants, selectedHydrantId, onMapbo
     </div>
   );
 }
+
+// Memoized so dashboard renders that don't touch the map (panel state, toasts,
+// OTW edge-indicator frames) skip the entire map subtree. All callbacks are
+// useCallback-stable in HydroScoutDashboard; map-relevant data (hydrants,
+// userLocation, routes) still flows through by identity.
+export default memo(MapView);

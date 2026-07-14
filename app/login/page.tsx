@@ -2,10 +2,10 @@
 
 import { useState, FormEvent, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useIsMobile, useIsShort } from "@/lib/use-media-query";
+import AuthShell, { AccentTicks, BRAND } from "../src/components/AuthShell";
 
 export default function LoginPage() {
   // useSearchParams() needs a Suspense boundary to prerender (Next.js 16).
@@ -29,25 +29,31 @@ function LoginContent() {
   const tight = isMobile && isShort;
   // Mobile input vertical padding (kept at 16px font min to avoid iOS focus-zoom).
   const padY = tight ? 9 : 11;
-  const headingSize = isMobile ? (tight ? 28 : 34) : 56;
-  const subSize = isMobile ? (tight ? 16 : 18) : 26;
-  const subMargin = isMobile ? (tight ? "4px 0 14px" : "6px 0 20px") : "8px 0 36px";
-  const labelSize = isMobile ? (tight ? 13 : 15) : 18;
+  const headingSize = isMobile ? (tight ? 26 : 32) : 46;
+  const subSize = isMobile ? (tight ? 14 : 16) : 18;
+  const subMargin = isMobile ? (tight ? "4px 0 14px" : "6px 0 20px") : "10px 0 34px";
+  const labelSize = isMobile ? (tight ? 12 : 13) : 14;
   const formGap = isMobile ? (tight ? 10 : 14) : 18;
-  const btnFont = isMobile ? (tight ? 16 : 17) : 20;
+  const btnFont = isMobile ? (tight ? 16 : 17) : 18;
 
   // Theme-derived colours (the page uses inline styles, so `dark:` utilities
-  // don't apply — we branch on isDark instead). The yellow brand panel stays.
-  const panelBg = isDark ? "#0b0f14" : "#ffffff";
-  const textColor = isDark ? "#e5e7eb" : "#000";
-  const inputBg = isDark ? "#1f2937" : "#ffffff";
-  const inputBorder = isDark ? "#374151" : "#ccc";
-  const errorColor = isDark ? "#e0353b" : "#e0353b";
+  // don't apply — we branch on isDark instead). The brand panel stays black.
+  const textColor = isDark ? "#e5e7eb" : "#0b0f14";
+  const mutedColor = isDark ? "#8b93a1" : "#6b7280";
+  const inputBg = isDark ? "#151b23" : "#ffffff";
+  const inputBorder = isDark ? "#2b333f" : "#d7dbe0";
+  const labelStyle: React.CSSProperties = {
+    fontSize: labelSize,
+    fontWeight: 600,
+    color: mutedColor,
+    letterSpacing: "0.07em",
+    textTransform: "uppercase",
+  };
   const baseInputStyle: React.CSSProperties = {
     padding: isMobile ? `${padY}px 16px` : "13px 20px",
     borderRadius: 24,
     border: `1.5px solid ${inputBorder}`,
-    fontSize: isMobile ? 16 : 18,
+    fontSize: isMobile ? 16 : 17,
     outline: "none",
     width: "100%",
     boxSizing: "border-box",
@@ -105,171 +111,137 @@ function LoginContent() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", width: "100%", overflowX: "hidden", ...(isMobile ? { height: "100dvh", overflowY: "hidden" } : { minHeight: "100dvh" }) }}>
-      {/* Left Panel */}
-      <div
-        style={{
-          flex: isMobile ? "0 0 auto" : "0 0 42%",
-          background: "#FED42E",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: isMobile ? (tight ? "10px 0" : "16px 0") : 0,
-        }}
-      >
-        <div style={{ position: "relative", width: isMobile ? (tight ? 64 : 84) : "55%", aspectRatio: "3 / 4" }}>
-          <Image
-            src="/Login Hydrant Logo.png"
-            alt="Hydro-Scout Hydrant"
-            fill
-            style={{ objectFit: "contain" }}
-            priority
+    <AuthShell>
+      <AccentTicks style={{ marginBottom: tight ? 10 : 16 }} />
+
+      <h1 style={{ fontSize: headingSize, fontWeight: 800, margin: 0, lineHeight: 1.05, letterSpacing: "-0.02em", color: textColor }}>
+        Every Second <span style={{ color: BRAND.red }}>Counts.</span>
+      </h1>
+      <p style={{ fontSize: subSize, color: mutedColor, margin: subMargin }}>
+        Login Please
+      </p>
+
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: formGap }}>
+        {/* Email */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          <label style={labelStyle}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            placeholder="you@example.com"
+            className="auth-input"
+            style={baseInputStyle}
           />
         </div>
-      </div>
 
-      {/* Right Panel */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          background: panelBg,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: isMobile ? "flex-start" : "center",
-          overflowY: isMobile ? "auto" : "visible",
-          padding: isMobile ? (tight ? "16px 22px 18px" : "24px 22px 30px") : "40px 48px",
-        }}
-      >
-        {/* margin auto centres the form when it fits, yet stays scrollable when it doesn't */}
-        <div style={{ width: "100%", maxWidth: 420, margin: isMobile ? "auto 0" : undefined }}>
-          <h1 style={{ fontSize: headingSize, fontWeight: 700, margin: 0, lineHeight: 1.1, color: textColor }}>
-            Hello Po!
-          </h1>
-          <p style={{ fontSize: subSize, color: textColor, margin: subMargin }}>
-            Login Please
-          </p>
-
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: formGap }}>
-            {/* Email */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: labelSize, fontWeight: 500, color: textColor }}>Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                style={baseInputStyle}
-              />
-            </div>
-
-            {/* Password */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: labelSize, fontWeight: 500, color: textColor }}>Password</label>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  style={passwordInputStyle}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  style={{
-                    position: "absolute",
-                    right: 14,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    color: "#888",
-                  }}
-                >
-                  {showPassword ? eyeOff : eyeOpen}
-                </button>
-              </div>
-            </div>
-
-            {error && (
-              <p style={{ color: errorColor, fontSize: 16, margin: 0 }}>{error}</p>
-            )}
-
-            {/* Login button */}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="active:scale-[0.97]"
-              style={{
-                marginTop: tight ? 4 : 8,
-                padding: isMobile ? (tight ? "11px 20px" : "13px 20px") : "16px 20px",
-                borderRadius: 24,
-                border: "2px solid #000",
-                background: submitting ? "#e8b800" : "#FED42E",
-                color: "#000",
-                fontWeight: 700,
-                fontSize: btnFont,
-                cursor: submitting ? "default" : "pointer",
-                width: "100%",
-                fontFamily: "inherit",
-                transition: "transform 0.1s, background 0.15s",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 10,
-              }}
-            >
-              {submitting && (
-                <svg className="anim-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M12 2a10 10 0 0 1 10 10" />
-                </svg>
-              )}
-              {submitting ? "Logging in..." : "Login"}
-            </button>
-
-            {/* Sign Up button */}
+        {/* Password */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          <label style={labelStyle}>Password</label>
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              className="auth-input"
+              style={passwordInputStyle}
+            />
             <button
               type="button"
-              onClick={() => router.push("/signup")}
-              className="active:scale-[0.97]"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
               style={{
-                padding: isMobile ? (tight ? "10px 20px" : "12px 20px") : "15px 20px",
-                borderRadius: 24,
-                border: `1.5px solid ${textColor}`,
-                background: "transparent",
-                color: textColor,
-                fontWeight: 600,
-                fontSize: btnFont,
+                position: "absolute",
+                right: 14,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
                 cursor: "pointer",
-                width: "100%",
-                fontFamily: "inherit",
-                transition: "transform 0.1s, opacity 0.15s",
+                padding: 0,
+                display: "flex",
+                alignItems: "center",
+                color: "#888",
               }}
             >
-              Sign Up
+              {showPassword ? eyeOff : eyeOpen}
             </button>
-
-            {/* Forgot password */}
-            <p style={{ textAlign: "center", margin: tight ? "4px 0 0" : "8px 0 0" }}>
-              <a
-                href="/forgot-password"
-                style={{ color: "#FFA500", fontSize: 16, fontWeight: 500, textDecoration: "none" }}
-              >
-                Forgot Password?
-              </a>
-            </p>
-          </form>
+          </div>
         </div>
-      </div>
-    </div>
+
+        {error && (
+          <p className="anim-shake" style={{ color: BRAND.red, fontSize: 15, fontWeight: 500, margin: 0 }}>{error}</p>
+        )}
+
+        {/* Login button */}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="auth-btn"
+          style={{
+            marginTop: tight ? 4 : 8,
+            padding: isMobile ? (tight ? "11px 20px" : "13px 20px") : "16px 20px",
+            borderRadius: 24,
+            border: "none",
+            background: submitting ? "#e8b800" : BRAND.yellow,
+            color: "#000",
+            fontWeight: 700,
+            fontSize: btnFont,
+            letterSpacing: "0.01em",
+            cursor: submitting ? "default" : "pointer",
+            width: "100%",
+            fontFamily: "inherit",
+            boxShadow: submitting ? "none" : "0 6px 18px -8px rgba(254, 212, 46, 0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+          }}
+        >
+          {submitting && (
+            <svg className="anim-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M12 2a10 10 0 0 1 10 10" />
+            </svg>
+          )}
+          {submitting ? "Logging in..." : "Login"}
+        </button>
+
+        {/* Sign Up button */}
+        <button
+          type="button"
+          onClick={() => router.push("/signup")}
+          className="auth-btn auth-btn-ghost"
+          style={{
+            padding: isMobile ? (tight ? "10px 20px" : "12px 20px") : "15px 20px",
+            borderRadius: 24,
+            border: `1.5px solid ${inputBorder}`,
+            background: "transparent",
+            color: textColor,
+            fontWeight: 600,
+            fontSize: btnFont,
+            cursor: "pointer",
+            width: "100%",
+            fontFamily: "inherit",
+          }}
+        >
+          Sign Up
+        </button>
+
+        {/* Forgot password */}
+        <p style={{ textAlign: "center", margin: tight ? "4px 0 0" : "8px 0 0" }}>
+          <a
+            href="/forgot-password"
+            className="auth-link"
+            style={{ color: BRAND.red, fontSize: 15, fontWeight: 600 }}
+          >
+            Forgot Password?
+          </a>
+        </p>
+      </form>
+    </AuthShell>
   );
 }

@@ -239,8 +239,9 @@ export default function HydrantInfoPanel({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             ref={photoRef}
-            src={proxiedPhotoUrl(hydrant.photos[0])}
+            src={proxiedPhotoUrl(hydrant.photos[0], 1024)}
             alt={`${hydrant.name} field photo`}
+            decoding="async"
             className="aspect-square w-full object-cover"
           />
         )}

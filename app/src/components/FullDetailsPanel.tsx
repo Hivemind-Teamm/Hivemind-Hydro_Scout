@@ -92,8 +92,9 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
         {hydrant.photos.length > 0 ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={proxiedPhotoUrl(hydrant.photos[1] ?? hydrant.photos[0])}
+            src={proxiedPhotoUrl(hydrant.photos[1] ?? hydrant.photos[0], 160)}
             alt={`${hydrant.name} field photo`}
+            decoding="async"
             className="h-14 w-14 shrink-0 rounded-lg object-cover"
           />
         ) : (
@@ -219,8 +220,9 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={proxiedPhotoUrl(lightbox)}
+            src={proxiedPhotoUrl(lightbox, 1600)}
             alt="Hydrant photo"
+            decoding="async"
             className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
@@ -309,7 +311,7 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
                 title={isHeadOrAdmin ? 'Click to view · Right-click for options' : 'Click to view'}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={proxiedPhotoUrl(url)} alt={`${hydrant.name} photo ${i + 1}`} className="h-full w-full object-cover" />
+                <img src={proxiedPhotoUrl(url, 320)} alt={`${hydrant.name} photo ${i + 1}`} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                 {hydrant.photos[0] === url && (
                   <span className="absolute bottom-0 left-0 right-0 bg-black/50 py-0.5 text-center text-[8px] font-bold uppercase tracking-wide text-white">Display</span>
                 )}
