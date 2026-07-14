@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { updatePassword } from 'firebase/auth';
 import { useAuth } from '@/lib/auth-context';
 import LogoutButton from './LogoutButton';
+import AvatarPlaceholder from './AvatarPlaceholder';
 
 const ROLE_LABELS: Record<string, string> = {
   general:    'General User',
@@ -44,7 +45,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
   const email       = user?.email ?? '';
   const displayName = user?.displayName
     || (email ? email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
-  const initials    = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
 
   function handleSignIn() { onClose(); router.push('/login');  }
   function handleSignUp() { onClose(); router.push('/signup'); }
@@ -151,8 +151,8 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
 
         {/* Profile banner */}
         <div className="flex items-center gap-4 bg-[#e0353b] py-4 pl-6 pr-12">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white text-lg font-extrabold text-[#e0353b]">
-            {initials}
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white text-[#e0353b]">
+            <AvatarPlaceholder />
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-extrabold text-white">{displayName}</p>

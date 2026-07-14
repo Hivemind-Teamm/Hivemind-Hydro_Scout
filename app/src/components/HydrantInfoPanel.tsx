@@ -41,6 +41,8 @@ export default function HydrantInfoPanel({
   const meta = STATUS_META[hydrant.status];
   const canEdit   = role === 'head' || role === 'admin';
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
+  // General users (and guests) are view-only — no routing.
+  const canRoute  = role === 'authorized' || role === 'head' || role === 'admin';
 
   // Touch device (phone / tablet) = primary pointer is coarse (finger).
   // Desktop with a mouse = primary pointer is fine.
@@ -263,7 +265,9 @@ export default function HydrantInfoPanel({
             </div>
           </div>
 
+          {(canRoute || canEdit || canReport) && (
           <div className="flex items-center gap-2">
+            {canRoute && (
             <button
               onClick={() => { if (isOtw) { onRouteDismiss(); } else { onRoute(); } }}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-colors ${isOtw ? 'bg-red-700 hover:bg-red-800 active:bg-red-900' : 'bg-[#e0353b] hover:bg-[#c42d32] active:bg-[#9e2428]'}`}
@@ -271,6 +275,7 @@ export default function HydrantInfoPanel({
               <RouteIcon />
               {isOtw ? 'Routing…' : 'Route'}
             </button>
+            )}
             {canEdit && (
               <button
                 title="Edit hydrant"
@@ -290,6 +295,7 @@ export default function HydrantInfoPanel({
               </button>
             )}
           </div>
+          )}
 
           {routeCalculating && (
             <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-[#e0353b]">
