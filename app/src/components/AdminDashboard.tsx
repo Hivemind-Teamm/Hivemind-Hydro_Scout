@@ -566,10 +566,28 @@ interface ParseResult { fileName: string; rows: ParsedRow[]; errors: RowError[] 
 
 interface LastImport { file: string; valid: number; errors: number; by: string; date: string }
 
+// The field-survey workbook layout. Columns the importer doesn't consume
+// (record no., photos, maintenance dates…) are kept so the sheet stays usable
+// as the paper-trail record the surveyors actually fill in.
 const TEMPLATE_COLUMNS = [
-  'address', 'lat', 'lng', 'status', 'landmark', 'concessionaire',
-  'type', 'mounting', 'outlets', 'color', 'waterCleanliness', 'hazard', 'note',
+  'Record No.', 'Hydrant ID', 'Date Inspected', 'Inspector/s', 'Source Type',
+  'Latitude', 'Longitude', 'Address', 'Nearest Landmark', 'Operational Status',
+  'Hazard Flag', 'Main Photo Taken', 'Photo File / Link', 'Additional Photo /s',
+  'Hydrant Color', 'Outlet Count', 'Outlet Size / Type', 'Adapter Needed',
+  'Key / Wrench Needed', 'Pressure Status', 'Water Cleanliness',
+  'Ownership / Jurisdiction', 'Last Maintenance Date', 'Next Maintenance Date',
+  'Notes / Observations',
 ] as const;
+
+const TEMPLATE_WIDTHS = [10, 11, 14, 14, 13, 11, 11, 34, 22, 18, 15, 16, 18, 18, 14, 12, 17, 15, 19, 15, 20, 22, 21, 21, 46];
+
+const TEMPLATE_SAMPLE_ROWS: (string | number)[][] = [
+  [1, 'HYD-001', '2026-06-11', 'R. Paredes', 'Fire Hydrant', 14.66139, 121.04466, '40 Forestry, Diliman, Quezon City', 'Near barangay hall', 'Operational', 'None', 'Yes', 'IMG_8788.HEIC', 'IMG_8787.HEIC', 'Yellow', 2, '2.5" NST', 'No', 'Yes', 'Strong', 'Clear', 'Manila Water', '', '', 'Example row — clear operational hydrant.'],
+  [2, 'HYD-002', '2026-06-11', 'J. Avenido', 'Fire Hydrant', 14.66219, 121.04952, '84 Central Ave, Quezon City', 'Beside sari-sari store', 'Reduced Pressure', 'Obstructed', 'Yes', 'IMG_8801.HEIC', '', 'Yellow', 2, '2.5" NST', 'No', 'Yes', 'Weak', 'Murky', 'Manila Water', '', '', 'Strong midway, weak fully open. Van often parked in front.'],
+  [3, 'HYD-003', '2026-06-12', 'N. Cervantes', 'Fire Hydrant', 14.6528, 121.06242, 'Emilio Jacinto St, Diliman, QC', 'Inside gated compound', 'Out of Service', 'Hard to access', 'Yes', 'IMG_8938.HEIC', 'IMG_8941.HEIC', 'Violet', 2, 'Unknown', 'No', 'Yes', 'Out', 'Unknown / Not tested', 'Manila Water', '', '', 'Water turned off by utility. Needs permit to access.'],
+];
+
+const TEMPLATE_ROW_COUNT = 100;
 
 function BulkImportCard({ adminName }: { adminName: string }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -577,6 +595,7 @@ function BulkImportCard({ adminName }: { adminName: string }) {
   const [result, setResult] = useState<ParseResult | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitMsg, setCommitMsg] = useState<string | null>(null);
+  const [templateBusy, setTemplateBusy] = useState(false);
   const [lastImport, setLastImport] = useState<LastImport>({
     file: 'hydrant_survey_june2026.csv',
     valid: 48,
@@ -649,19 +668,30 @@ function BulkImportCard({ adminName }: { adminName: string }) {
     setResult(null);
   }
 
-  function downloadTemplate() {
-    const sample = [
-      '"123 Kalayaan Ave, Diliman, Quezon City"', '14.6539', '121.0685', 'operational',
-      'Near Barangay Hall', 'MWSS', 'Pillar', 'Above Ground', '2', 'Red', 'Clear', 'None', 'Sample row — delete before import',
-    ].join(',');
-    const csv = `${TEMPLATE_COLUMNS.join(',')}\n${sample}\n`;
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'hydro-scout-import-template.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+  async function downloadTemplate() {
+    setTemplateBusy(true);
+    try {
+      const XLSX = await import('xlsx');
+      // Blank numbered rows after the samples, so surveyors just fill down.
+      const blanks = Array.from(
+        { length: TEMPLATE_ROW_COUNT - TEMPLATE_SAMPLE_ROWS.length },
+        (_, i) => [TEMPLATE_SAMPLE_ROWS.length + i + 1, ...Array(TEMPLATE_COLUMNS.length - 1).fill('')],
+      );
+      const sheet = XLSX.utils.aoa_to_sheet([[...TEMPLATE_COLUMNS], ...TEMPLATE_SAMPLE_ROWS, ...blanks]);
+      sheet['!cols'] = TEMPLATE_WIDTHS.map((wch) => ({ wch }));
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, 'Hydrant Data');
+      const buf = XLSX.write(book, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Hydro-Scout_Hydrant_Data_Template.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setTemplateBusy(false);
+    }
   }
 
   return (
@@ -757,10 +787,11 @@ function BulkImportCard({ adminName }: { adminName: string }) {
             </dl>
           </div>
           <button
-            onClick={downloadTemplate}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#e0353b] py-2.5 text-xs font-bold text-[#e0353b] transition-all duration-150 ease-out hover:bg-red-50 hover:scale-[1.02] hover:shadow-sm active:scale-[0.97] active:duration-75 dark:border-[#e0353b] dark:text-[#e0353b] dark:hover:bg-red-950/40"
+            onClick={() => void downloadTemplate()}
+            disabled={templateBusy}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#e0353b] py-2.5 text-xs font-bold text-[#e0353b] transition-all duration-150 ease-out hover:bg-red-50 hover:scale-[1.02] hover:shadow-sm active:scale-[0.97] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-[#e0353b] dark:text-[#e0353b] dark:hover:bg-red-950/40"
           >
-            <DownloadGlyph /> Download Import Template
+            <DownloadGlyph /> {templateBusy ? 'Preparing…' : 'Download Excel Template (.xlsx)'}
           </button>
         </div>
       </div>
@@ -800,6 +831,28 @@ function splitCsvLine(line: string): string[] {
   return out.map((s) => s.trim());
 }
 
+// Header names are matched punctuation- and case-insensitively, so both the
+// survey workbook headers ("Operational Status") and the older short-form ones
+// ("status") resolve to the same field.
+const normHeader = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const HEADER_ALIASES: Record<string, string[]> = {
+  address:          ['address'],
+  lat:              ['lat', 'latitude'],
+  lng:              ['lng', 'long', 'longitude'],
+  status:           ['status', 'operationalstatus'],
+  landmark:         ['landmark', 'nearestlandmark'],
+  concessionaire:   ['concessionaire', 'ownershipjurisdiction', 'ownership', 'jurisdiction'],
+  type:             ['type', 'sourcetype'],
+  mounting:         ['mounting'],
+  keyWrench:        ['keywrench', 'keywrenchneeded'],
+  outlets:          ['outlets', 'outletcount'],
+  color:            ['color', 'hydrantcolor'],
+  waterCleanliness: ['watercleanliness'],
+  hazard:           ['hazard', 'hazardflag'],
+  note:             ['note', 'notes', 'notesobservations', 'observations'],
+};
+
 function normStatus(v: string): HydrantStatus | null {
   const s = v.toLowerCase().trim();
   if (['operational', 'op', 'active', 'working', 'in service'].includes(s)) return 'operational';
@@ -822,15 +875,22 @@ function parseHydrantMatrix(fileName: string, matrix: string[][], adminName: str
   const nonEmpty = matrix.filter((cells) => cells.some((c) => (c ?? '').trim().length > 0));
   if (nonEmpty.length === 0) return { fileName, rows: [], errors: [{ line: 0, reason: 'The file is empty.' }] };
 
-  const header = (nonEmpty[0] ?? []).map((h) => (h ?? '').toLowerCase().trim());
-  const idx = (name: string) => header.indexOf(name);
+  // Strip a UTF-8 BOM off the first header cell — Excel writes one on CSV export.
+  const header = (nonEmpty[0] ?? []).map((h, i) => normHeader(i === 0 ? (h ?? '').replace(/^﻿/, '') : (h ?? '')));
+  const idx = (field: string) => {
+    for (const alias of HEADER_ALIASES[field] ?? []) {
+      const i = header.indexOf(alias);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
   const col = { address: idx('address'), lat: idx('lat'), lng: idx('lng'), status: idx('status') };
 
   if (col.address < 0 || col.lat < 0 || col.lng < 0 || col.status < 0) {
-    return { fileName, rows: [], errors: [{ line: 0, reason: 'Header must include address, lat, lng and status columns.' }] };
+    return { fileName, rows: [], errors: [{ line: 0, reason: 'Header must include Address, Latitude, Longitude and Operational Status columns.' }] };
   }
 
-  const get = (cells: string[], name: string) => { const i = idx(name); return i >= 0 ? (cells[i] ?? '') : ''; };
+  const get = (cells: string[], field: string) => { const i = idx(field); return i >= 0 ? (cells[i] ?? '') : ''; };
   const rows: ParsedRow[] = [];
   const errors: RowError[] = [];
 
@@ -842,10 +902,20 @@ function parseHydrantMatrix(fileName: string, matrix: string[][], adminName: str
     const lng = Number(cells[col.lng]);
     const status = normStatus(cells[col.status] ?? '');
 
+    // Unfilled template rows carry only a record number — skip them silently
+    // instead of reporting 97 "missing address" errors.
+    const blankRecord = [col.address, col.lat, col.lng, col.status].every((c) => !(cells[c] ?? '').trim());
+    if (blankRecord) continue;
+
     if (!address.trim()) { errors.push({ line: lineNo, reason: 'Missing address.' }); continue; }
     if (!Number.isFinite(lat) || lat < -90 || lat > 90) { errors.push({ line: lineNo, reason: 'Invalid latitude.' }); continue; }
     if (!Number.isFinite(lng) || lng < -180 || lng > 180) { errors.push({ line: lineNo, reason: 'Invalid longitude.' }); continue; }
     if (!status) { errors.push({ line: lineNo, reason: `Unrecognized status "${cells[col.status] ?? ''}".` }); continue; }
+
+    // The survey sheet writes "None" for a hydrant with no hazards; that must
+    // not become a hazard badge reading "None".
+    const hazardRaw = get(cells, 'hazard');
+    const hazard = /^none$/i.test(hazardRaw.trim()) ? '' : hazardRaw;
 
     rows.push({
       line: lineNo,
@@ -855,11 +925,11 @@ function parseHydrantMatrix(fileName: string, matrix: string[][], adminName: str
         landmark: get(cells, 'landmark'),
         concessionaire: get(cells, 'concessionaire'),
         status,
-        waterCleanliness: get(cells, 'watercleanliness'),
-        hazard: get(cells, 'hazard'),
+        waterCleanliness: get(cells, 'waterCleanliness'),
+        hazard,
         type: get(cells, 'type'),
         mounting: get(cells, 'mounting'),
-        keyWrench: get(cells, 'keywrench'),
+        keyWrench: get(cells, 'keyWrench'),
         outlets: Number(get(cells, 'outlets')) || 2,
         color: get(cells, 'color'),
         note: get(cells, 'note'),
