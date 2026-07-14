@@ -552,18 +552,20 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
-      {/* Restricted access banner */}
-      <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-500/30 dark:bg-amber-500/10">
-        <span className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-        </span>
-        <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
-          <span className="font-bold">Restricted to Head &amp; Admin</span> — enforced by Firestore security rules, not just hidden in the interface.
-        </p>
-      </div>
+      {/* Restricted access banner — only for users without access */}
+      {!isHeadOrAdmin && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <span className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </span>
+          <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+            <span className="font-bold">Restricted to Head &amp; Admin</span> — enforced by Firestore security rules, not just hidden in the interface.
+          </p>
+        </div>
+      )}
 
       {isHeadOrAdmin && (
         <>
