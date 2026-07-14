@@ -12,6 +12,7 @@
 import { useMemo, useRef, useState, type DragEvent } from 'react';
 import { FiX } from 'react-icons/fi';
 import { useAuth } from '@/lib/auth-context';
+import AvatarPlaceholder from './AvatarPlaceholder';
 import {
   useUsers,
   updateUserRole,
@@ -246,8 +247,8 @@ function UserRow({
       {/* User */}
       <td className="px-6 py-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-xs font-extrabold text-white">
-            {user.initials}
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-white">
+            <AvatarPlaceholder />
           </span>
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-sm font-bold text-neutral-800 dark:text-neutral-100">
@@ -459,8 +460,8 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
     <ModalShell title="Edit Account" subtitle={user.email} onClose={onClose}>
       <div className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-800/50">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-sm font-extrabold text-white">
-            {user.initials}
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e0353b] text-white">
+            <AvatarPlaceholder />
           </span>
           <div>
             <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">{user.displayName}</p>

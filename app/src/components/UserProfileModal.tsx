@@ -1,6 +1,7 @@
 'use client';
 
 import { FiX } from 'react-icons/fi';
+import AvatarPlaceholder from './AvatarPlaceholder';
 
 const ROLE_COLORS: Record<string, string> = {
   Admin:             '#e0353b',
@@ -20,7 +21,6 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ user, onClose }: UserProfileModalProps) {
-  const initials = user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const badgeColor = ROLE_COLORS[user.role] ?? '#6b7280';
 
   return (
@@ -36,8 +36,8 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
           >
             <FiX className="h-4 w-4" strokeWidth={2.5} />
           </button>
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xl font-extrabold text-[#e0353b]">
-            {initials}
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#e0353b]">
+            <AvatarPlaceholder />
           </div>
           <p className="text-base font-extrabold text-white">{user.name}</p>
           <span

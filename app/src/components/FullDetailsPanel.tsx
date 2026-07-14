@@ -10,7 +10,8 @@ import { formatDistance } from '@/lib/haversine';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { deleteHydrantPhoto, setDisplayPhoto, validateHydrant, flagForReinspection, deleteHydrant } from '../data/store';
 import PillBadge from './PillBadge';
-import { FiX, FiCheck, FiInfo } from 'react-icons/fi';
+import AvatarPlaceholder from './AvatarPlaceholder';
+import { FiX, FiCheck } from 'react-icons/fi';
 
 type Tab = 'quick' | 'details' | 'log' | 'admin';
 
@@ -43,6 +44,9 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
   const isAdmin       = role === 'admin';
   const isHeadOrAdmin = role === 'head' || role === 'admin';
   const canAnnotate   = role === 'authorized' || role === 'head' || role === 'admin';
+  // General users (and not-signed-in guests) get the restricted, view-only,
+  // anonymized version of the panel.
+  const isGeneralView = !role || role === 'general';
 
   // Close menu on outside click
   useEffect(() => {
@@ -73,9 +77,12 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
     finally { setMenuBusy(false); setPhotoMenu(null); }
   };
 
+  // General/guest: Quick + Details only (Log & Admin hidden completely).
   const tabs: Tab[] = isAdmin
     ? ['quick', 'details', 'log', 'admin']
-    : ['quick', 'details', 'log'];
+    : isGeneralView
+      ? ['quick', 'details']
+      : ['quick', 'details', 'log'];
 
   const tabLabel: Record<Tab, string> = { quick: 'Quick', details: 'Details', log: 'Log', admin: 'Admin' };
 
@@ -156,7 +163,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
       {/* ── Tab content ── */}
       <div className="scroll-fade min-h-0 flex-1 overflow-y-auto">
         {tab === 'quick'   && <QuickTab   hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
-        {tab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} onPhotoContextMenu={handlePhotoContextMenu} onViewPhoto={setLightbox} />}
+        {tab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} isGeneralView={isGeneralView} onPhotoContextMenu={handlePhotoContextMenu} onViewPhoto={setLightbox} />}
         {tab === 'log'     && <MaintenanceTab hydrant={hydrant} linkedReports={linkedReports} onViewUser={onViewUser} />}
         {tab === 'admin'   && <AdminTab   hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} onClose={onClose} />}
       </div>
@@ -276,11 +283,12 @@ function QuickTab({ hydrant, meta, distanceM, isOtw }: { hydrant: Hydrant; meta:
 }
 
 /* ──────────────────────── DETAILS ──────────────────────── */
-function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoContextMenu, onViewPhoto }: {
+function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, isGeneralView, onPhotoContextMenu, onViewPhoto }: {
   hydrant: Hydrant;
   onViewUser: (name: string, role: string) => void;
   canAnnotate: boolean;
   isHeadOrAdmin: boolean;
+  isGeneralView: boolean;
   onPhotoContextMenu: (e: React.MouseEvent, url: string) => void;
   onViewPhoto: (url: string) => void;
 }) {
@@ -331,20 +339,33 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
         <div className="flex flex-col gap-3">
           {hydrant.notes.map((n, i) => (
             <div key={i} className="flex gap-2">
-              <button
-                onClick={() => onViewUser(n.user, 'Authorized User')}
-                title={`View ${n.user}'s profile`}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-[10px] font-bold text-neutral-600 hover:bg-[#FED42E] transition-colors dark:bg-neutral-700 dark:text-neutral-300"
-              >
-                {n.initials}
-              </button>
-              <div className="flex-1 rounded-lg bg-neutral-100 px-2.5 py-2 dark:bg-neutral-700">
+              {/* Author identity is anonymized (and non-clickable) for general users. */}
+              {isGeneralView ? (
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400">
+                  <AvatarPlaceholder />
+                </span>
+              ) : (
                 <button
                   onClick={() => onViewUser(n.user, 'Authorized User')}
-                  className="text-[10px] font-semibold text-[#e0353b] hover:underline mb-0.5 block dark:text-[#e0353b]"
+                  title={`View ${n.user}'s profile`}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-neutral-600 hover:bg-[#FED42E] transition-colors dark:bg-neutral-700 dark:text-neutral-300"
                 >
-                  {n.user}
+                  <AvatarPlaceholder />
                 </button>
+              )}
+              <div className="flex-1 rounded-lg bg-neutral-100 px-2.5 py-2 dark:bg-neutral-700">
+                {isGeneralView ? (
+                  <span className="mb-0.5 block text-[10px] font-semibold tracking-widest text-neutral-500 dark:text-neutral-400">
+                    ••••••••
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => onViewUser(n.user, 'Authorized User')}
+                    className="text-[10px] font-semibold text-[#e0353b] hover:underline mb-0.5 block dark:text-[#e0353b]"
+                  >
+                    {n.user}
+                  </button>
+                )}
                 <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-200">{n.text}</p>
                 <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">{n.date}</p>
               </div>
@@ -358,40 +379,38 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, onPhotoCo
         )}
       </div>
 
-      {/* Status history */}
-      <div className="mt-5">
-        <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
-          Status History — Chronological
-        </p>
-        <div className="flex flex-col gap-3">
-          {hydrant.register.map((entry, i) => (
-            <div key={i} className="flex gap-2.5">
-              <div className="flex flex-col items-center">
-                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: entry.statusColor }} />
-                {i < hydrant.register.length - 1 && <div className="mt-1 w-px flex-1 bg-neutral-200 dark:bg-neutral-700" />}
+      {/* Status history — hidden completely for general users. */}
+      {!isGeneralView && (
+        <div className="mt-5">
+          <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+            Status History — Chronological
+          </p>
+          <div className="flex flex-col gap-3">
+            {hydrant.register.map((entry, i) => (
+              <div key={i} className="flex gap-2.5">
+                <div className="flex flex-col items-center">
+                  <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: entry.statusColor }} />
+                  {i < hydrant.register.length - 1 && <div className="mt-1 w-px flex-1 bg-neutral-200 dark:bg-neutral-700" />}
+                </div>
+                <div className="pb-3">
+                  <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">{entry.action}</p>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                    by{' '}
+                    <button
+                      onClick={() => onViewUser(entry.by, entry.role)}
+                      className="font-semibold text-[#e0353b] hover:underline dark:text-[#e0353b]"
+                    >
+                      {entry.by}
+                    </button>
+                    {' '}· {entry.role}
+                  </p>
+                  <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{entry.date}</p>
+                </div>
               </div>
-              <div className="pb-3">
-                <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">{entry.action}</p>
-                <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                  by{' '}
-                  <button
-                    onClick={() => onViewUser(entry.by, entry.role)}
-                    className="font-semibold text-[#e0353b] hover:underline dark:text-[#e0353b]"
-                  >
-                    {entry.by}
-                  </button>
-                  {' '}· {entry.role}
-                </p>
-                <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{entry.date}</p>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-        <div className="mt-4 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-          <FiInfo className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <p>Inspector names stay visible to logged-in users (lawful under RA 10173) so inspectors can confirm their own work. Entries are immutable once signed.</p>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -506,11 +525,6 @@ function MaintenanceTab({ hydrant, linkedReports, onViewUser }: {
             })}
           </div>
         )}
-      </div>
-
-      <div className="mt-4 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-        <FiInfo className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <p>Sign-off names stay visible to logged-in users (lawful under RA 10173) for accountability. History entries are immutable once recorded.</p>
       </div>
     </div>
   );
