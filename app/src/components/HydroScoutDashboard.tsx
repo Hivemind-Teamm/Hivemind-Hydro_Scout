@@ -1053,13 +1053,16 @@ export default function HydroScoutDashboard() {
 
       {/* Non-operational route confirmation toast */}
       {nonOperationalConfirm && (
-        <div className="pointer-events-auto absolute left-1/2 top-[4.25rem] z-[2100] flex -translate-x-1/2 flex-col gap-2 rounded-2xl bg-neutral-900/90 px-4 py-3 shadow-xl backdrop-blur-sm anim-fade-scale max-w-[min(420px,92vw)]">
+        <div
+          className="pointer-events-auto absolute left-1/2 z-[2100] flex -translate-x-1/2 flex-col gap-2 rounded-2xl bg-white/95 px-4 py-3 shadow-xl ring-1 ring-black/5 backdrop-blur-sm anim-fade-scale max-w-[min(420px,92vw)] dark:bg-neutral-900/90 dark:ring-white/10"
+          style={{ top: isMobile ? 'calc(7rem + env(safe-area-inset-top, 0px))' : '5.25rem' }}
+        >
           <div className="flex items-start gap-2.5">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={STATUS_META[nonOperationalConfirm.status].color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
               <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
-            <span className="text-xs text-neutral-200 leading-snug">
+            <span className="text-xs text-neutral-700 leading-snug dark:text-neutral-200">
               <span className="font-bold" style={{ color: STATUS_META[nonOperationalConfirm.status].color }}>
                 {nonOperationalConfirm.name}
               </span>{' '}
@@ -1069,7 +1072,7 @@ export default function HydroScoutDashboard() {
           <div className="flex justify-end gap-2">
             <button
               onClick={() => setNonOperationalConfirm(null)}
-              className="rounded-full px-3 py-1.5 text-xs font-semibold text-neutral-300 hover:bg-white/10"
+              className="rounded-full px-3 py-1.5 text-xs font-semibold text-neutral-500 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/10"
             >
               Cancel
             </button>
