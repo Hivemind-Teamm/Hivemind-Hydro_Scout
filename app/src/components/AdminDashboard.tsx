@@ -265,9 +265,12 @@ function UserRow({
       </td>
       {/* Station */}
       <td className="px-3 py-3 text-sm text-neutral-600 dark:text-neutral-300">{user.station}</td>
-      {/* Status */}
+      {/* Status — text color matches the status (green = active, gray = invited). */}
       <td className="px-3 py-3">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+        <span
+          className={`flex items-center gap-1.5 text-xs font-semibold ${user.active ? '' : 'text-neutral-500 dark:text-neutral-400'}`}
+          style={user.active ? { color: '#2fbf4f' } : undefined}
+        >
           <span
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ background: user.active ? '#2fbf4f' : '#cbd5e1' }}
