@@ -517,3 +517,6 @@ body {
   .auth-rise { animation: none; }
   .auth-btn:not(:disabled):active { transform: none; }
 }
+
+/* TEMP: hydrants hidden for screenshot — remove this block to restore. */
+.hydrant-pin, .hydrant-cluster-icon { display: none !important; }
