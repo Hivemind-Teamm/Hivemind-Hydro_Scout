@@ -265,6 +265,8 @@ function QuickTab({ hydrant, meta, distanceM, isOtw }: { hydrant: Hydrant; meta:
         { label: 'Status',   value: <span className="font-bold" style={{ color: meta.color }}>• {meta.legendLabel}</span> },
         { label: 'Pressure', value: <span className="font-bold" style={{ color: PRESSURE_COLOR[hydrant.pressure] }}>{hydrant.pressure}</span> },
         { label: 'Distance', value: distanceValue },
+        { label: 'Latitude',  value: <span className="font-semibold text-neutral-800 dark:text-neutral-100">{hydrant.lat.toFixed(6)}</span> },
+        { label: 'Longitude', value: <span className="font-semibold text-neutral-800 dark:text-neutral-100">{hydrant.lng.toFixed(6)}</span> },
         { label: 'Hazard',   value: hydrant.hazard },
         { label: 'Landmark', value: hydrant.landmark },
       ]} />
