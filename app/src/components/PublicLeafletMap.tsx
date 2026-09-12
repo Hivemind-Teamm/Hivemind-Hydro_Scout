@@ -5,9 +5,12 @@ import {
   MapContainer,
   Marker,
   TileLayer,
+  ZoomControl,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
+
+import "leaflet/dist/leaflet.css";
 
 interface PublicHydrant {
   id: string;
@@ -19,38 +22,22 @@ interface PublicLeafletMapProps {
   hydrants: PublicHydrant[];
 }
 
-const DEFAULT_CENTER: [number, number] = [
-  14.6549,
-  121.0647,
-];
+const DEFAULT_CENTER: [number, number] = [14.6549, 121.0647];
 
 const publicHydrantIcon = L.icon({
   iconUrl: "/Hydrant%20Pin%20Gren.png",
-
   iconSize: [34, 42],
-
   iconAnchor: [17, 42],
 });
 
-function FitHydrants({
-  hydrants,
-}: {
-  hydrants: PublicHydrant[];
-}) {
+function FitHydrants({ hydrants }: PublicLeafletMapProps) {
   const map = useMap();
 
   useEffect(() => {
-    if (hydrants.length === 0) {
-      return;
-    }
+    if (!hydrants.length) return;
 
     const bounds = L.latLngBounds(
-      hydrants.map(
-        (hydrant): [number, number] => [
-          hydrant.lat,
-          hydrant.lng,
-        ]
-      )
+      hydrants.map((hydrant) => [hydrant.lat, hydrant.lng])
     );
 
     if (bounds.isValid()) {
@@ -72,8 +59,8 @@ export default function PublicLeafletMap({
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={14}
-        scrollWheelZoom={true}
-        zoomControl={true}
+        zoomControl={false}
+        scrollWheelZoom
         className="h-full w-full"
         style={{
           height: "100%",
@@ -81,23 +68,22 @@ export default function PublicLeafletMap({
         }}
       >
         <TileLayer
-          attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+          attribution='&copy; OpenStreetMap contributors &copy; CARTO'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
 
         {hydrants.map((hydrant) => (
           <Marker
             key={hydrant.id}
-            position={[
-              hydrant.lat,
-              hydrant.lng,
-            ]}
+            position={[hydrant.lat, hydrant.lng]}
             icon={publicHydrantIcon}
             interactive={false}
           />
         ))}
 
         <FitHydrants hydrants={hydrants} />
+
+        <ZoomControl position="bottomright" />
       </MapContainer>
     </div>
   );
