@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect } from "react";
+
 import {
   MapContainer,
   Marker,
   TileLayer,
+  ZoomControl,
   useMap,
 } from "react-leaflet";
+
 import L from "leaflet";
+
+import "leaflet/dist/leaflet.css";
 
 interface PublicHydrant {
   id: string;
@@ -26,9 +31,7 @@ const DEFAULT_CENTER: [number, number] = [
 
 const publicHydrantIcon = L.icon({
   iconUrl: "/Hydrant%20Pin%20Gren.png",
-
   iconSize: [34, 42],
-
   iconAnchor: [17, 42],
 });
 
@@ -73,7 +76,7 @@ export default function PublicLeafletMap({
         center={DEFAULT_CENTER}
         zoom={14}
         scrollWheelZoom={true}
-        zoomControl={true}
+        zoomControl={false}
         className="h-full w-full"
         style={{
           height: "100%",
@@ -98,6 +101,8 @@ export default function PublicLeafletMap({
         ))}
 
         <FitHydrants hydrants={hydrants} />
+
+        <ZoomControl position="bottomright" />
       </MapContainer>
     </div>
   );
