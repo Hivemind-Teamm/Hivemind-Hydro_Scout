@@ -18,7 +18,7 @@ import NearestHydrantPanel from './NearestHydrantPanel';
 // bundle so the first load parses/executes less JS on phones. They're warmed
 // right after the map is ready (see the effect below), which also lets the
 // service worker cache their chunks for offline use — same pattern MapView
-// uses for the Leaflet chunk.
+// uses for the MapLibre chunk.
 const OperationsDashboard = dynamic(() => import('./OperationsDashboard'), { ssr: false });
 const AdminDashboard      = dynamic(() => import('./AdminDashboard'),      { ssr: false });
 const PinHydrantModal     = dynamic(() => import('./PinHydrantModal'),     { ssr: false });
@@ -51,10 +51,10 @@ const ROUTE_CORRIDOR_M = 300;
 const EMERGENCY_ETA_FACTOR = 0.75;
 
 export default function HydroScoutDashboard() {
-  // Start on Leaflet/OSM immediately when no Mapbox token is configured, so we
+  // Start on MapLibre immediately when no Mapbox token is configured, so we
   // never flash a broken Mapbox render before an effect can fall back.
   const [provider, setProvider] = useState<MapProvider>(
-    () => (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ? 'mapbox' : 'leaflet'),
+    () => (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ? 'mapbox' : 'maplibre'),
   );
   const [autoFallback, setAutoFallback] = useState(
     () => !process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
@@ -299,20 +299,20 @@ export default function HydroScoutDashboard() {
   }, [otwRoute, otwHydrant]);
 
   // Offline, Mapbox can't fetch styles/tiles (they aren't service-worker
-  // cached), so switch to Leaflet proactively — its CARTO tiles and chunk are
-  // cached, so the map keeps rendering instead of erroring out.
+  // unavailable), so switch to MapLibre proactively. MapLibre is the
+  // token-free fallback renderer for the dashboard.
   useEffect(() => {
     if (connection === 'offline' && !userOverride) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setProvider('leaflet');
+      setProvider('maplibre');
     }
   }, [connection, userOverride]);
 
   const handleMapboxError = useCallback(
     (error: unknown) => {
-      console.warn('Mapbox failed to load, falling back to Leaflet/OSM:', error);
+      console.warn('Mapbox failed to load, falling back to MapLibre:', error);
       setAutoFallback(true);
-      if (!userOverride) setProvider('leaflet');
+      if (!userOverride) setProvider('maplibre');
     },
     [userOverride],
   );
@@ -321,8 +321,7 @@ export default function HydroScoutDashboard() {
     setUserOverride(true);
     const ctrl = controllerRef.current;
     if (ctrl) {
-      // Both controllers report zoom in Mapbox units (LeafletMap converts
-      // internally — see OSM_ZOOM_OFFSET), so the viewport carries over as-is.
+      // Both GL renderers use the same zoom scale, so the viewport carries over as-is.
       setMapViewport({ center: ctrl.getCenter(), zoom: ctrl.getZoom() });
     }
     if (provider === 'mapbox') {
@@ -332,7 +331,7 @@ export default function HydroScoutDashboard() {
       // User is manually switching back to Mapbox — clear the auto-fallback warning.
       setAutoFallback(false);
     }
-    setProvider(provider === 'mapbox' ? 'leaflet' : 'mapbox');
+    setProvider(provider === 'mapbox' ? 'maplibre' : 'mapbox');
   }, [provider]);
 
   const handleMapReady = useCallback((controller: MapController) => {

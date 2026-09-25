@@ -19,7 +19,7 @@ interface DashboardOverlayProps {
   activeStatus: HydrantStatus | null;
   onSelectStatus: (status: HydrantStatus) => void;
   counts: Record<HydrantStatus, number>;
-  provider: 'mapbox' | 'leaflet';
+  provider: 'mapbox' | 'maplibre';
   autoFallback: boolean;
   onToggleProvider: () => void;
   onZoomIn: () => void;
@@ -326,7 +326,7 @@ function DashboardOverlay({
                     icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
                   />
                 )}
-                <MobileMenuRow label={provider === 'mapbox' ? 'Map: Satellite (Mapbox)' : 'Map: Streets (OSM)'} onClick={onToggleProvider}
+                <MobileMenuRow label={provider === 'mapbox' ? 'Map: Satellite (Mapbox)' : 'Map: Streets (MapLibre)'} onClick={onToggleProvider}
                   icon={<MapGlyph />}
                 />
                 <MobileMenuRow label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'} onClick={toggleTheme}
@@ -477,7 +477,7 @@ function DashboardOverlay({
       {/* Vertical toolbar — layers, reports, dashboard, then add hydrant at bottom */}
       <div className="pointer-events-auto absolute left-4 top-[14.875rem] z-[1000] flex flex-col gap-3">
         <ToolButton
-          label={provider === 'mapbox' ? 'Switch to OSM map' : 'Switch to Mapbox'}
+          label={provider === 'mapbox' ? 'Switch to MapLibre map' : 'Switch to Mapbox'}
           onClick={onToggleProvider}
           rounded
         >
@@ -587,7 +587,7 @@ function DashboardOverlay({
             </ul>
             {autoFallback && (
               <p className="mt-3 border-t border-neutral-200 dark:border-neutral-700 pt-2 text-[11px] text-[#e0353b] dark:text-[#e0353b]">
-                Mapbox unavailable — showing OpenStreetMap.
+                Mapbox unavailable — showing MapLibre.
               </p>
             )}
           </div>

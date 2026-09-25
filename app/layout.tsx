@@ -3,7 +3,7 @@ import Script from "next/script";
 import { Geist, Geist_Mono, ABeeZee } from "next/font/google";
 
 import "./globals.css";
-import "leaflet/dist/leaflet.css";
+
 
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/lib/theme-context";
