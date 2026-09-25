@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { collection, onSnapshot } from "firebase/firestore";
+
 import { db } from "@/lib/firebase";
 
 export interface PublicHydrant {
@@ -11,22 +12,16 @@ export interface PublicHydrant {
   lng: number;
 }
 
-const PublicLeafletMap = dynamic(
+const PublicMapLibreMap = dynamic(
   () =>
-    import("./PublicLeafletMap").then(
+    import("./PublicMapLibreMap").then(
       (module) => module.default
     ),
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full w-full items-center justify-center bg-[#151a20]">
-        <div className="text-center">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#FED42E]" />
-
-          <p className="text-sm font-semibold text-white/50">
-            Loading hydrant map…
-          </p>
-        </div>
+      <div className="flex h-full w-full items-center justify-center bg-[#0b0f14] text-sm text-white/50">
+        Loading public map...
       </div>
     ),
   }
@@ -34,50 +29,54 @@ const PublicLeafletMap = dynamic(
 
 function readLocation(
   value: unknown
-): { lat: number; lng: number } | null {
+): {
+  lat: number;
+  lng: number;
+} | null {
   if (!value || typeof value !== "object") {
     return null;
   }
 
   const location = value as {
-    latitude?: number;
-    longitude?: number;
-    _latitude?: number;
-    _longitude?: number;
-    lat?: number;
-    lng?: number;
+    latitude?: unknown;
+    longitude?: unknown;
+    lat?: unknown;
+    lng?: unknown;
   };
 
   const lat =
-    location.latitude ??
-    location._latitude ??
-    location.lat;
+    typeof location.latitude === "number"
+      ? location.latitude
+      : typeof location.lat === "number"
+      ? location.lat
+      : null;
 
   const lng =
-    location.longitude ??
-    location._longitude ??
-    location.lng;
+    typeof location.longitude === "number"
+      ? location.longitude
+      : typeof location.lng === "number"
+      ? location.lng
+      : null;
 
-  if (
-    typeof lat !== "number" ||
-    typeof lng !== "number"
-  ) {
+  if (lat === null || lng === null) {
     return null;
   }
 
-  return { lat, lng };
+  return {
+    lat,
+    lng,
+  };
 }
 
 export default function PublicHydrantMap() {
-  const [hydrants, setHydrants] = useState<
-    PublicHydrant[]
-  >([]);
+  const [hydrants, setHydrants] =
+    useState<PublicHydrant[]>([]);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [error, setError] = useState<
-    string | null
-  >(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -118,7 +117,7 @@ export default function PublicHydrantMap() {
 
       (snapshotError) => {
         console.error(
-          "Unable to load public hydrant locations:",
+          "Failed to load public hydrants:",
           snapshotError
         );
 
@@ -135,35 +134,23 @@ export default function PublicHydrantMap() {
 
   if (loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#151a20]">
-        <div className="text-center">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#FED42E]" />
-
-          <p className="text-sm font-semibold text-white/50">
-            Loading hydrant locations…
-          </p>
-        </div>
+      <div className="flex h-full w-full items-center justify-center bg-[#0b0f14] text-sm text-white/50">
+        Loading hydrant locations...
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#151a20]">
-        <div className="max-w-sm px-6 text-center">
-          <p className="font-semibold text-[#e0353b]">
-            Map unavailable
-          </p>
-
-          <p className="mt-2 text-sm text-white/50">
-            {error}
-          </p>
-        </div>
+      <div className="flex h-full w-full items-center justify-center bg-[#0b0f14] px-6 text-center text-sm text-red-400">
+        {error}
       </div>
     );
   }
 
   return (
-    <PublicLeafletMap hydrants={hydrants} />
+    <PublicMapLibreMap
+      hydrants={hydrants}
+    />
   );
 }
