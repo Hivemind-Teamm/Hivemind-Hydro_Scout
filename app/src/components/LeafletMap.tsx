@@ -391,7 +391,10 @@ function ZoomBridge({ onMapReady }: { onMapReady?: (controller: MapController) =
       fitRoute: (coords, padding = 60) => {
         if (!coords.length) return;
         const bounds = L.latLngBounds(coords.map(([lng, lat]) => L.latLng(lat, lng)));
-        map.fitBounds(bounds, { padding: [padding, padding] });
+        const p = typeof padding === 'number'
+          ? { top: padding, bottom: padding, left: padding, right: padding }
+          : padding;
+        map.fitBounds(bounds, { paddingTopLeft: [p.left, p.top], paddingBottomRight: [p.right, p.bottom] });
       },
       setZoomLimits: (min, max) => {
         // Callers pass Mapbox units; convert. Keep the 3 floor even when

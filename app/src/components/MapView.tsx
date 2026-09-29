@@ -145,7 +145,7 @@ export interface MapController {
 
   fitRoute: (
     coords: [number, number][],
-    padding?: number
+    padding?: number | MapPadding
   ) => void;
 
   setZoomLimits: (
@@ -169,9 +169,43 @@ export interface MapController {
   } | null;
 }
 
+/* Per-side camera padding, in pixels. */
+export interface MapPadding {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 export interface PendingPin {
   lat: number;
   lng: number;
+}
+
+/*
+ * Pinned fire incident as the map renders it: the
+ * fire marker, its hydrant search radius, and the
+ * supply line from the chosen hydrant to the fire.
+ */
+export interface FireOverlay {
+  lat: number;
+  lng: number;
+
+  radiusM: number;
+
+  /*
+   * Hydrants inside the radius. They are never
+   * clustered and never dimmed; everything else
+   * is dimmed while a fire is pinned.
+   */
+  zoneIds: Set<string>;
+
+  supply: {
+    hydrantId: string;
+    lat: number;
+    lng: number;
+    label: string;
+  } | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -239,6 +273,27 @@ interface MapViewProps {
   initialZoom?: number;
 
   onMapMove?: () => void;
+
+  /*
+   * Fire-pin mode: the next map tap places the
+   * fire instead of selecting/adding hydrants.
+   */
+  firePinMode?: boolean;
+
+  fire?:
+    | FireOverlay
+    | null;
+
+  onFirePin?: (
+    lat: number,
+    lng: number
+  ) => void;
+
+  /* Fire marker dragged to a new spot. */
+  onFireMove?: (
+    lat: number,
+    lng: number
+  ) => void;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -281,6 +336,14 @@ function MapView({
   initialZoom,
 
   onMapMove,
+
+  firePinMode = false,
+
+  fire = null,
+
+  onFirePin,
+
+  onFireMove,
 }: MapViewProps) {
   const { isDark } = useTheme();
 
@@ -388,6 +451,18 @@ function MapView({
             onMapMove={
               onMapMove
             }
+            firePinMode={
+              firePinMode
+            }
+            fire={
+              fire
+            }
+            onFirePin={
+              onFirePin
+            }
+            onFireMove={
+              onFireMove
+            }
           />
         ) : (
           <MapLibreMap
@@ -444,6 +519,18 @@ function MapView({
             }
             onMapMove={
               onMapMove
+            }
+            firePinMode={
+              firePinMode
+            }
+            fire={
+              fire
+            }
+            onFirePin={
+              onFirePin
+            }
+            onFireMove={
+              onFireMove
             }
           />
         )}
