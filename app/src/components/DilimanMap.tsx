@@ -1,14 +1,19 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import MapGL, { Marker, Layer, type MapRef, type MarkerEvent } from 'react-map-gl/mapbox';
+import MapGL, { Marker, Layer, Source, type MapRef, type MarkerEvent } from 'react-map-gl/mapbox';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import Supercluster from 'supercluster';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './hydrantIcon';
+import {
+  FLAME_PATH, FIRE_COLOR, SUPPLY_LINE_COLOR,
+  FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH,
+} from './fireIcon';
 import { STATUS_META, type Hydrant, type HydrantStatus } from '../data/hydrants';
-import type { MapController, PendingPin } from './MapView';
+import { circleRing } from '@/lib/fire-response';
+import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 const CLUSTER_RADIUS = 60;
 const CLUSTER_MAX_ZOOM = 15;
@@ -109,6 +114,10 @@ interface DilimanMapProps {
   initialZoom?: number;
   isDark?: boolean;
   onMapMove?: () => void;
+  firePinMode?: boolean;
+  fire?: FireOverlay | null;
+  onFirePin?: (lat: number, lng: number) => void;
+  onFireMove?: (lat: number, lng: number) => void;
 }
 
 const MAP_STYLE_LIGHT = 'mapbox://styles/mapbox/streets-v12';
@@ -124,9 +133,14 @@ interface HydrantMarkersProps {
   otwHydrantId: string | null;
   inOtwMode: boolean;
   nearRouteIds?: Set<string> | null;
-  addHydrantMode: boolean;
+  /** Hydrants inside a pinned fire's radius; all others are dimmed. */
+  fireZoneIds: Set<string> | null;
+  /** Hydrant the fire supply line is drawn from. */
+  fireSupplyId: string | null;
+  /** A map-pick mode (add hydrant / pin fire) is active. */
+  crosshair: boolean;
   onHydrantClick: (e: MarkerEvent<MouseEvent>, h: Hydrant) => void;
-  onClusterClick: (cluster: ClusterMarker) => void;
+  onClusterClick: (e: MarkerEvent<MouseEvent>, cluster: ClusterMarker) => void;
 }
 
 // The full hydrant + cluster marker set, memoized. DilimanMap re-renders on
@@ -138,7 +152,7 @@ interface HydrantMarkersProps {
 // offset between integer zooms is never seen.
 const HydrantMarkers = memo(function HydrantMarkers({
   map, hydrants, placement, clusters, clusterZoom, selectedHydrantId,
-  otwHydrantId, inOtwMode, nearRouteIds, addHydrantMode, onHydrantClick, onClusterClick,
+  otwHydrantId, inOtwMode, nearRouteIds, fireZoneIds, fireSupplyId, crosshair, onHydrantClick, onClusterClick,
 }: HydrantMarkersProps) {
   return (
     <>
@@ -164,6 +178,11 @@ const HydrantMarkers = memo(function HydrantMarkers({
         const nearRoute = nearRouteIds?.has(h.id) ?? false;
         const offRoute = inOtwMode && !nearRoute && !isOtwTarget;
 
+        // Fire mode visual states
+        const inFireZone = fireZoneIds?.has(h.id) ?? false;
+        const offFire = !!fireZoneIds && !inFireZone && !isOtwTarget;
+        const isSupply = fireSupplyId === h.id;
+
         return (
           <Marker
             key={h.id}
@@ -176,16 +195,18 @@ const HydrantMarkers = memo(function HydrantMarkers({
               style={{
                 position: 'relative',
                 transform: `translate(${dx}px, ${dy}px)`,
-                opacity: clustered ? 0 : offRoute ? 0.25 : 1,
+                opacity: clustered ? 0 : offRoute || offFire ? 0.25 : 1,
                 transition: `transform ${PIN_GLIDE}, opacity 0.3s ease`,
                 pointerEvents: clustered ? 'none' : 'auto',
-                cursor: addHydrantMode ? 'crosshair' : 'pointer',
+                cursor: crosshair ? 'crosshair' : 'pointer',
                 willChange: 'transform, opacity',
-                filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : nearRoute ? `drop-shadow(0 0 5px ${meta.color})` : undefined,
+                filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : nearRoute || inFireZone ? `drop-shadow(0 0 5px ${meta.color})` : undefined,
               }}
             >
+              {/* Fire supply hydrant: water-blue pulse ring */}
+              {isSupply && !isOtwTarget && !clustered && <div className="fire-supply-ring" />}
               {/* Selected hydrant: yellow single pulse ring (only outside OTW mode) */}
-              {selected && !isOtwTarget && !clustered && !inOtwMode && (
+              {selected && !isSupply && !isOtwTarget && !clustered && !inOtwMode && (
                 <div style={{
                   position: 'absolute', inset: -5, borderRadius: '50%',
                   border: '2px solid #FED42E',
@@ -252,7 +273,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
                       hydrant or the OTW routing target — so the map isn't a
                       field of spraying water at rest. Operational → strong
                       jet · reduced pressure → weak dribble. */}
-                  {(selected || isOtwTarget) && !clustered && (
+                  {(selected || isOtwTarget || isSupply) && !clustered && (
                     <div className="hydrant-fx">
                       <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
                         <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
@@ -276,7 +297,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
           longitude={cluster.lng}
           latitude={cluster.lat}
           anchor="center"
-          onClick={(e) => { e.originalEvent.stopPropagation(); onClusterClick(cluster); }}
+          onClick={(e) => { e.originalEvent.stopPropagation(); onClusterClick(e, cluster); }}
         >
           <div
             className="anim-fade-scale"
@@ -296,7 +317,11 @@ const HydrantMarkers = memo(function HydrantMarkers({
               fontWeight: 800,
               fontFamily: 'Arial, sans-serif',
               textShadow: '0 1px 2px rgba(255,255,255,0.4)',
-              cursor: addHydrantMode ? 'crosshair' : 'pointer',
+              cursor: crosshair ? 'crosshair' : 'pointer',
+              // Clusters never hold fire-zone hydrants, so they dim with the
+              // rest of the map outside the radius.
+              opacity: fireZoneIds ? 0.35 : 1,
+              transition: 'opacity 0.3s ease',
             }}
           >
             {cluster.count}
@@ -313,6 +338,9 @@ const OTW_BG_LAYER = 'otw-route-bg';
 const OTW_LINE_LAYER = 'otw-route-line';
 const OTW_LAYERS = [OTW_GLOW_LAYER, OTW_BG_LAYER, OTW_LINE_LAYER];
 
+const FIRE_RADIUS_SOURCE = 'fire-radius';
+const FIRE_SUPPLY_SOURCE = 'fire-supply-line';
+
 const DASH_SEQUENCE = [
   [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5],
   [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 3, 3],
@@ -321,6 +349,7 @@ const DASH_SEQUENCE = [
 export default function DilimanMap({
   hydrants, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
+  firePinMode = false, fire = null, onFirePin, onFireMove,
 }: DilimanMapProps) {
   const mapRef = useRef<MapRef>(null);
   const otwAnimRef = useRef<number | null>(null);
@@ -329,20 +358,27 @@ export default function DilimanMap({
   const [clusterZoom, setClusterZoom] = useState(clusterLevel(DEFAULT_ZOOM));
 
 
+  const fireZoneIds = fire?.zoneIds ?? null;
+  const crosshair = addHydrantMode || firePinMode;
+
   const supercluster = useMemo(() => {
     const index = new Supercluster<HydrantProps>({
       radius: CLUSTER_RADIUS,
       maxZoom: CLUSTER_MAX_ZOOM,
     });
+    // Hydrants around a pinned fire are left out of the index so they always
+    // render individually — seeing each one is the point of the fire view.
+    // With no placement entry they are simply never treated as clustered.
+    const clusterable = fireZoneIds ? hydrants.filter((h) => !fireZoneIds.has(h.id)) : hydrants;
     index.load(
-      hydrants.map((h) => ({
+      clusterable.map((h) => ({
         type: 'Feature' as const,
         properties: { hydrantId: h.id, status: h.status },
         geometry: { type: 'Point' as const, coordinates: [h.lng, h.lat] },
       })),
     );
     return index;
-  }, [hydrants]);
+  }, [hydrants, fireZoneIds]);
 
   const layout = useMemo<ClusterLayout>(() => {
     const clusters: ClusterMarker[] = [];
@@ -376,8 +412,8 @@ export default function DilimanMap({
 
   useEffect(() => {
     if (!mapInstance) return;
-    mapInstance.getCanvas().style.cursor = addHydrantMode ? 'crosshair' : '';
-  }, [addHydrantMode, mapInstance]);
+    mapInstance.getCanvas().style.cursor = crosshair ? 'crosshair' : '';
+  }, [crosshair, mapInstance]);
 
   useEffect(() => {
     if (!mapInstance) return;
@@ -386,8 +422,8 @@ export default function DilimanMap({
     return () => { if (mapInstance.loaded()) mapInstance.off('style.load', onStyleLoad); };
   }, [mapInstance]);
 
-  const addHydrantModeRef = useRef(addHydrantMode);
-  useEffect(() => { addHydrantModeRef.current = addHydrantMode; }, [addHydrantMode]);
+  const crosshairRef = useRef(crosshair);
+  useEffect(() => { crosshairRef.current = crosshair; }, [crosshair]);
 
   useEffect(() => {
     if (!mapInstance) return;
@@ -416,7 +452,7 @@ export default function DilimanMap({
       if (!rotating) return;
       rotating = false;
       mapInstance.dragPan.enable();
-      canvas.style.cursor = addHydrantModeRef.current ? 'crosshair' : '';
+      canvas.style.cursor = crosshairRef.current ? 'crosshair' : '';
     };
 
     canvas.addEventListener('mousedown', onMouseDown);
@@ -645,16 +681,54 @@ export default function DilimanMap({
     };
   }, [mapInstance]);
 
-  const handleClusterClick = useCallback((cluster: ClusterMarker) => {
+  // In fire-pin mode a tap on a hydrant or cluster marker still means "the
+  // fire is HERE" — markers swallow the map click, so resolve the point under
+  // the pointer ourselves.
+  const pinFireAtEvent = useCallback((ev: MouseEvent) => {
+    if (!mapInstance || !onFirePin) return;
+    const rect = mapInstance.getContainer().getBoundingClientRect();
+    const p = mapInstance.unproject([ev.clientX - rect.left, ev.clientY - rect.top]);
+    onFirePin(p.lat, p.lng);
+  }, [mapInstance, onFirePin]);
+
+  const handleClusterClick = useCallback((e: MarkerEvent<MouseEvent>, cluster: ClusterMarker) => {
+    if (firePinMode) { pinFireAtEvent(e.originalEvent); return; }
     if (addHydrantMode || !mapInstance) return;
     const zoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id), 18);
     mapInstance.flyTo({ center: [cluster.lng, cluster.lat], zoom, speed: 1.4 });
-  }, [supercluster, addHydrantMode, mapInstance]);
+  }, [supercluster, addHydrantMode, firePinMode, pinFireAtEvent, mapInstance]);
 
   const handleHydrantClick = useCallback((e: MarkerEvent<MouseEvent>, h: Hydrant) => {
     e.originalEvent.stopPropagation();
-    if (!addHydrantMode) onSelectHydrant(h);
-  }, [addHydrantMode, onSelectHydrant]);
+    if (firePinMode) pinFireAtEvent(e.originalEvent);
+    else if (!addHydrantMode) onSelectHydrant(h);
+  }, [addHydrantMode, firePinMode, pinFireAtEvent, onSelectHydrant]);
+
+  // Fire overlay geometry — search radius polygon and hydrant → fire line.
+  // Keyed on coordinates, not the overlay object, which is rebuilt whenever
+  // the hydrant feed ticks.
+  const supply = fire?.supply ?? null;
+  const fireLat = fire?.lat;
+  const fireLng = fire?.lng;
+  const fireRadiusM = fire?.radiusM;
+  const supplyLat = supply?.lat;
+  const supplyLng = supply?.lng;
+  const fireRadiusData = useMemo<GeoJSON.Feature<GeoJSON.Polygon> | null>(
+    () => fireLat === undefined || fireLng === undefined || fireRadiusM === undefined ? null : {
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'Polygon', coordinates: [circleRing(fireLat, fireLng, fireRadiusM)] },
+    },
+    [fireLat, fireLng, fireRadiusM],
+  );
+  const fireSupplyData = useMemo<GeoJSON.Feature<GeoJSON.LineString> | null>(
+    () => fireLat === undefined || fireLng === undefined || supplyLat === undefined || supplyLng === undefined ? null : {
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'LineString', coordinates: [[supplyLng, supplyLat], [fireLng, fireLat]] },
+    },
+    [fireLat, fireLng, supplyLat, supplyLng],
+  );
 
   const map = mapInstance;
 
@@ -681,7 +755,8 @@ export default function DilimanMap({
         onLoad={handleLoad}
         onError={(e: unknown) => onError?.(e)}
         onClick={(e: { lngLat: { lat: number; lng: number } }) => {
-          if (addHydrantMode) onMapClick(e.lngLat.lat, e.lngLat.lng);
+          if (firePinMode) onFirePin?.(e.lngLat.lat, e.lngLat.lng);
+          else if (addHydrantMode) onMapClick(e.lngLat.lat, e.lngLat.lng);
           else onMapBackgroundClick();
         }}
       >
@@ -702,6 +777,39 @@ export default function DilimanMap({
           />
         )}
 
+        {/* Fire search radius + supply line. Declared before the markers, but
+            markers are DOM overlays so they always sit above these GL layers. */}
+        {fireRadiusData && (
+          <Source id={FIRE_RADIUS_SOURCE} type="geojson" data={fireRadiusData}>
+            <Layer
+              id="fire-radius-fill"
+              type="fill"
+              paint={{ 'fill-color': FIRE_COLOR, 'fill-opacity': FIRE_RADIUS_FILL_OPACITY }}
+            />
+            <Layer
+              id="fire-radius-line"
+              type="line"
+              paint={{ 'line-color': FIRE_COLOR, 'line-width': 2, 'line-opacity': 0.85, 'line-dasharray': FIRE_RADIUS_LINE_DASH }}
+            />
+          </Source>
+        )}
+        {fireSupplyData && (
+          <Source id={FIRE_SUPPLY_SOURCE} type="geojson" data={fireSupplyData}>
+            <Layer
+              id="fire-supply-glow"
+              type="line"
+              layout={{ 'line-cap': 'round' }}
+              paint={{ 'line-color': SUPPLY_LINE_COLOR, 'line-width': 10, 'line-opacity': 0.2, 'line-blur': 4 }}
+            />
+            <Layer
+              id="fire-supply-line"
+              type="line"
+              layout={{ 'line-cap': 'round' }}
+              paint={{ 'line-color': SUPPLY_LINE_COLOR, 'line-width': 3.5, 'line-dasharray': SUPPLY_LINE_DASH }}
+            />
+          </Source>
+        )}
+
         {map && (
           <HydrantMarkers
             map={map}
@@ -713,7 +821,9 @@ export default function DilimanMap({
             otwHydrantId={otwHydrant?.id ?? null}
             inOtwMode={!!otwRoute}
             nearRouteIds={nearRouteIds}
-            addHydrantMode={addHydrantMode}
+            fireZoneIds={fireZoneIds}
+            fireSupplyId={supply?.hydrantId ?? null}
+            crosshair={crosshair}
             onHydrantClick={handleHydrantClick}
             onClusterClick={handleClusterClick}
           />
@@ -722,6 +832,37 @@ export default function DilimanMap({
         {pendingPin && (
           <Marker longitude={pendingPin.lng} latitude={pendingPin.lat} anchor="center">
             <div style={{ width: 14, height: 14, background: '#FED42E', border: '2.5px solid #e0353b', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }} />
+          </Marker>
+        )}
+
+        {fire && supply && (
+          <Marker
+            longitude={(supply.lng + fire.lng) / 2}
+            latitude={(supply.lat + fire.lat) / 2}
+            anchor="center"
+            style={{ pointerEvents: 'none' }}
+          >
+            <div className="fire-supply-label">{supply.label}</div>
+          </Marker>
+        )}
+
+        {fire && (
+          <Marker
+            longitude={fire.lng}
+            latitude={fire.lat}
+            anchor="center"
+            draggable
+            onDragEnd={(e) => onFireMove?.(e.lngLat.lat, e.lngLat.lng)}
+            // Don't let a tap on the pin read as a background tap (closes panels).
+            onClick={(e) => e.originalEvent.stopPropagation()}
+          >
+            <div className="fire-pin" title="Fire location — drag to adjust">
+              <span className="fire-pin-pulse" />
+              <span className="fire-pin-pulse fire-pin-pulse-late" />
+              <span className="fire-pin-core">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={FLAME_PATH} /></svg>
+              </span>
+            </div>
           </Marker>
         )}
 

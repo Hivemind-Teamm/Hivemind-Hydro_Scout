@@ -11,11 +11,22 @@ import {
   HYDRANT_ICON_HEIGHT,
 } from './hydrantIcon';
 import {
+  FIRE_COLOR,
+  SUPPLY_LINE_COLOR,
+  FIRE_RADIUS_FILL_OPACITY,
+  FIRE_RADIUS_LINE_DASH,
+  SUPPLY_LINE_DASH,
+  createFirePinElement,
+  createSupplyLabelElement,
+} from './fireIcon';
+import {
   STATUS_META,
   type Hydrant,
   type HydrantStatus,
 } from '../data/hydrants';
+import { circleRing } from '@/lib/fire-response';
 import type {
+  FireOverlay,
   MapController,
   PendingPin,
 } from './MapView';
@@ -44,6 +55,20 @@ const HAZARD_LAYER = 'hydroscout-hazards';
 const OTW_TARGET_HALO_OUTER = 'hydroscout-otw-halo-outer';
 const OTW_TARGET_HALO_INNER = 'hydroscout-otw-halo-inner';
 const OTW_TARGET_LAYER = 'hydroscout-otw-pin';
+
+// Fire incident: search radius, hydrant → fire supply line, and the hydrants
+// inside the radius (own unclustered source, like the OTW target).
+const FIRE_RADIUS_SOURCE = 'hydroscout-fire-radius';
+const FIRE_SUPPLY_SOURCE = 'hydroscout-fire-supply';
+const FIRE_ZONE_SOURCE = 'hydroscout-fire-zone';
+
+const FIRE_RADIUS_FILL = 'hydroscout-fire-radius-fill';
+const FIRE_RADIUS_LINE = 'hydroscout-fire-radius-line';
+const FIRE_SUPPLY_GLOW = 'hydroscout-fire-supply-glow';
+const FIRE_SUPPLY_LINE = 'hydroscout-fire-supply-line';
+const FIRE_ZONE_HALO = 'hydroscout-fire-zone-halo';
+const FIRE_ZONE_LAYER = 'hydroscout-fire-zone-pins';
+const FIRE_ZONE_HAZARD = 'hydroscout-fire-zone-hazards';
 
 const OTW_ROUTE_SOURCE = 'otw-route';
 const OTW_GLOW_LAYER = 'otw-route-glow';
@@ -78,6 +103,10 @@ interface MapLibreMapProps {
   initialZoom?: number;
   isDark?: boolean;
   onMapMove?: () => void;
+  firePinMode?: boolean;
+  fire?: FireOverlay | null;
+  onFirePin?: (lat: number, lng: number) => void;
+  onFireMove?: (lat: number, lng: number) => void;
 }
 
 type HydrantFeatureProperties = {
@@ -87,7 +116,14 @@ type HydrantFeatureProperties = {
   selected: boolean;
   nearRoute: boolean;
   offRoute: boolean;
+  offFire: boolean;
+  supply: boolean;
   hazard: boolean;
+};
+
+const EMPTY_COLLECTION: GeoJSON.FeatureCollection = {
+  type: 'FeatureCollection',
+  features: [],
 };
 
 function iconIdForStatus(status: HydrantStatus) {
@@ -99,6 +135,7 @@ function toFeature(
   selectedHydrantId: string | null,
   inOtwMode: boolean,
   nearRouteIds?: Set<string> | null,
+  fire?: FireOverlay | null,
 ): GeoJSON.Feature<GeoJSON.Point, HydrantFeatureProperties> {
   const nearRoute = nearRouteIds?.has(hydrant.id) ?? false;
 
@@ -111,6 +148,8 @@ function toFeature(
       selected: selectedHydrantId === hydrant.id,
       nearRoute,
       offRoute: inOtwMode && !nearRoute,
+      offFire: !!fire && !fire.zoneIds.has(hydrant.id),
+      supply: fire?.supply?.hydrantId === hydrant.id,
       hazard: inOtwMode && hydrant.status !== 'operational',
     },
     geometry: {
@@ -125,23 +164,86 @@ function buildHydrantCollection(
   selectedHydrantId: string | null,
   otwHydrant: Hydrant | null | undefined,
   otwRoute: [number, number][] | null | undefined,
-  nearRouteIds?: Set<string> | null,
+  nearRouteIds: Set<string> | null | undefined,
+  fire: FireOverlay | null | undefined,
+  // true → only the hydrants inside the fire radius (unclustered source);
+  // false → everything else (clustered source).
+  fireZone: boolean,
 ): GeoJSON.FeatureCollection<GeoJSON.Point, HydrantFeatureProperties> {
   const excludeId = otwHydrant?.id ?? null;
   const inOtwMode = !!otwRoute;
+  const zoneIds = fire?.zoneIds;
 
   return {
     type: 'FeatureCollection',
     features: hydrants
-      .filter((hydrant) => hydrant.id !== excludeId)
+      .filter(
+        (hydrant) =>
+          hydrant.id !== excludeId &&
+          (zoneIds?.has(hydrant.id) ?? false) === fireZone,
+      )
       .map((hydrant) =>
         toFeature(
           hydrant,
           selectedHydrantId,
           inOtwMode,
           nearRouteIds,
+          fire,
         ),
       ),
+  };
+}
+
+function buildFireRadiusCollection(
+  fire: FireOverlay | null | undefined,
+): GeoJSON.FeatureCollection {
+  if (!fire) {
+    return EMPTY_COLLECTION;
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            circleRing(
+              fire.lat,
+              fire.lng,
+              fire.radiusM,
+            ),
+          ],
+        },
+      },
+    ],
+  };
+}
+
+function buildFireSupplyCollection(
+  fire: FireOverlay | null | undefined,
+): GeoJSON.FeatureCollection {
+  if (!fire?.supply) {
+    return EMPTY_COLLECTION;
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [fire.supply.lng, fire.supply.lat],
+            [fire.lng, fire.lat],
+          ],
+        },
+      },
+    ],
   };
 }
 
@@ -167,6 +269,8 @@ function buildTargetCollection(
           selected: false,
           nearRoute: true,
           offRoute: false,
+          offFire: false,
+          supply: false,
           hazard: otwHydrant.status !== 'operational',
         },
         geometry: {
@@ -298,6 +402,10 @@ export default function MapLibreMap({
   initialZoom,
   isDark = false,
   onMapMove,
+  firePinMode = false,
+  fire = null,
+  onFirePin,
+  onFireMove,
 }: MapLibreMapProps) {
   const containerRef =
     useRef<HTMLDivElement | null>(null);
@@ -325,6 +433,10 @@ export default function MapLibreMap({
     otwRoute,
     nearRouteIds,
     onMapMove,
+    firePinMode,
+    fire,
+    onFirePin,
+    onFireMove,
   });
 
   useEffect(() => {
@@ -339,6 +451,10 @@ export default function MapLibreMap({
       otwRoute,
       nearRouteIds,
       onMapMove,
+      firePinMode,
+      fire,
+      onFirePin,
+      onFireMove,
     };
   }, [
     hydrants,
@@ -351,6 +467,10 @@ export default function MapLibreMap({
     otwRoute,
     nearRouteIds,
     onMapMove,
+    firePinMode,
+    fire,
+    onFirePin,
+    onFireMove,
   ]);
 
   const hydrantById = useMemo(
@@ -371,13 +491,15 @@ export default function MapLibreMap({
   }, [hydrantById]);
 
   const getHydrantData = useCallback(
-    () =>
+    (fireZone = false) =>
       buildHydrantCollection(
         propsRef.current.hydrants,
         propsRef.current.selectedHydrantId,
         propsRef.current.otwHydrant,
         propsRef.current.otwRoute,
         propsRef.current.nearRouteIds,
+        propsRef.current.fire,
+        fireZone,
       ),
     [],
   );
@@ -495,7 +617,11 @@ export default function MapLibreMap({
           paint: {
             'icon-opacity': [
               'case',
-              ['==', ['get', 'offRoute'], true],
+              [
+                'any',
+                ['==', ['get', 'offRoute'], true],
+                ['==', ['get', 'offFire'], true],
+              ],
               0.25,
               1,
             ],
@@ -575,6 +701,188 @@ export default function MapLibreMap({
             'icon-pitch-alignment': 'map',
           },
         });
+      }
+
+      /* ── Fire incident layers ──
+         Radius + supply line sit UNDER every hydrant layer; the fire-zone
+         pins sit above the clustered pins but under the OTW target, which
+         stays topmost. */
+
+      if (!map.getSource(FIRE_RADIUS_SOURCE)) {
+        map.addSource(FIRE_RADIUS_SOURCE, {
+          type: 'geojson',
+          data: buildFireRadiusCollection(
+            propsRef.current.fire,
+          ),
+        });
+      }
+
+      if (!map.getSource(FIRE_SUPPLY_SOURCE)) {
+        map.addSource(FIRE_SUPPLY_SOURCE, {
+          type: 'geojson',
+          data: buildFireSupplyCollection(
+            propsRef.current.fire,
+          ),
+        });
+      }
+
+      if (!map.getSource(FIRE_ZONE_SOURCE)) {
+        map.addSource(FIRE_ZONE_SOURCE, {
+          type: 'geojson',
+          data: getHydrantData(true),
+        });
+      }
+
+      if (!map.getLayer(FIRE_RADIUS_FILL)) {
+        map.addLayer(
+          {
+            id: FIRE_RADIUS_FILL,
+            type: 'fill',
+            source: FIRE_RADIUS_SOURCE,
+            paint: {
+              'fill-color': FIRE_COLOR,
+              'fill-opacity': FIRE_RADIUS_FILL_OPACITY,
+            },
+          },
+          CLUSTER_LAYER,
+        );
+      }
+
+      if (!map.getLayer(FIRE_RADIUS_LINE)) {
+        map.addLayer(
+          {
+            id: FIRE_RADIUS_LINE,
+            type: 'line',
+            source: FIRE_RADIUS_SOURCE,
+            paint: {
+              'line-color': FIRE_COLOR,
+              'line-width': 2,
+              'line-opacity': 0.85,
+              'line-dasharray': FIRE_RADIUS_LINE_DASH,
+            },
+          },
+          CLUSTER_LAYER,
+        );
+      }
+
+      if (!map.getLayer(FIRE_SUPPLY_GLOW)) {
+        map.addLayer(
+          {
+            id: FIRE_SUPPLY_GLOW,
+            type: 'line',
+            source: FIRE_SUPPLY_SOURCE,
+            layout: { 'line-cap': 'round' },
+            paint: {
+              'line-color': SUPPLY_LINE_COLOR,
+              'line-width': 10,
+              'line-opacity': 0.2,
+              'line-blur': 4,
+            },
+          },
+          CLUSTER_LAYER,
+        );
+      }
+
+      if (!map.getLayer(FIRE_SUPPLY_LINE)) {
+        map.addLayer(
+          {
+            id: FIRE_SUPPLY_LINE,
+            type: 'line',
+            source: FIRE_SUPPLY_SOURCE,
+            layout: { 'line-cap': 'round' },
+            paint: {
+              'line-color': SUPPLY_LINE_COLOR,
+              'line-width': 3.5,
+              'line-dasharray': SUPPLY_LINE_DASH,
+            },
+          },
+          CLUSTER_LAYER,
+        );
+      }
+
+      if (!map.getLayer(FIRE_ZONE_HALO)) {
+        map.addLayer(
+          {
+            id: FIRE_ZONE_HALO,
+            type: 'circle',
+            source: FIRE_ZONE_SOURCE,
+            filter: [
+              'any',
+              ['==', ['get', 'supply'], true],
+              ['==', ['get', 'selected'], true],
+            ],
+            paint: {
+              'circle-radius': 22,
+              'circle-color': [
+                'case',
+                ['==', ['get', 'supply'], true],
+                'rgba(14,165,233,0.12)',
+                'rgba(254,212,46,0.10)',
+              ],
+              'circle-stroke-color': [
+                'case',
+                ['==', ['get', 'supply'], true],
+                SUPPLY_LINE_COLOR,
+                '#FED42E',
+              ],
+              'circle-stroke-width': 2.5,
+            },
+          },
+          OTW_TARGET_HALO_OUTER,
+        );
+      }
+
+      if (!map.getLayer(FIRE_ZONE_LAYER)) {
+        map.addLayer(
+          {
+            id: FIRE_ZONE_LAYER,
+            type: 'symbol',
+            source: FIRE_ZONE_SOURCE,
+            layout: {
+              'icon-image': ['get', 'icon'],
+              'icon-size': 1,
+              'icon-anchor': 'bottom',
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+              'icon-rotation-alignment': 'map',
+              'icon-pitch-alignment': 'map',
+            },
+            paint: {
+              'icon-opacity': [
+                'case',
+                ['==', ['get', 'offRoute'], true],
+                0.25,
+                1,
+              ],
+            },
+          },
+          OTW_TARGET_HALO_OUTER,
+        );
+      }
+
+      if (!map.getLayer(FIRE_ZONE_HAZARD)) {
+        map.addLayer(
+          {
+            id: FIRE_ZONE_HAZARD,
+            type: 'symbol',
+            source: FIRE_ZONE_SOURCE,
+            filter: ['==', ['get', 'hazard'], true],
+            layout: {
+              'text-field': '!',
+              'text-font': ['Noto Sans Regular'],
+              'text-size': 12,
+              'text-offset': [1.25, -2.1],
+              'text-allow-overlap': true,
+              'text-ignore-placement': true,
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': '#ef4444',
+              'text-halo-width': 5,
+            },
+          },
+          OTW_TARGET_HALO_OUTER,
+        );
       }
     }, [getHydrantData, getTargetData]);
 
@@ -659,6 +967,39 @@ export default function MapLibreMap({
       ) as maplibregl.GeoJSONSource | undefined;
 
       targetSource?.setData(getTargetData());
+
+      const currentFire = propsRef.current.fire;
+
+      (
+        map.getSource(FIRE_ZONE_SOURCE) as
+          | maplibregl.GeoJSONSource
+          | undefined
+      )?.setData(getHydrantData(true));
+
+      (
+        map.getSource(FIRE_RADIUS_SOURCE) as
+          | maplibregl.GeoJSONSource
+          | undefined
+      )?.setData(buildFireRadiusCollection(currentFire));
+
+      (
+        map.getSource(FIRE_SUPPLY_SOURCE) as
+          | maplibregl.GeoJSONSource
+          | undefined
+      )?.setData(buildFireSupplyCollection(currentFire));
+
+      // Clusters never hold fire-zone hydrants, so they
+      // dim with the rest of the map outside the radius.
+      const clusterOpacity = currentFire ? 0.35 : 1;
+
+      if (map.getLayer(CLUSTER_LAYER)) {
+        map.setPaintProperty(CLUSTER_LAYER, 'circle-opacity', clusterOpacity);
+        map.setPaintProperty(CLUSTER_LAYER, 'circle-stroke-opacity', clusterOpacity);
+      }
+
+      if (map.getLayer(CLUSTER_COUNT_LAYER)) {
+        map.setPaintProperty(CLUSTER_COUNT_LAYER, 'text-opacity', clusterOpacity);
+      }
     }, [getHydrantData, getTargetData]);
 
   const updateRoute = useCallback(() => {
@@ -893,15 +1234,33 @@ export default function MapLibreMap({
       onLoad?.();
     };
 
+    // `style.load` fires before the new style's tiles
+    // arrive, while isStyleLoaded() — which the layer
+    // setup requires — is still false, so rebuild once
+    // the map settles. (On first load the `load`
+    // handler gets there first; this is then a no-op.)
     const handleStyleLoad = () => {
-      void prepareStyle();
+      map.once('idle', () => {
+        void prepareStyle();
+      });
     };
 
     const handleClick = async (
       event: maplibregl.MapMouseEvent,
     ) => {
+      // Fire-pin mode: wherever the tap lands — empty map, a pin or a
+      // cluster — that is where the fire is.
+      if (propsRef.current.firePinMode) {
+        propsRef.current.onFirePin?.(
+          event.lngLat.lat,
+          event.lngLat.lng,
+        );
+        return;
+      }
+
       const clickableLayers = [
         HYDRANT_LAYER,
+        FIRE_ZONE_LAYER,
         OTW_TARGET_LAYER,
         CLUSTER_LAYER,
       ].filter((id) => !!map.getLayer(id));
@@ -965,6 +1324,7 @@ export default function MapLibreMap({
 
       if (
         top?.layer.id === HYDRANT_LAYER ||
+        top?.layer.id === FIRE_ZONE_LAYER ||
         top?.layer.id === OTW_TARGET_LAYER
       ) {
         if (
@@ -1032,13 +1392,15 @@ export default function MapLibreMap({
     }
 
     map.getCanvas().style.cursor =
-      addHydrantMode
+      addHydrantMode || firePinMode
         ? 'crosshair'
         : '';
 
     updateHydrantSources();
   }, [
     addHydrantMode,
+    firePinMode,
+    fire,
     hydrants,
     selectedHydrantId,
     otwHydrant,
@@ -1056,18 +1418,31 @@ export default function MapLibreMap({
     updateRoute,
   ]);
 
+  /*
+   * Theme swap. `diff: false` forces a full style
+   * reload: the default diffed swap silently strips
+   * every source/layer added at runtime (all the
+   * hydrant, route and fire layers) and never fires
+   * `style.load`, so nothing rebuilt them — every
+   * hydrant vanished on a light/dark toggle.
+   */
+  const appliedStyleRef = useRef(
+    isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT,
+  );
+
   useEffect(() => {
     const map = mapRef.current;
+    const style = isDark
+      ? MAP_STYLE_DARK
+      : MAP_STYLE_LIGHT;
 
-    if (!map) {
+    // The map was created with this style already.
+    if (!map || appliedStyleRef.current === style) {
       return;
     }
 
-    map.setStyle(
-      isDark
-        ? MAP_STYLE_DARK
-        : MAP_STYLE_LIGHT,
-    );
+    appliedStyleRef.current = style;
+    map.setStyle(style, { diff: false });
   }, [isDark]);
 
   useEffect(() => {
@@ -1146,6 +1521,93 @@ export default function MapLibreMap({
       userMarkerRef.current = null;
     };
   }, [userLocation]);
+
+  /*
+   * Fire marker. Unlike the GL layers it doesn't
+   * depend on the style, so it only needs the map.
+   */
+  const fireLat = fire?.lat;
+  const fireLng = fire?.lng;
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (
+      !map ||
+      fireLat === undefined ||
+      fireLng === undefined
+    ) {
+      return;
+    }
+
+    const element = createFirePinElement();
+
+    // Don't let a tap on the pin read as a
+    // background tap (which closes panels).
+    element.addEventListener('click', (e) =>
+      e.stopPropagation(),
+    );
+
+    const marker = new maplibregl.Marker({
+      element,
+      anchor: 'center',
+      draggable: true,
+      subpixelPositioning: true,
+    })
+      .setLngLat([fireLng, fireLat])
+      .addTo(map);
+
+    marker.on('dragend', () => {
+      const { lat, lng } = marker.getLngLat();
+      propsRef.current.onFireMove?.(lat, lng);
+    });
+
+    return () => {
+      marker.remove();
+    };
+  }, [fireLat, fireLng]);
+
+  /* Distance pill at the supply line's midpoint. */
+  const supplyLat = fire?.supply?.lat;
+  const supplyLng = fire?.supply?.lng;
+  const supplyLabel = fire?.supply?.label;
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (
+      !map ||
+      fireLat === undefined ||
+      fireLng === undefined ||
+      supplyLat === undefined ||
+      supplyLng === undefined ||
+      supplyLabel === undefined
+    ) {
+      return;
+    }
+
+    const marker = new maplibregl.Marker({
+      element:
+        createSupplyLabelElement(supplyLabel),
+      anchor: 'center',
+      subpixelPositioning: true,
+    })
+      .setLngLat([
+        (supplyLng + fireLng) / 2,
+        (supplyLat + fireLat) / 2,
+      ])
+      .addTo(map);
+
+    return () => {
+      marker.remove();
+    };
+  }, [
+    fireLat,
+    fireLng,
+    supplyLat,
+    supplyLng,
+    supplyLabel,
+  ]);
 
   return (
     <div

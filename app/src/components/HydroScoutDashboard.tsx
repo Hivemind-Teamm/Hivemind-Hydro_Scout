@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import MapView, { type MapProvider, type MapController } from './MapView';
+import MapView, { type MapProvider, type MapController, type FireOverlay } from './MapView';
 import DashboardOverlay from './DashboardOverlay';
 import HydrantInfoPanel from './HydrantInfoPanel';
 import FullDetailsPanel from './FullDetailsPanel';
@@ -13,6 +13,7 @@ import AccountCenterModal from './AccountCenterModal';
 import UserProfileModal, { type ViewingUser } from './UserProfileModal';
 import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
+import FireResponsePanel from './FireResponsePanel';
 
 // The three heaviest, rarely-open surfaces are split out of the initial
 // bundle so the first load parses/executes less JS on phones. They're warmed
@@ -35,6 +36,13 @@ import { useOnlineStatus } from '@/lib/use-online-status';
 import { haversineM, formatDistance, formatDuration, distToRouteM } from '@/lib/haversine';
 import { type RankedHydrant } from '@/lib/nearest-hydrant';
 import { playHazardChime } from '@/lib/chime';
+import { MdLocalFireDepartment } from 'react-icons/md';
+import {
+  FIRE_HYDRANT_RADIUS_M,
+  circleRing,
+  pickSupplyHydrant,
+  rankHydrantsNearFire,
+} from '@/lib/fire-response';
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
 const OTW_ROUTE_KEY    = 'hydroscout_otw_route';
@@ -49,6 +57,53 @@ const ROUTE_CORRIDOR_M = 300;
 // than an ordinary car obeying normal flow. 0.75 ≈ 25% faster than free-flow.
 // Tune to match observed local response times.
 const EMERGENCY_ETA_FACTOR = 0.75;
+
+// A pinned fire survives a reload (like OTW mode), but a pin left over from a
+// past incident shouldn't greet the next shift — it expires after this long.
+const FIRE_INCIDENT_KEY    = 'hydroscout_fire_incident';
+const FIRE_INCIDENT_TTL_MS = 12 * 60 * 60 * 1000;
+
+interface FireIncident {
+  lat: number;
+  lng: number;
+  /** Reverse-geocoded address; null while the lookup is in flight. */
+  address: string | null;
+  pinnedAt: number;
+}
+
+function loadFireIncident(): FireIncident | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(FIRE_INCIDENT_KEY);
+    if (!raw) return null;
+    const f = JSON.parse(raw) as Partial<FireIncident>;
+    if (
+      typeof f.lat !== 'number' || typeof f.lng !== 'number' || typeof f.pinnedAt !== 'number' ||
+      Date.now() - f.pinnedAt > FIRE_INCIDENT_TTL_MS
+    ) {
+      localStorage.removeItem(FIRE_INCIDENT_KEY);
+      return null;
+    }
+    return { lat: f.lat, lng: f.lng, address: typeof f.address === 'string' ? f.address : null, pinnedAt: f.pinnedAt };
+  } catch {
+    return null; // storage blocked or corrupt data
+  }
+}
+
+// Nominatim reverse geocode; falls back to the coordinates on any failure.
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { 'Accept-Language': 'en' } },
+    );
+    const data = await res.json() as { display_name?: string };
+    return data.display_name ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export default function HydroScoutDashboard() {
   // Start on MapLibre immediately when no Mapbox token is configured, so we
@@ -88,6 +143,14 @@ export default function HydroScoutDashboard() {
   const [otwMeta, setOtwMeta] = useState<{ distanceM: number; durationS: number } | null>(null);
   // OTW hazard panel minimized state — lifted here so tapping the map can collapse it.
   const [hazardPanelMinimized, setHazardPanelMinimized] = useState(false);
+
+  // Fire incident: pin mode (next map tap places the fire), the pinned fire,
+  // and the hydrant the user picked to run the supply line from (null → the
+  // nearest operational one is used).
+  const [firePinMode,        setFirePinMode]        = useState(false);
+  const [fireIncident,       setFireIncident]       = useState<FireIncident | null>(loadFireIncident);
+  const [fireSupplyChoice,   setFireSupplyChoice]   = useState<string | null>(null);
+  const [firePanelMinimized, setFirePanelMinimized] = useState(false);
 
   const geoErrorTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controllerRef         = useRef<MapController | null>(null);
@@ -153,6 +216,11 @@ export default function HydroScoutDashboard() {
 
   const { role } = useAuth();
   const isMobile = useIsMobile();
+  // Fire response planning is for responders — the same roles that can route
+  // (see DashboardOverlay). A pin restored from storage stays hidden for
+  // anyone else rather than being wiped.
+  const canPinFire = role === 'authorized' || role === 'head' || role === 'admin';
+  const fire = canPinFire ? fireIncident : null;
   const { hydrants, loading, error } = useHydrants();
   const { reports, loading: reportsLoading } = useReports();
   const hasPendingReports = reports.some((r) => r.status === 'pending');
@@ -198,6 +266,13 @@ export default function HydroScoutDashboard() {
   useEffect(() => {
     if (otwRoute) localStorage.setItem(OTW_ROUTE_KEY, JSON.stringify(otwRoute));
   }, [otwRoute]);
+
+  useEffect(() => {
+    try {
+      if (fireIncident) localStorage.setItem(FIRE_INCIDENT_KEY, JSON.stringify(fireIncident));
+      else localStorage.removeItem(FIRE_INCIDENT_KEY);
+    } catch { /* storage unavailable — the pin just won't survive a reload */ }
+  }, [fireIncident]);
 
   useEffect(() => {
     if (loading || !hydrants.length || otwRestoredRef.current) return;
@@ -473,6 +548,37 @@ export default function HydroScoutDashboard() {
     return { nearRouteIds: ids, routeHazards: hazards };
   }, [hydrants, otwRoute]);
 
+  // Fire response: hydrants inside the radius, the supply hydrant, and the
+  // overlay the map draws. Keyed on the fire's coordinates (not the incident
+  // object) so the address arriving doesn't rebuild the map overlay.
+  const fireLat = fire?.lat;
+  const fireLng = fire?.lng;
+  const fireRanking = useMemo(
+    () => (fireLat === undefined || fireLng === undefined
+      ? null
+      : rankHydrantsNearFire(hydrants, { lat: fireLat, lng: fireLng })),
+    [hydrants, fireLat, fireLng],
+  );
+  const fireSupply = useMemo(
+    () => (fireRanking ? pickSupplyHydrant(fireRanking.inRadius, fireSupplyChoice) : null),
+    [fireRanking, fireSupplyChoice],
+  );
+  const fireOverlay = useMemo<FireOverlay | null>(() => {
+    if (fireLat === undefined || fireLng === undefined || !fireRanking) return null;
+    return {
+      lat: fireLat,
+      lng: fireLng,
+      radiusM: FIRE_HYDRANT_RADIUS_M,
+      zoneIds: new Set(fireRanking.inRadius.map((c) => c.hydrant.id)),
+      supply: fireSupply && {
+        hydrantId: fireSupply.hydrant.id,
+        lat: fireSupply.hydrant.lat,
+        lng: fireSupply.hydrant.lng,
+        label: formatDistance(fireSupply.distanceM),
+      },
+    };
+  }, [fireLat, fireLng, fireRanking, fireSupply]);
+
   // Chime once when hazards first appear during OTW mode
   const prevHazardCountRef = useRef(0);
   useEffect(() => {
@@ -534,7 +640,9 @@ export default function HydroScoutDashboard() {
   const handleMapBackgroundClick = useCallback(() => {
     handleCloseAll();
     if (otwHydrant) setHazardPanelMinimized(true);
-  }, [handleCloseAll, otwHydrant]);
+    // Same for the fire card on phones, where it covers part of the map.
+    if (isMobile) setFirePanelMinimized(true);
+  }, [handleCloseAll, otwHydrant, isMobile]);
 
   const handleCloseFullDetails = useCallback(() => setShowFullDetails(false), []);
   const handleCloseEdit        = useCallback(() => setShowEdit(false), []);
@@ -647,6 +755,7 @@ export default function HydroScoutDashboard() {
   const handleToggleAddHydrant = useCallback(() => {
     setAddHydrantMode((prev) => {
       if (!prev) {
+        setFirePinMode(false);
         setSelectedHydrant(null);
         setShowFullDetails(false);
         setShowEdit(false);
@@ -661,21 +770,113 @@ export default function HydroScoutDashboard() {
   const handleMapClick = useCallback(async (lat: number, lng: number) => {
     controllerRef.current?.flyTo(lat, lng, 17);
     setPendingLocation({ lat, lng, address: 'Loading…' });
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-      const data = await res.json() as { display_name?: string };
-      setPendingLocation({ lat, lng, address: data.display_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
-    } catch {
-      setPendingLocation({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
-    }
+    const address = await reverseGeocode(lat, lng);
+    setPendingLocation({ lat, lng, address });
   }, []);
 
+  /* ── Fire incident ── */
+
+  // Frames the whole search radius in the part of the map the fire panel
+  // leaves visible: left of it on desktop, above the bottom card on phones.
+  const fitFireRadius = useCallback((lat: number, lng: number) => {
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const padding = isMobile
+      ? { top: 8.5 * rem, bottom: window.innerHeight * 0.42 + 6.5 * rem, left: 24, right: 24 }
+      : { top: 6 * rem, bottom: 2 * rem, left: 5 * rem, right: 23 * rem };
+    // Too little room left (e.g. a phone in landscape) — plain padding beats
+    // a camera the map refuses to fit.
+    const roomY = window.innerHeight - padding.top - padding.bottom;
+    const roomX = window.innerWidth - padding.left - padding.right;
+    controllerRef.current?.fitRoute(
+      circleRing(lat, lng, FIRE_HYDRANT_RADIUS_M, 16),
+      roomY < 160 || roomX < 160 ? 48 : padding,
+    );
+  }, [isMobile]);
+
+  // A fire restored after a reload is framed once the map is up — an active
+  // incident matters more than the usual first-fix fly to the user's position,
+  // which is skipped. (A restored OTW route keeps priority over both.)
+  const restoredFireRef = useRef(fire);
+  useEffect(() => {
+    const restored = restoredFireRef.current;
+    if (!mapReady || !restored) return;
+    restoredFireRef.current = null;
+    hasAutoLocatedRef.current = true;
+    if (!otwRouteRef.current) fitFireRadius(restored.lat, restored.lng);
+  }, [mapReady, fitFireRadius]);
+
+  // Moves (or first places) the fire and looks up its address. Moving the pin
+  // keeps the incident's original timestamp; the address lookup only lands if
+  // the pin hasn't moved again since.
+  const placeFire = useCallback((lat: number, lng: number) => {
+    setFireIncident((prev) => ({ lat, lng, address: null, pinnedAt: prev?.pinnedAt ?? Date.now() }));
+    reverseGeocode(lat, lng).then((address) => {
+      setFireIncident((prev) => (prev && prev.lat === lat && prev.lng === lng ? { ...prev, address } : prev));
+    });
+  }, []);
+
+  // Map tap in fire-pin mode. A fresh spot gets a fresh supply-hydrant pick.
+  const handleFirePin = useCallback((lat: number, lng: number) => {
+    setFirePinMode(false);
+    setFirePanelMinimized(false);
+    setFireSupplyChoice(null);
+    placeFire(lat, lng);
+    fitFireRadius(lat, lng);
+  }, [placeFire, fitFireRadius]);
+
+  // Fire marker dragged. Keeps the user's supply pick if it's still in range.
+  const handleFireMove = useCallback((lat: number, lng: number) => {
+    placeFire(lat, lng);
+  }, [placeFire]);
+
+  const handleToggleFirePinMode = useCallback(() => {
+    if (firePinMode) {
+      setFirePinMode(false);
+      return;
+    }
+    // Pick modes are exclusive, and an open hydrant card would sit over the
+    // map the user is about to tap.
+    setFirePinMode(true);
+    setAddHydrantMode(false);
+    setPendingLocation(null);
+    setSelectedHydrant(null);
+    setShowFullDetails(false);
+    setShowEdit(false);
+    setShowReport(false);
+    // On a phone the fire card covers the map being tapped; placing the pin
+    // re-opens it.
+    if (isMobile) setFirePanelMinimized(true);
+  }, [firePinMode, isMobile]);
+
+  const handleClearFire = useCallback(() => {
+    setFirePinMode(false);
+    setFireIncident(null);
+    setFireSupplyChoice(null);
+  }, []);
+
+  const handleRecenterFire = useCallback(() => {
+    if (fireLat !== undefined && fireLng !== undefined) fitFireRadius(fireLat, fireLng);
+  }, [fireLat, fireLng, fitFireRadius]);
+
+  const handleExpandFirePanel = useCallback(() => {
+    setFirePanelMinimized(false);
+    // Phones only have room for one bottom-left card.
+    if (otwHydrant) setHazardPanelMinimized(true);
+  }, [otwHydrant]);
+
+  // Esc backs out of fire-pin mode.
+  useEffect(() => {
+    if (!firePinMode) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFirePinMode(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [firePinMode]);
+
   const handleTargetLocation = useCallback(() => {
+    // "Here" means the fire in fire-pin mode, a new hydrant in add mode.
+    const placeAt = firePinMode ? handleFirePin : handleMapClick;
     if (userLocation) {
-      handleMapClick(userLocation.lat, userLocation.lng);
+      placeAt(userLocation.lat, userLocation.lng);
       return;
     }
     if (!('geolocation' in navigator)) {
@@ -689,7 +890,7 @@ export default function HydroScoutDashboard() {
     const onSuccess = (pos: GeolocationPosition) => {
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setUserLocation(loc);
-      handleMapClick(loc.lat, loc.lng);
+      placeAt(loc.lat, loc.lng);
     };
     const onFinalError = (err: GeolocationPositionError) => {
       showGeoError(
@@ -705,7 +906,7 @@ export default function HydroScoutDashboard() {
       timeout: 15000,
       maximumAge: 30000,
     });
-  }, [userLocation, handleMapClick, showGeoError]);
+  }, [userLocation, firePinMode, handleFirePin, handleMapClick, showGeoError]);
 
   // Handle nearest hydrant selection — fly map to it
   const handleNearestHydrantSelect = useCallback((hydrant: RankedHydrant | null) => {
@@ -837,6 +1038,55 @@ export default function HydroScoutDashboard() {
   const handleOpenDashboard = useCallback(() => setShowOpsDashboard(true), []);
   const handleOpenAdmin     = useCallback(() => setShowAdminDashboard(true), []);
 
+  // Fire response panel — top-right on desktop (under the full-details / edit
+  // sheets, which slide over it); on phones a bottom-left card that minimizes
+  // to an edge tab and shares that spot with the OTW hazards card.
+  let fireUi: React.ReactNode = null;
+  if (fire && fireRanking) {
+    const panel = (
+      <FireResponsePanel
+        lat={fire.lat}
+        lng={fire.lng}
+        address={fire.address}
+        radiusM={FIRE_HYDRANT_RADIUS_M}
+        candidates={fireRanking.inRadius}
+        nearestOutside={fireRanking.nearestOutside}
+        supply={fireSupply}
+        loading={loading}
+        maxHeight={isMobile ? '42dvh' : 'calc(100dvh - 24rem)'}
+        onSelectSupply={setFireSupplyChoice}
+        onViewHydrant={handleSelectHydrant}
+        onRecenter={handleRecenterFire}
+        onMovePin={handleToggleFirePinMode}
+        onClear={handleClearFire}
+        onMinimize={isMobile ? () => setFirePanelMinimized(true) : undefined}
+      />
+    );
+    const hiddenByHazards = !!otwHydrant && !hazardPanelMinimized;
+    if (!isMobile) {
+      fireUi = <div className="pointer-events-none absolute right-4 top-[4.75rem] z-[1100] w-80">{panel}</div>;
+    } else if (!firePanelMinimized && !hiddenByHazards) {
+      fireUi = <div className="pointer-events-none absolute left-3 right-[4.75rem] z-[1150]" style={{ bottom: '5.5rem' }}>{panel}</div>;
+    } else {
+      fireUi = (
+        <button
+          onClick={handleExpandFirePanel}
+          className="pointer-events-auto absolute left-0 z-[1150] flex flex-col items-center rounded-r-xl px-2 py-3 shadow-xl"
+          style={{ bottom: otwHydrant ? '12rem' : '5.5rem', background: 'linear-gradient(135deg, #e0353b 0%, #f97316 100%)' }}
+          aria-label="Show fire incident panel"
+        >
+          <MdLocalFireDepartment className="mb-1.5 h-4 w-4 text-white" />
+          <span className="mb-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-white/25 px-1 text-[9px] font-bold text-white">
+            {fireRanking.inRadius.length}
+          </span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+      );
+    }
+  }
+
   return (
     <div className="relative h-dvh w-screen overflow-hidden">
 
@@ -884,6 +1134,10 @@ export default function HydroScoutDashboard() {
           initialCenter={mapViewport?.center}
           initialZoom={mapViewport?.zoom}
           onMapMove={handleMapMove}
+          firePinMode={firePinMode}
+          fire={fireOverlay}
+          onFirePin={handleFirePin}
+          onFireMove={handleFireMove}
         />
       </div>
 
@@ -959,7 +1213,40 @@ export default function HydroScoutDashboard() {
         onSelectHazardHydrant={handleSelectHydrant}
         hazardPanelMinimized={hazardPanelMinimized}
         onHazardPanelMinimizedChange={setHazardPanelMinimized}
+        firePinMode={firePinMode}
+        fireActive={!!fire}
+        onToggleFirePin={handleToggleFirePinMode}
       />
+
+      {/* Fire-pin mode hint. Bottom-center on desktop (clear of the search bar
+          and the side panels); under the search row on phones, pushed below
+          the OTW banner when that's showing. */}
+      {firePinMode && (
+        <div
+          className="pointer-events-none absolute left-1/2 z-[2050] -translate-x-1/2 anim-fade-scale"
+          style={isMobile
+            ? { top: `calc(${otwHydrant ? '11rem' : '6.75rem'} + env(safe-area-inset-top, 0px))` }
+            : { bottom: '1.5rem' }}
+        >
+          <div className="pointer-events-auto flex items-center gap-2.5 whitespace-nowrap rounded-full bg-neutral-900/90 py-1.5 pl-3 pr-1.5 shadow-xl backdrop-blur-sm">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inset-0 animate-ping rounded-full bg-[#f97316] opacity-75" />
+              <span className="relative h-2.5 w-2.5 rounded-full bg-[#f97316]" />
+            </span>
+            <span className="text-xs font-semibold text-white">
+              {isMobile ? 'Tap the map where the fire is' : 'Click the map where the fire is'}
+            </span>
+            <button
+              onClick={handleToggleFirePinMode}
+              className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-white/25"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {fireUi}
 
       {/* ── Nearest Hydrant Panel — bottom-left, above map, below modals ──
           Raised further up on mobile so it clears the Mapbox attribution bar. */}
@@ -969,7 +1256,7 @@ export default function HydroScoutDashboard() {
           onHydrantSelect={handleNearestHydrantSelect}
           selectedHydrantId={nearestHydrant?.id ?? null}
           isOpen={nearestPanelOpen}
-          onOpen={() => setNearestPanelOpen(true)}
+          onOpen={() => { setNearestPanelOpen(true); if (isMobile) setFirePanelMinimized(true); }}
           onClose={() => { controllerRef.current?.zoomOut(); setNearestPanelOpen(false); setNearestHydrant(null); }}
         />
       </div>

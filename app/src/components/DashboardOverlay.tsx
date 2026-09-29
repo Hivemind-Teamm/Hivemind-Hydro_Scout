@@ -14,6 +14,7 @@ import { HYDRANT_PIN_FILTER } from './hydrantIcon';
 import OtwHazardPanel from './OtwHazardPanel';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 import { FiAlertTriangle } from 'react-icons/fi';
+import { MdLocalFireDepartment } from 'react-icons/md';
 
 interface DashboardOverlayProps {
   activeStatus: HydrantStatus | null;
@@ -45,6 +46,11 @@ interface DashboardOverlayProps {
   /** OTW hazard panel minimized state — lifted so a map tap can collapse it. */
   hazardPanelMinimized?: boolean;
   onHazardPanelMinimizedChange?: (minimized: boolean) => void;
+  /** Fire-pin mode: the next map tap places the fire. */
+  firePinMode?: boolean;
+  /** A fire is currently pinned on the map. */
+  fireActive?: boolean;
+  onToggleFirePin?: () => void;
 }
 
 function DashboardOverlay({
@@ -76,12 +82,19 @@ function DashboardOverlay({
   onSelectHazardHydrant,
   hazardPanelMinimized = false,
   onHazardPanelMinimizedChange,
+  firePinMode = false,
+  fireActive = false,
+  onToggleFirePin,
 }: DashboardOverlayProps) {
   const { user, role } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
+  // Fire response planning is for responders — the same roles that can route.
+  const canPinFire = role === 'authorized' || role === 'head' || role === 'admin';
+  const firePinLabel = firePinMode ? 'Cancel fire pin' : fireActive ? 'Move fire pin' : 'Pin a fire';
+  const pinHereLabel = firePinMode ? 'Pin fire at my location' : 'Pin at my location';
   const [showCounts] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const setHazardPanelMinimized = onHazardPanelMinimizedChange ?? (() => {});
@@ -211,6 +224,9 @@ function DashboardOverlay({
               </span>
             </button>
           )}
+          {canPinFire && onToggleFirePin && (
+            <FirePinButton label={firePinLabel} onClick={onToggleFirePin} active={firePinMode} pinned={fireActive} tooltipSide="left" />
+          )}
           {role !== 'general' && role !== null && (
             <div className="relative">
               <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports} tooltipSide="left">
@@ -221,8 +237,8 @@ function DashboardOverlay({
               )}
             </div>
           )}
-          {addHydrantMode && (
-            <ToolButton label="Pin at my location" onClick={onTargetLocation} rounded tooltipSide="left">
+          {(addHydrantMode || firePinMode) && (
+            <ToolButton label={pinHereLabel} onClick={onTargetLocation} rounded tooltipSide="left">
               <TargetGlyph />
             </ToolButton>
           )}
@@ -497,6 +513,10 @@ function DashboardOverlay({
           </div>
         )}
 
+        {canPinFire && onToggleFirePin && (
+          <FirePinButton label={firePinLabel} onClick={onToggleFirePin} active={firePinMode} pinned={fireActive} />
+        )}
+
         {canPin && (
           <div className="group relative mt-1">
             <button
@@ -534,8 +554,8 @@ function DashboardOverlay({
       <div className={`absolute bottom-6 right-6 z-[1000] flex flex-col items-end gap-3 ${isOtw ? 'w-72' : 'w-60'}`}>
         {/* GPS + 3D + theme buttons row — always visible */}
         <div className="pointer-events-auto flex gap-2">
-          {addHydrantMode && (
-            <ToolButton label="Pin at my location" onClick={onTargetLocation} rounded tooltipSide="top">
+          {(addHydrantMode || firePinMode) && (
+            <ToolButton label={pinHereLabel} onClick={onTargetLocation} rounded tooltipSide="top">
               <TargetGlyph />
             </ToolButton>
           )}
@@ -758,6 +778,29 @@ function ToolButton({
           {label}
         </span>
       </div>
+    </div>
+  );
+}
+
+// Toggles fire-pin mode. Yellow while picking (like the other mode toggles);
+// a red dot marks that a fire is already pinned.
+function FirePinButton({ label, onClick, active, pinned, tooltipSide }: {
+  label: string;
+  onClick: () => void;
+  active: boolean;
+  pinned: boolean;
+  tooltipSide?: 'right' | 'left' | 'top';
+}) {
+  return (
+    <div className="relative">
+      <ToolButton label={label} onClick={onClick} rounded active={active} tooltipSide={tooltipSide}>
+        <MdLocalFireDepartment className={`h-[22px] w-[22px] ${active ? '' : 'text-[#f97316]'}`} />
+      </ToolButton>
+      {pinned && !active && (
+        <span className="pointer-events-none absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-[#e0353b] dark:border-neutral-800">
+          <span className="h-1.5 w-1.5 animate-ping rounded-full bg-white/80" />
+        </span>
+      )}
     </div>
   );
 }

@@ -428,6 +428,72 @@ body {
   50%      { transform: scale(1.18); box-shadow: 0 0 6px rgba(224, 53, 59, 0.9); }
 }
 
+/* ── Fire pin ──
+   The incident marker placed in fire-pin mode, shared by both map providers
+   (see fireIcon.ts). Anchored at its center — that point is the center of the
+   hydrant search radius. Draggable, hence the grab cursor. */
+.fire-pin {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  cursor: grab;
+}
+.fire-pin:active { cursor: grabbing; }
+.fire-pin-core {
+  position: absolute;
+  inset: 5px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: radial-gradient(circle at 35% 30%, #fb923c 0%, #f97316 45%, #e0353b 100%);
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45), 0 0 14px rgba(249, 115, 22, 0.75);
+}
+.fire-pin-core svg { display: block; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
+.fire-pin-pulse {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: rgba(249, 115, 22, 0.45);
+  pointer-events: none;
+  animation: fire-pin-pulse 1.8s ease-out infinite;
+}
+.fire-pin-pulse-late { animation-delay: 0.9s; }
+@keyframes fire-pin-pulse {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0;   }
+}
+
+/* Supply hydrant — the one the hose line is drawn from. Water-blue ring. */
+.fire-supply-ring {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2.5px solid #0ea5e9;
+  pointer-events: none;
+  animation: route-ring-pulse 1.6s ease-out infinite;
+}
+
+/* Distance pill at the midpoint of the hydrant → fire supply line. */
+.fire-supply-label {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #0369a1;
+  border: 1.5px solid #ffffff;
+  color: #ffffff;
+  font: 700 11px/1.4 Arial, sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fire-pin-pulse, .fire-supply-ring { animation: none; opacity: 0; }
+}
+
 /* ── Add-hydrant active ripple — hydrant-shaped, short reach ── */
 @keyframes ping-hydrant {
   0%   { scale: 1;    opacity: 0.55; }
