@@ -1,4 +1,6 @@
 rules_version = '2';
+// unitLocations/{stationId}: stationId, updatedBy, lat, lng, accuracy, updatedAt.
+// Temporary F1 contract: station accounts have accountType == 'station' and stationId.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -39,7 +41,41 @@ service cloud.firestore {
 
       // New users can create their own document (signup flow).
       // Only admins can create documents for other users or delete any.
-      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      // Self-signup cannot grant a role or station assignment used by location rules.
+      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'email', 'displayName', 'role', 'createdAt', 'lastLoginAt'
+        ])
+        && request.resource.data.role == 'general');
+      allow delete: if isAdmin();
+    }
+
+    // ---------- latest station positions ----------
+
+    function isAssignedStation(stationId) {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountType == 'station'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == stationId;
+    }
+
+    function isValidUnitLocation(stationId) {
+      let data = request.resource.data;
+      return data.keys().hasAll(['stationId', 'updatedBy', 'lat', 'lng', 'accuracy', 'updatedAt'])
+        && data.keys().hasOnly(['stationId', 'updatedBy', 'lat', 'lng', 'accuracy', 'updatedAt'])
+        && data.stationId is string && data.stationId.size() <= 128
+        && data.stationId.matches('^[A-Za-z0-9_-]+$')
+        && data.stationId == stationId
+        && data.updatedBy is string && data.updatedBy.size() <= 128
+        && data.updatedBy == request.auth.uid
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    match /unitLocations/{stationId} {
+      allow read: if isAdmin() || isAssignedStation(stationId);
+      allow create, update: if isAssignedStation(stationId) && isValidUnitLocation(stationId);
       allow delete: if isAdmin();
     }
 
