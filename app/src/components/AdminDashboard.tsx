@@ -339,6 +339,8 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [station, setStation] = useState('');
+  const [stationId, setStationId] = useState('');
+  const [aorBarangaysText, setAorBarangaysText] = useState('');
   const [role, setRole] = useState<UserRole>('general');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -347,9 +349,22 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
     setError(null);
     if (!email.trim() || !password) { setError('Email and a temporary password are required.'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    const aorBarangays = aorBarangaysText
+      .split(',')
+      .map((barangay) => barangay.trim())
+      .filter(Boolean);
+
     setSubmitting(true);
     try {
-      await createUserAccount({ displayName, email, password, role, station });
+      await createUserAccount({
+        displayName,
+        email,
+        password,
+        role,
+        station,
+        stationId,
+        aorBarangays,
+      });
       onClose();
     } catch (e: unknown) {
       const code = (e as { code?: string })?.code ?? '';
@@ -403,6 +418,28 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
             />
           </Field>
         </div>
+
+        <Field label="Station ID">
+          <input
+            value={stationId}
+            onChange={(e) => setStationId(e.target.value)}
+            placeholder="e.g. QCFD-STATION-01"
+            className="admin-input"
+          />
+        </Field>
+
+        <Field label="AOR Barangays">
+          <input
+            value={aorBarangaysText}
+            onChange={(e) => setAorBarangaysText(e.target.value)}
+            placeholder="e.g. Laging Handa, Sacred Heart, South Triangle"
+            className="admin-input"
+          />
+          <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+            Separate multiple barangays with commas.
+          </span>
+        </Field>
+
         <Field label="Role">
           <div className="flex gap-1.5">
             {ROLE_ORDER.map((r) => {
