@@ -399,10 +399,10 @@ export default function HydroScoutDashboard() {
       // Both GL renderers use the same zoom scale, so the viewport carries over as-is.
       setMapViewport({ center: ctrl.getCenter(), zoom: ctrl.getZoom() });
     }
-    if (provider === 'mapbox') {
-      setIs3D(false);
-      controllerRef.current?.setPitch(0);
-    } else {
+    // The incoming map mounts flat, so drop 3D on every switch.
+    setIs3D(false);
+    controllerRef.current?.setPitch(0);
+    if (provider !== 'mapbox') {
       // User is manually switching back to Mapbox — clear the auto-fallback warning.
       setAutoFallback(false);
     }

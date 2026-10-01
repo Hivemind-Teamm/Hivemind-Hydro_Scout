@@ -1,5 +1,5 @@
 // Shared display dimensions for the hydrant pin images, used by both the
-// Mapbox markers and the Leaflet markers so the two providers match.
+// Mapbox and MapLibre markers so the two providers match.
 
 export const HYDRANT_ICON_WIDTH = 34;
 export const HYDRANT_ICON_HEIGHT = 44;
