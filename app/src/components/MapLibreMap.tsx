@@ -1,87 +1,129 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+// MapLibre mirror of DilimanMap (the Mapbox provider). Same DOM-marker hydrant
+// pins, Supercluster CSS-glide clustering, eased wheel/button zoom, globe,
+// shift-drag rotate, location orb, OTW route and fire overlay — so switching
+// providers changes only the basemap, not how the map feels. Keep the two in
+// step: when DilimanMap's behaviour changes, port it here.
+//
+// Built on MapLibre's public API rather than react-map-gl: react-map-gl 8.1
+// reads `map.transform`, which MapLibre v6 removed, and throws on every camera
+// event. <MapMarker> below is the equivalent of react-map-gl's <Marker> — a
+// native maplibregl.Marker whose element React renders into via a portal.
+
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import * as maplibregl from 'maplibre-gl';
-
 import 'maplibre-gl/dist/maplibre-gl.css';
-
+import Supercluster from 'supercluster';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
+import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './hydrantIcon';
 import {
-  HYDRANT_ICON_WIDTH,
-  HYDRANT_ICON_HEIGHT,
-} from './hydrantIcon';
-import {
-  FIRE_COLOR,
-  SUPPLY_LINE_COLOR,
-  FIRE_RADIUS_FILL_OPACITY,
-  FIRE_RADIUS_LINE_DASH,
-  SUPPLY_LINE_DASH,
-  createFirePinElement,
-  createSupplyLabelElement,
+  FLAME_PATH, FIRE_COLOR, SUPPLY_LINE_COLOR,
+  FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH,
 } from './fireIcon';
-import {
-  STATUS_META,
-  type Hydrant,
-  type HydrantStatus,
-} from '../data/hydrants';
+import { STATUS_META, type Hydrant, type HydrantStatus } from '../data/hydrants';
 import { circleRing } from '@/lib/fire-response';
-import type {
-  FireOverlay,
-  MapController,
-  PendingPin,
-} from './MapView';
+import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 if (typeof window !== 'undefined') {
-  maplibregl.setWorkerUrl(
-    '/maplibre/maplibre-gl-worker.mjs',
-  );
+  maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 }
 
-const MAP_STYLE_LIGHT =
-  'https://tiles.openfreemap.org/styles/positron';
+const CLUSTER_RADIUS = 60;
+const CLUSTER_MAX_ZOOM = 15;
+const WORLD_BBOX: [number, number, number, number] = [-180, -85, 180, 85];
+const clusterLevel = (zoom: number) => Math.round(zoom);
+const PIN_GLIDE = '0.35s cubic-bezier(0.4, 0, 0.2, 1)';
 
-const MAP_STYLE_DARK =
-  'https://tiles.openfreemap.org/styles/dark';
+// ── Continuous, eased wheel zoom (identical to DilimanMap) ────────────────────
+// MapLibre's stock scroll zoom reads as one short animation per wheel event;
+// instead accumulate wheel delta into a goal zoom and glide toward it every
+// frame with a frame-rate-independent exponential curve, keeping the point
+// under the cursor at gesture start pinned and continuing to glide after the
+// wheel stops. Constants match DilimanMap 1:1 so both providers accelerate
+// identically.
+const WHEEL_ZOOM_RATE = 0.0035;  // zoom levels per wheel-delta pixel
+const GLIDE_K = 9;               // exponential glide stiffness (per second)
+const WHEEL_REANCHOR_MS = 180;   // a gap this long re-pins the cursor anchor
+const WHEEL_IDLE_MS = 180;       // wheel considered idle after this quiet gap
+const WHEEL_CONVERGE = 0.003;    // snap to goal once within this many levels
+// Below this zoom we render the globe (see GLOBE_PROJECTION). Cursor-anchoring
+// there means rotating the sphere, which both spins the map and fights the
+// globe↔mercator transition — so on the globe zoom about the center instead
+// and only pin the cursor once flat.
+const GLOBE_ANCHOR_MIN_ZOOM = 6;
+// easeOutQuint: drastic attack, long silky settle — applied to +/- zoom.
+const easeOutQuint = (t: number) => 1 - Math.pow(1 - t, 5);
 
-const HYDRANT_SOURCE = 'hydroscout-hydrants';
-const OTW_TARGET_SOURCE = 'hydroscout-otw-target';
+// MapLibre's built-in `globe` only flattens to mercator between zoom 11 and 12,
+// so the campus view would still sit on a faintly curved sphere. Use Mapbox's
+// transition window (5–6) instead: a globe when zoomed out to the world,
+// plain mercator from region level down — matching the Mapbox provider.
+const GLOBE_PROJECTION: maplibregl.ProjectionSpecification = {
+  type: ['interpolate', ['linear'], ['zoom'], 5, 'vertical-perspective', 6, 'mercator'],
+};
 
-const CLUSTER_LAYER = 'hydroscout-clusters';
-const CLUSTER_COUNT_LAYER = 'hydroscout-cluster-count';
-const SELECTED_HALO_LAYER = 'hydroscout-selected-halo';
-const HYDRANT_LAYER = 'hydroscout-hydrant-pins';
-const HAZARD_LAYER = 'hydroscout-hazards';
+// Mapbox's globe floats in dark space with a glowing atmosphere; MapLibre
+// draws nothing around the sphere, so a light globe vanished into the page.
+// The container paints the space and the sky spec adds the atmosphere rim,
+// faded out by the time the projection flattens. Sky/fog colours also tint
+// the horizon at steep pitch, so they follow the theme.
+const SPACE_COLOR = '#05070d';
+const atmosphereSky = (dark: boolean): maplibregl.SkySpecification => ({
+  'sky-color': dark ? '#0b1020' : '#bfdcf5',
+  'horizon-color': dark ? '#1f2a3d' : '#eef6ff',
+  'fog-color': dark ? '#11151c' : '#f2f2f0',
+  'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0],
+});
 
-const OTW_TARGET_HALO_OUTER = 'hydroscout-otw-halo-outer';
-const OTW_TARGET_HALO_INNER = 'hydroscout-otw-halo-inner';
-const OTW_TARGET_LAYER = 'hydroscout-otw-pin';
+// ── Sub-pixel markers during our continuous wheel zoom ─────────────────────
+// MapLibre's Marker `_update()` snaps its position to a whole pixel on every
+// `moveend` unless `subpixelPositioning` is on. Our wheel loop drives
+// `easeTo({duration:0})` each frame, and a zero-duration ease fires `moveend`
+// every frame — so each frame's sub-pixel projection gets rounded and every pin
+// visibly shivers while the WebGL basemap zooms smoothly underneath. Same fix
+// as DilimanMap: while one of our zoom loops is mid-flight, position pins from
+// the UNrounded projection; at rest fall back to rounding so icons stay crisp.
+//
+// MapLibre's `_update` is a per-instance arrow function (unpatchable on the
+// prototype), but it reads `this._subpixelPositioning`, which the constructor
+// assigns. A prototype accessor intercepts that assignment and ORs in our
+// global flag. The flag lives on the Marker class (not a module `let`) so the
+// once-installed, Fast-Refresh-frozen accessor and the live loop that sets it
+// read the same source of truth.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type SmoothML = { _hsZoomActive?: boolean; _hsSmoothZoom?: boolean };
+const smoothMarker = maplibregl.Marker as unknown as SmoothML;
+const setMlSmoothZoom = (v: boolean) => { smoothMarker._hsZoomActive = v; };
 
-// Fire incident: search radius, hydrant ΓåÆ fire supply line, and the hydrants
-// inside the radius (own unclustered source, like the OTW target).
-const FIRE_RADIUS_SOURCE = 'hydroscout-fire-radius';
-const FIRE_SUPPLY_SOURCE = 'hydroscout-fire-supply';
-const FIRE_ZONE_SOURCE = 'hydroscout-fire-zone';
+function installSmoothMarkerZoom(MarkerClass: any) {
+  if (!MarkerClass?.prototype || MarkerClass._hsSmoothZoom) return;
+  MarkerClass._hsSmoothZoom = true;
+  Object.defineProperty(MarkerClass.prototype, '_subpixelPositioning', {
+    configurable: true,
+    get(this: { _hsSubpixel?: boolean }) { return !!this._hsSubpixel || !!MarkerClass._hsZoomActive; },
+    set(this: { _hsSubpixel?: boolean }, v: boolean) { this._hsSubpixel = v; },
+  });
+}
+installSmoothMarkerZoom(maplibregl.Marker);
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
-const FIRE_RADIUS_FILL = 'hydroscout-fire-radius-fill';
-const FIRE_RADIUS_LINE = 'hydroscout-fire-radius-line';
-const FIRE_SUPPLY_GLOW = 'hydroscout-fire-supply-glow';
-const FIRE_SUPPLY_LINE = 'hydroscout-fire-supply-line';
-const FIRE_ZONE_HALO = 'hydroscout-fire-zone-halo';
-const FIRE_ZONE_LAYER = 'hydroscout-fire-zone-pins';
-const FIRE_ZONE_HAZARD = 'hydroscout-fire-zone-hazards';
+type HydrantProps = { hydrantId: string; status: HydrantStatus };
 
-const OTW_ROUTE_SOURCE = 'otw-route';
-const OTW_GLOW_LAYER = 'otw-route-glow';
-const OTW_BG_LAYER = 'otw-route-bg';
-const OTW_LINE_LAYER = 'otw-route-line';
+interface ClusterMarker {
+  id: number;
+  lng: number;
+  lat: number;
+  count: number;
+}
 
-const USER_MARKER_CLASS = 'hydroscout-user-marker';
+type HydrantPlacement = Map<string, { lng: number; lat: number } | null>;
 
-const HYDRANT_STATUSES = [
-  'operational',
-  'reduced',
-  'out',
-] as const satisfies readonly HydrantStatus[];
+interface ClusterLayout {
+  clusters: ClusterMarker[];
+  placement: HydrantPlacement;
+}
 
 interface MapLibreMapProps {
   hydrants: Hydrant[];
@@ -109,1514 +151,878 @@ interface MapLibreMapProps {
   onFireMove?: (lat: number, lng: number) => void;
 }
 
-type HydrantFeatureProperties = {
-  id: string;
-  status: HydrantStatus;
-  icon: string;
-  selected: boolean;
-  nearRoute: boolean;
-  offRoute: boolean;
-  offFire: boolean;
-  supply: boolean;
-  hazard: boolean;
-};
+const MAP_STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/positron';
+const MAP_STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 
-const EMPTY_COLLECTION: GeoJSON.FeatureCollection = {
-  type: 'FeatureCollection',
-  features: [],
-};
+type MLMap = maplibregl.Map;
 
-function iconIdForStatus(status: HydrantStatus) {
-  return `hydroscout-hydrant-${status}`;
+interface MapMarkerProps {
+  map: MLMap;
+  longitude: number;
+  latitude: number;
+  anchor?: maplibregl.PositionAnchor;
+  draggable?: boolean;
+  style?: CSSProperties;
+  onClick?: (e: MouseEvent) => void;
+  onDragEnd?: (lngLat: maplibregl.LngLat) => void;
+  children: ReactNode;
 }
 
-function toFeature(
-  hydrant: Hydrant,
-  selectedHydrantId: string | null,
-  inOtwMode: boolean,
-  nearRouteIds?: Set<string> | null,
-  fire?: FireOverlay | null,
-): GeoJSON.Feature<GeoJSON.Point, HydrantFeatureProperties> {
-  const nearRoute = nearRouteIds?.has(hydrant.id) ?? false;
+// A native MapLibre DOM marker with React children portalled into its element —
+// what react-map-gl's <Marker> does. The marker is created once per mount;
+// position updates go through setLngLat, so a moving GPS fix doesn't recreate
+// the orb (and restart its pulse) on every update.
+function MapMarker({ map, longitude, latitude, anchor = 'center', draggable = false, style, onClick, onDragEnd, children }: MapMarkerProps) {
+  const [element] = useState(() => document.createElement('div'));
+  const markerRef = useRef<maplibregl.Marker | null>(null);
+  const handlersRef = useRef({ onClick, onDragEnd });
+  useEffect(() => { handlersRef.current = { onClick, onDragEnd }; }, [onClick, onDragEnd]);
 
-  return {
-    type: 'Feature',
-    properties: {
-      id: hydrant.id,
-      status: hydrant.status,
-      icon: iconIdForStatus(hydrant.status),
-      selected: selectedHydrantId === hydrant.id,
-      nearRoute,
-      offRoute: inOtwMode && !nearRoute,
-      offFire: !!fire && !fire.zoneIds.has(hydrant.id),
-      supply: fire?.supply?.hydrantId === hydrant.id,
-      hazard: inOtwMode && hydrant.status !== 'operational',
-    },
-    geometry: {
-      type: 'Point',
-      coordinates: [hydrant.lng, hydrant.lat],
-    },
-  };
-}
-
-function buildHydrantCollection(
-  hydrants: Hydrant[],
-  selectedHydrantId: string | null,
-  otwHydrant: Hydrant | null | undefined,
-  otwRoute: [number, number][] | null | undefined,
-  nearRouteIds: Set<string> | null | undefined,
-  fire: FireOverlay | null | undefined,
-  // true ΓåÆ only the hydrants inside the fire radius (unclustered source);
-  // false ΓåÆ everything else (clustered source).
-  fireZone: boolean,
-): GeoJSON.FeatureCollection<GeoJSON.Point, HydrantFeatureProperties> {
-  const excludeId = otwHydrant?.id ?? null;
-  const inOtwMode = !!otwRoute;
-  const zoneIds = fire?.zoneIds;
-
-  return {
-    type: 'FeatureCollection',
-    features: hydrants
-      .filter(
-        (hydrant) =>
-          hydrant.id !== excludeId &&
-          (zoneIds?.has(hydrant.id) ?? false) === fireZone,
-      )
-      .map((hydrant) =>
-        toFeature(
-          hydrant,
-          selectedHydrantId,
-          inOtwMode,
-          nearRouteIds,
-          fire,
-        ),
-      ),
-  };
-}
-
-function buildFireRadiusCollection(
-  fire: FireOverlay | null | undefined,
-): GeoJSON.FeatureCollection {
-  if (!fire) {
-    return EMPTY_COLLECTION;
-  }
-
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'Polygon',
-          coordinates: [
-            circleRing(
-              fire.lat,
-              fire.lng,
-              fire.radiusM,
-            ),
-          ],
-        },
-      },
-    ],
-  };
-}
-
-function buildFireSupplyCollection(
-  fire: FireOverlay | null | undefined,
-): GeoJSON.FeatureCollection {
-  if (!fire?.supply) {
-    return EMPTY_COLLECTION;
-  }
-
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [fire.supply.lng, fire.supply.lat],
-            [fire.lng, fire.lat],
-          ],
-        },
-      },
-    ],
-  };
-}
-
-function buildTargetCollection(
-  otwHydrant: Hydrant | null | undefined,
-): GeoJSON.FeatureCollection<GeoJSON.Point, HydrantFeatureProperties> {
-  if (!otwHydrant) {
-    return {
-      type: 'FeatureCollection',
-      features: [],
+  useEffect(() => {
+    const marker = new maplibregl.Marker({ element, anchor, draggable })
+      .setLngLat([longitude, latitude])
+      .addTo(map);
+    markerRef.current = marker;
+    const click = (e: MouseEvent) => handlersRef.current.onClick?.(e);
+    const dragEnd = () => handlersRef.current.onDragEnd?.(marker.getLngLat());
+    element.addEventListener('click', click);
+    marker.on('dragend', dragEnd);
+    return () => {
+      element.removeEventListener('click', click);
+      marker.off('dragend', dragEnd);
+      marker.remove();
+      markerRef.current = null;
     };
-  }
+    // Position and draggability are synced by the effects below; recreating
+    // the marker for them would remount its children.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, element, anchor]);
 
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {
-          id: otwHydrant.id,
-          status: otwHydrant.status,
-          icon: iconIdForStatus(otwHydrant.status),
-          selected: false,
-          nearRoute: true,
-          offRoute: false,
-          offFire: false,
-          supply: false,
-          hazard: otwHydrant.status !== 'operational',
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [otwHydrant.lng, otwHydrant.lat],
-        },
-      },
-    ],
-  };
+  useEffect(() => { markerRef.current?.setLngLat([longitude, latitude]); }, [longitude, latitude]);
+  useEffect(() => { markerRef.current?.setDraggable(draggable); }, [draggable]);
+  useEffect(() => {
+    if (!style) return;
+    Object.assign(element.style, style);
+  }, [element, style]);
+
+  return createPortal(children, element);
 }
 
-async function loadHydrantImages(map: maplibregl.Map) {
-  await Promise.all(
-    HYDRANT_STATUSES.map(async (status) => {
-      const id = iconIdForStatus(status);
+interface HydrantMarkersProps {
+  map: MLMap;
+  hydrants: Hydrant[];
+  placement: HydrantPlacement;
+  clusters: ClusterMarker[];
+  clusterZoom: number;
+  selectedHydrantId: string | null;
+  otwHydrantId: string | null;
+  inOtwMode: boolean;
+  nearRouteIds?: Set<string> | null;
+  /** Hydrants inside a pinned fire's radius; all others are dimmed. */
+  fireZoneIds: Set<string> | null;
+  /** Hydrant the fire supply line is drawn from. */
+  fireSupplyId: string | null;
+  /** A map-pick mode (add hydrant / pin fire) is active. */
+  crosshair: boolean;
+  onHydrantClick: (e: MouseEvent, h: Hydrant) => void;
+  onClusterClick: (e: MouseEvent, cluster: ClusterMarker) => void;
+}
 
-      if (map.hasImage(id)) {
-        return;
-      }
+// The full hydrant + cluster marker set, memoized. MapLibreMap re-renders on
+// every GPS fix (user-location marker) and other dashboard churn; the ~50
+// markers here only depend on these props, so memoization skips reconciling
+// them all on renders that didn't change hydrant/cluster state. Every hydrant
+// stays mounted; clustering glides each pin into its cluster centroid with a
+// CSS transform + fade instead of mounting/unmounting.
+const HydrantMarkers = memo(function HydrantMarkers({
+  map, hydrants, placement, clusters, clusterZoom, selectedHydrantId,
+  otwHydrantId, inOtwMode, nearRouteIds, fireZoneIds, fireSupplyId, crosshair, onHydrantClick, onClusterClick,
+}: HydrantMarkersProps) {
+  return (
+    <>
+      {hydrants.map((h) => {
+        const centroid = placement.get(h.id);
+        // OTW target is always shown as individual marker, never absorbed into a cluster
+        const isOtwTarget = otwHydrantId === h.id;
+        const clustered = !isOtwTarget && !!centroid;
 
-      const response = await map.loadImage(
-        STATUS_META[status].iconUrl,
-      );
+        let dx = 0;
+        let dy = 0;
+        if (centroid) {
+          const here = map.project([h.lng, h.lat]);
+          const there = map.project([centroid.lng, centroid.lat]);
+          dx = there.x - here.x;
+          dy = there.y - here.y;
+        }
 
-      const sourceImage = response.data;
+        const selected = selectedHydrantId === h.id;
+        const meta = STATUS_META[h.status];
 
-      const canvas = document.createElement('canvas');
-      canvas.width = HYDRANT_ICON_WIDTH;
-      canvas.height = HYDRANT_ICON_HEIGHT;
+        // OTW mode visual states
+        const nearRoute = nearRouteIds?.has(h.id) ?? false;
+        const offRoute = inOtwMode && !nearRoute && !isOtwTarget;
 
-      const context = canvas.getContext('2d');
+        // Fire mode visual states
+        const inFireZone = fireZoneIds?.has(h.id) ?? false;
+        const offFire = !!fireZoneIds && !inFireZone && !isOtwTarget;
+        const isSupply = fireSupplyId === h.id;
 
-      if (!context) {
-        throw new Error(
-          `Unable to prepare hydrant icon for ${status}.`,
+        return (
+          <MapMarker
+            key={h.id}
+            map={map}
+            longitude={h.lng}
+            latitude={h.lat}
+            anchor="bottom"
+            onClick={(e) => onHydrantClick(e, h)}
+          >
+            <div
+              style={{
+                position: 'relative',
+                transform: `translate(${dx}px, ${dy}px)`,
+                opacity: clustered ? 0 : offRoute || offFire ? 0.25 : 1,
+                transition: `transform ${PIN_GLIDE}, opacity 0.3s ease`,
+                pointerEvents: clustered ? 'none' : 'auto',
+                cursor: crosshair ? 'crosshair' : 'pointer',
+                willChange: 'transform, opacity',
+                filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : nearRoute || inFireZone ? `drop-shadow(0 0 5px ${meta.color})` : undefined,
+              }}
+            >
+              {/* Fire supply hydrant: water-blue pulse ring */}
+              {isSupply && !isOtwTarget && !clustered && <div className="fire-supply-ring" />}
+              {/* Selected hydrant: yellow single pulse ring (only outside OTW mode) */}
+              {selected && !isSupply && !isOtwTarget && !clustered && !inOtwMode && (
+                <div style={{
+                  position: 'absolute', inset: -5, borderRadius: '50%',
+                  border: '2px solid #FED42E',
+                  animation: 'route-ring-pulse 2s ease-out infinite',
+                  pointerEvents: 'none',
+                }} />
+              )}
+              {/* OTW target: triple emergency beacon rings */}
+              {isOtwTarget && !clustered && (
+                <>
+                  {[0, 0.33, 0.66].map((delay) => (
+                    <div key={delay} style={{
+                      position: 'absolute', inset: -5, borderRadius: '50%',
+                      border: '2.5px solid #ef4444',
+                      animation: `emergency-beacon-pulse 1s ease-out ${delay}s infinite`,
+                      pointerEvents: 'none',
+                    }} />
+                  ))}
+                </>
+              )}
+              {h.status === 'out' ? (
+                /* Out of service → sliced hydrant (two clipped halves + glint). */
+                <div className="hydrant-slice" style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="half top"
+                    src={meta.iconUrl}
+                    alt={`${h.name} — ${meta.legendLabel}`}
+                    title={`${h.name} — ${meta.legendLabel}`}
+                    width={HYDRANT_ICON_WIDTH}
+                    height={HYDRANT_ICON_HEIGHT}
+                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
+                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="half bot"
+                    src={meta.iconUrl}
+                    alt=""
+                    aria-hidden
+                    width={HYDRANT_ICON_WIDTH}
+                    height={HYDRANT_ICON_HEIGHT}
+                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
+                  />
+                  <span className="cut" />
+                </div>
+              ) : (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={meta.iconUrl}
+                    alt={`${h.name} — ${meta.legendLabel}`}
+                    title={`${h.name} — ${meta.legendLabel}`}
+                    width={HYDRANT_ICON_WIDTH}
+                    height={HYDRANT_ICON_HEIGHT}
+                    style={{
+                      display: 'block',
+                      width: HYDRANT_ICON_WIDTH,
+                      height: HYDRANT_ICON_HEIGHT,
+                      objectFit: 'contain',
+                      filter: HYDRANT_PIN_FILTER,
+                    }}
+                  />
+                  {/* Water only spouts from the focused pin — the selected
+                      hydrant or the OTW routing target — so the map isn't a
+                      field of spraying water at rest. Operational → strong
+                      jet · reduced pressure → weak dribble. */}
+                  {(selected || isOtwTarget || isSupply) && !clustered && (
+                    <div className="hydrant-fx">
+                      <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
+                        <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* While routing, flag nearby non-operational hydrants as hazards. */}
+              {inOtwMode && !clustered && h.status !== 'operational' && (
+                <div className="hydrant-hazard-badge">!</div>
+              )}
+            </div>
+          </MapMarker>
         );
-      }
+      })}
 
-      context.clearRect(
-        0,
-        0,
-        HYDRANT_ICON_WIDTH,
-        HYDRANT_ICON_HEIGHT,
-      );
-
-      context.drawImage(
-        sourceImage as CanvasImageSource,
-        0,
-        0,
-        HYDRANT_ICON_WIDTH,
-        HYDRANT_ICON_HEIGHT,
-      );
-
-      const imageData = context.getImageData(
-        0,
-        0,
-        HYDRANT_ICON_WIDTH,
-        HYDRANT_ICON_HEIGHT,
-      );
-
-      if (!map.hasImage(id)) {
-        map.addImage(id, imageData);
-      }
-    }),
+      {clusters.map((cluster) => (
+        <MapMarker
+          key={`cluster-${clusterZoom}-${cluster.id}`}
+          map={map}
+          longitude={cluster.lng}
+          latitude={cluster.lat}
+          anchor="center"
+          onClick={(e) => { e.stopPropagation(); onClusterClick(e, cluster); }}
+        >
+          <div
+            className="anim-fade-scale"
+            style={{
+              width: 42,
+              height: 42,
+              background: 'linear-gradient(135deg, rgba(254,212,46,0.38) 0%, rgba(254,212,46,0.16) 100%)',
+              border: '1.5px solid rgba(254,212,46,0.55)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 0 12px rgba(254,212,46,0.35), 0 3px 8px rgba(0,0,0,0.4)',
+              color: '#e0353b',
+              fontSize: 13,
+              fontWeight: 800,
+              fontFamily: 'Arial, sans-serif',
+              textShadow: '0 1px 2px rgba(255,255,255,0.4)',
+              cursor: crosshair ? 'crosshair' : 'pointer',
+              // Clusters never hold fire-zone hydrants, so they dim with the
+              // rest of the map outside the radius.
+              opacity: fireZoneIds ? 0.35 : 1,
+              transition: 'opacity 0.3s ease',
+            }}
+          >
+            {cluster.count}
+          </div>
+        </MapMarker>
+      ))}
+    </>
   );
-}
+});
 
-function createPendingPinElement() {
-  const el = document.createElement('div');
+const OTW_SOURCE = 'otw-route';
+const OTW_GLOW_LAYER = 'otw-route-glow';
+const OTW_BG_LAYER = 'otw-route-bg';
+const OTW_LINE_LAYER = 'otw-route-line';
+const OTW_LAYERS = [OTW_GLOW_LAYER, OTW_BG_LAYER, OTW_LINE_LAYER];
 
-  el.style.width = '14px';
-  el.style.height = '14px';
-  el.style.background = '#FED42E';
-  el.style.border = '2.5px solid #e0353b';
-  el.style.borderRadius = '50%';
-  el.style.boxShadow =
-    '0 2px 8px rgba(0,0,0,0.45)';
+const FIRE_RADIUS_SOURCE = 'fire-radius';
+const FIRE_RADIUS_FILL = 'fire-radius-fill';
+const FIRE_RADIUS_LINE = 'fire-radius-line';
+const FIRE_SUPPLY_SOURCE = 'fire-supply-line';
+const FIRE_SUPPLY_GLOW = 'fire-supply-glow';
+const FIRE_SUPPLY_LINE = 'fire-supply-line';
 
-  return el;
-}
+// OpenFreeMap's vector source and the extruded-buildings layer built from it.
+const BUILDINGS_SOURCE = 'openmaptiles';
+const BUILDINGS_LAYER = '3d-buildings';
 
-function createUserLocationElement() {
-  const root = document.createElement('div');
+const SUPPLY_LABEL_STYLE: CSSProperties = { pointerEvents: 'none' };
 
-  root.className = USER_MARKER_CLASS;
-  root.style.position = 'relative';
-  root.style.width = '36px';
-  root.style.height = '36px';
+const DASH_SEQUENCE = [
+  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5],
+  [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 3, 3],
+];
 
-  const pulse = document.createElement('div');
-  pulse.className = 'user-location-pulse';
-
-  const dot = document.createElement('div');
-  dot.style.position = 'absolute';
-  dot.style.top = '50%';
-  dot.style.left = '50%';
-  dot.style.transform = 'translate(-50%,-50%)';
-  dot.style.width = '24px';
-  dot.style.height = '24px';
-  dot.style.background = '#2fbf4f';
-  dot.style.borderRadius = '50%';
-  dot.style.border = '3px solid #fff';
-  dot.style.boxShadow =
-    '0 2px 12px rgba(0,0,0,0.4)';
-
-  root.appendChild(pulse);
-  root.appendChild(dot);
-
-  return root;
-}
+// OpenFreeMap styles have no sprite entries for some POI icons; resolve them to
+// a transparent pixel instead of logging a warning per missing image.
+const TRANSPARENT_PIXEL = { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) };
 
 export default function MapLibreMap({
-  hydrants,
-  selectedHydrantId,
-  onLoad,
-  onError,
-  onMapReady,
-  onSelectHydrant,
-  addHydrantMode,
-  onMapClick,
-  onMapBackgroundClick,
-  pendingPin,
-  is3D = false,
-  userLocation,
-  otwHydrant,
-  otwRoute,
-  nearRouteIds,
-  initialCenter,
-  initialZoom,
-  isDark = false,
-  onMapMove,
-  firePinMode = false,
-  fire = null,
-  onFirePin,
-  onFireMove,
+  hydrants, selectedHydrantId, onLoad, onError, onMapReady,
+  onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
+  firePinMode = false, fire = null, onFirePin, onFireMove,
 }: MapLibreMapProps) {
-  const containerRef =
-    useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const otwAnimRef = useRef<number | null>(null);
+  // True while the current style can take sources/layers. Cleared the moment a
+  // theme swap starts loading a new style, set again on its `style.load`.
+  const styleLoadedRef = useRef(false);
+  const [styleEpoch, setStyleEpoch] = useState(0);
+  const [mapInstance, setMapInstance] = useState<MLMap | null>(null);
+  const [clusterZoom, setClusterZoom] = useState(clusterLevel(DEFAULT_ZOOM));
 
-  const mapRef =
-    useRef<maplibregl.Map | null>(null);
+  const fireZoneIds = fire?.zoneIds ?? null;
+  const crosshair = addHydrantMode || firePinMode;
 
-  const styleReadyRef =
-    useRef(false);
-
-  const pendingMarkerRef =
-    useRef<maplibregl.Marker | null>(null);
-
-  const userMarkerRef =
-    useRef<maplibregl.Marker | null>(null);
-
-  const propsRef = useRef({
-    hydrants,
-    selectedHydrantId,
-    onSelectHydrant,
-    addHydrantMode,
-    onMapClick,
-    onMapBackgroundClick,
-    otwHydrant,
-    otwRoute,
-    nearRouteIds,
-    onMapMove,
-    firePinMode,
-    fire,
-    onFirePin,
-    onFireMove,
-  });
-
+  // Latest callbacks/modes for the map-level listeners, which are bound once.
+  const liveRef = useRef({ onLoad, onError, onMapReady, onMapClick, onMapBackgroundClick, onFirePin, addHydrantMode, firePinMode });
   useEffect(() => {
-    propsRef.current = {
-      hydrants,
-      selectedHydrantId,
-      onSelectHydrant,
-      addHydrantMode,
-      onMapClick,
-      onMapBackgroundClick,
-      otwHydrant,
-      otwRoute,
-      nearRouteIds,
-      onMapMove,
-      firePinMode,
-      fire,
-      onFirePin,
-      onFireMove,
-    };
-  }, [
-    hydrants,
-    selectedHydrantId,
-    onSelectHydrant,
-    addHydrantMode,
-    onMapClick,
-    onMapBackgroundClick,
-    otwHydrant,
-    otwRoute,
-    nearRouteIds,
-    onMapMove,
-    firePinMode,
-    fire,
-    onFirePin,
-    onFireMove,
-  ]);
+    liveRef.current = { onLoad, onError, onMapReady, onMapClick, onMapBackgroundClick, onFirePin, addHydrantMode, firePinMode };
+  }, [onLoad, onError, onMapReady, onMapClick, onMapBackgroundClick, onFirePin, addHydrantMode, firePinMode]);
 
-  const hydrantById = useMemo(
-    () =>
-      new Map(
-        hydrants.map((hydrant) => [
-          hydrant.id,
-          hydrant,
-        ]),
-      ),
-    [hydrants],
-  );
-
-  const hydrantByIdRef = useRef(hydrantById);
-
-  useEffect(() => {
-    hydrantByIdRef.current = hydrantById;
-  }, [hydrantById]);
-
-  const getHydrantData = useCallback(
-    (fireZone = false) =>
-      buildHydrantCollection(
-        propsRef.current.hydrants,
-        propsRef.current.selectedHydrantId,
-        propsRef.current.otwHydrant,
-        propsRef.current.otwRoute,
-        propsRef.current.nearRouteIds,
-        propsRef.current.fire,
-        fireZone,
-      ),
-    [],
-  );
-
-  const getTargetData = useCallback(
-    () =>
-      buildTargetCollection(
-        propsRef.current.otwHydrant,
-      ),
-    [],
-  );
-
-  const ensureHydrantLayers =
-    useCallback(async () => {
-      const map = mapRef.current;
-
-      if (!map || !map.isStyleLoaded()) {
-        return;
-      }
-
-      await loadHydrantImages(map);
-
-      if (!map.getSource(HYDRANT_SOURCE)) {
-        map.addSource(HYDRANT_SOURCE, {
-          type: 'geojson',
-          data: getHydrantData(),
-          cluster: true,
-          clusterRadius: 60,
-          clusterMaxZoom: 15,
-        });
-      }
-
-      if (!map.getSource(OTW_TARGET_SOURCE)) {
-        map.addSource(OTW_TARGET_SOURCE, {
-          type: 'geojson',
-          data: getTargetData(),
-        });
-      }
-
-      if (!map.getLayer(CLUSTER_LAYER)) {
-        map.addLayer({
-          id: CLUSTER_LAYER,
-          type: 'circle',
-          source: HYDRANT_SOURCE,
-          filter: ['has', 'point_count'],
-          paint: {
-            'circle-radius': 21,
-            'circle-color':
-              'rgba(254, 212, 46, 0.28)',
-            'circle-stroke-color':
-              'rgba(254, 212, 46, 0.72)',
-            'circle-stroke-width': 1.5,
-          },
-        });
-      }
-
-      if (!map.getLayer(CLUSTER_COUNT_LAYER)) {
-        map.addLayer({
-          id: CLUSTER_COUNT_LAYER,
-          type: 'symbol',
-          source: HYDRANT_SOURCE,
-          filter: ['has', 'point_count'],
-          layout: {
-            'text-field':
-              ['get', 'point_count_abbreviated'],
-            'text-font': ['Noto Sans Regular'],
-            'text-size': 13,
-            'text-allow-overlap': true,
-            'text-ignore-placement': true,
-          },
-          paint: {
-            'text-color': '#e0353b',
-            'text-halo-color':
-              'rgba(255,255,255,0.5)',
-            'text-halo-width': 1,
-          },
-        });
-      }
-
-      if (!map.getLayer(SELECTED_HALO_LAYER)) {
-        map.addLayer({
-          id: SELECTED_HALO_LAYER,
-          type: 'circle',
-          source: HYDRANT_SOURCE,
-          filter: [
-            'all',
-            ['!', ['has', 'point_count']],
-            ['==', ['get', 'selected'], true],
-          ],
-          paint: {
-            'circle-radius': 22,
-            'circle-color':
-              'rgba(254,212,46,0.10)',
-            'circle-stroke-color': '#FED42E',
-            'circle-stroke-width': 2,
-          },
-        });
-      }
-
-      if (!map.getLayer(HYDRANT_LAYER)) {
-        map.addLayer({
-          id: HYDRANT_LAYER,
-          type: 'symbol',
-          source: HYDRANT_SOURCE,
-          filter: ['!', ['has', 'point_count']],
-          layout: {
-            'icon-image': ['get', 'icon'],
-            'icon-size': 1,
-            'icon-anchor': 'bottom',
-            'icon-allow-overlap': true,
-            'icon-ignore-placement': true,
-            'icon-rotation-alignment': 'map',
-            'icon-pitch-alignment': 'map',
-          },
-          paint: {
-            'icon-opacity': [
-              'case',
-              [
-                'any',
-                ['==', ['get', 'offRoute'], true],
-                ['==', ['get', 'offFire'], true],
-              ],
-              0.25,
-              1,
-            ],
-          },
-        });
-      }
-
-      if (!map.getLayer(HAZARD_LAYER)) {
-        map.addLayer({
-          id: HAZARD_LAYER,
-          type: 'symbol',
-          source: HYDRANT_SOURCE,
-          filter: [
-            'all',
-            ['!', ['has', 'point_count']],
-            ['==', ['get', 'hazard'], true],
-          ],
-          layout: {
-            'text-field': '!',
-            'text-font': ['Noto Sans Regular'],
-            'text-size': 12,
-            'text-offset': [1.25, -2.1],
-            'text-allow-overlap': true,
-            'text-ignore-placement': true,
-          },
-          paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': '#ef4444',
-            'text-halo-width': 5,
-          },
-        });
-      }
-
-      if (!map.getLayer(OTW_TARGET_HALO_OUTER)) {
-        map.addLayer({
-          id: OTW_TARGET_HALO_OUTER,
-          type: 'circle',
-          source: OTW_TARGET_SOURCE,
-          paint: {
-            'circle-radius': 29,
-            'circle-color':
-              'rgba(239,68,68,0.06)',
-            'circle-stroke-color':
-              'rgba(239,68,68,0.35)',
-            'circle-stroke-width': 2,
-          },
-        });
-      }
-
-      if (!map.getLayer(OTW_TARGET_HALO_INNER)) {
-        map.addLayer({
-          id: OTW_TARGET_HALO_INNER,
-          type: 'circle',
-          source: OTW_TARGET_SOURCE,
-          paint: {
-            'circle-radius': 22,
-            'circle-color':
-              'rgba(239,68,68,0.08)',
-            'circle-stroke-color': '#ef4444',
-            'circle-stroke-width': 2.5,
-          },
-        });
-      }
-
-      if (!map.getLayer(OTW_TARGET_LAYER)) {
-        map.addLayer({
-          id: OTW_TARGET_LAYER,
-          type: 'symbol',
-          source: OTW_TARGET_SOURCE,
-          layout: {
-            'icon-image': ['get', 'icon'],
-            'icon-size': 1,
-            'icon-anchor': 'bottom',
-            'icon-allow-overlap': true,
-            'icon-ignore-placement': true,
-            'icon-rotation-alignment': 'map',
-            'icon-pitch-alignment': 'map',
-          },
-        });
-      }
-
-      /* ΓöÇΓöÇ Fire incident layers ΓöÇΓöÇ
-         Radius + supply line sit UNDER every hydrant layer; the fire-zone
-         pins sit above the clustered pins but under the OTW target, which
-         stays topmost. */
-
-      if (!map.getSource(FIRE_RADIUS_SOURCE)) {
-        map.addSource(FIRE_RADIUS_SOURCE, {
-          type: 'geojson',
-          data: buildFireRadiusCollection(
-            propsRef.current.fire,
-          ),
-        });
-      }
-
-      if (!map.getSource(FIRE_SUPPLY_SOURCE)) {
-        map.addSource(FIRE_SUPPLY_SOURCE, {
-          type: 'geojson',
-          data: buildFireSupplyCollection(
-            propsRef.current.fire,
-          ),
-        });
-      }
-
-      if (!map.getSource(FIRE_ZONE_SOURCE)) {
-        map.addSource(FIRE_ZONE_SOURCE, {
-          type: 'geojson',
-          data: getHydrantData(true),
-        });
-      }
-
-      if (!map.getLayer(FIRE_RADIUS_FILL)) {
-        map.addLayer(
-          {
-            id: FIRE_RADIUS_FILL,
-            type: 'fill',
-            source: FIRE_RADIUS_SOURCE,
-            paint: {
-              'fill-color': FIRE_COLOR,
-              'fill-opacity': FIRE_RADIUS_FILL_OPACITY,
-            },
-          },
-          CLUSTER_LAYER,
-        );
-      }
-
-      if (!map.getLayer(FIRE_RADIUS_LINE)) {
-        map.addLayer(
-          {
-            id: FIRE_RADIUS_LINE,
-            type: 'line',
-            source: FIRE_RADIUS_SOURCE,
-            paint: {
-              'line-color': FIRE_COLOR,
-              'line-width': 2,
-              'line-opacity': 0.85,
-              'line-dasharray': FIRE_RADIUS_LINE_DASH,
-            },
-          },
-          CLUSTER_LAYER,
-        );
-      }
-
-      if (!map.getLayer(FIRE_SUPPLY_GLOW)) {
-        map.addLayer(
-          {
-            id: FIRE_SUPPLY_GLOW,
-            type: 'line',
-            source: FIRE_SUPPLY_SOURCE,
-            layout: { 'line-cap': 'round' },
-            paint: {
-              'line-color': SUPPLY_LINE_COLOR,
-              'line-width': 10,
-              'line-opacity': 0.2,
-              'line-blur': 4,
-            },
-          },
-          CLUSTER_LAYER,
-        );
-      }
-
-      if (!map.getLayer(FIRE_SUPPLY_LINE)) {
-        map.addLayer(
-          {
-            id: FIRE_SUPPLY_LINE,
-            type: 'line',
-            source: FIRE_SUPPLY_SOURCE,
-            layout: { 'line-cap': 'round' },
-            paint: {
-              'line-color': SUPPLY_LINE_COLOR,
-              'line-width': 3.5,
-              'line-dasharray': SUPPLY_LINE_DASH,
-            },
-          },
-          CLUSTER_LAYER,
-        );
-      }
-
-      if (!map.getLayer(FIRE_ZONE_HALO)) {
-        map.addLayer(
-          {
-            id: FIRE_ZONE_HALO,
-            type: 'circle',
-            source: FIRE_ZONE_SOURCE,
-            filter: [
-              'any',
-              ['==', ['get', 'supply'], true],
-              ['==', ['get', 'selected'], true],
-            ],
-            paint: {
-              'circle-radius': 22,
-              'circle-color': [
-                'case',
-                ['==', ['get', 'supply'], true],
-                'rgba(14,165,233,0.12)',
-                'rgba(254,212,46,0.10)',
-              ],
-              'circle-stroke-color': [
-                'case',
-                ['==', ['get', 'supply'], true],
-                SUPPLY_LINE_COLOR,
-                '#FED42E',
-              ],
-              'circle-stroke-width': 2.5,
-            },
-          },
-          OTW_TARGET_HALO_OUTER,
-        );
-      }
-
-      if (!map.getLayer(FIRE_ZONE_LAYER)) {
-        map.addLayer(
-          {
-            id: FIRE_ZONE_LAYER,
-            type: 'symbol',
-            source: FIRE_ZONE_SOURCE,
-            layout: {
-              'icon-image': ['get', 'icon'],
-              'icon-size': 1,
-              'icon-anchor': 'bottom',
-              'icon-allow-overlap': true,
-              'icon-ignore-placement': true,
-              'icon-rotation-alignment': 'map',
-              'icon-pitch-alignment': 'map',
-            },
-            paint: {
-              'icon-opacity': [
-                'case',
-                ['==', ['get', 'offRoute'], true],
-                0.25,
-                1,
-              ],
-            },
-          },
-          OTW_TARGET_HALO_OUTER,
-        );
-      }
-
-      if (!map.getLayer(FIRE_ZONE_HAZARD)) {
-        map.addLayer(
-          {
-            id: FIRE_ZONE_HAZARD,
-            type: 'symbol',
-            source: FIRE_ZONE_SOURCE,
-            filter: ['==', ['get', 'hazard'], true],
-            layout: {
-              'text-field': '!',
-              'text-font': ['Noto Sans Regular'],
-              'text-size': 12,
-              'text-offset': [1.25, -2.1],
-              'text-allow-overlap': true,
-              'text-ignore-placement': true,
-            },
-            paint: {
-              'text-color': '#ffffff',
-              'text-halo-color': '#ef4444',
-              'text-halo-width': 5,
-            },
-          },
-          OTW_TARGET_HALO_OUTER,
-        );
-      }
-    }, [getHydrantData, getTargetData]);
-
-  const ensureRouteLayers =
-    useCallback(() => {
-      const map = mapRef.current;
-
-      if (!map || !map.isStyleLoaded()) {
-        return;
-      }
-
-      if (!map.getSource(OTW_ROUTE_SOURCE)) {
-        map.addSource(OTW_ROUTE_SOURCE, {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: [],
-          },
-        });
-      }
-
-      if (!map.getLayer(OTW_GLOW_LAYER)) {
-        map.addLayer({
-          id: OTW_GLOW_LAYER,
-          type: 'line',
-          source: OTW_ROUTE_SOURCE,
-          layout: { visibility: 'none' },
-          paint: {
-            'line-color': '#DC2626',
-            'line-width': 22,
-            'line-opacity': 0.15,
-            'line-blur': 8,
-          },
-        });
-      }
-
-      if (!map.getLayer(OTW_BG_LAYER)) {
-        map.addLayer({
-          id: OTW_BG_LAYER,
-          type: 'line',
-          source: OTW_ROUTE_SOURCE,
-          layout: { visibility: 'none' },
-          paint: {
-            'line-color': '#F87171',
-            'line-width': 7,
-            'line-opacity': 0.5,
-          },
-        });
-      }
-
-      if (!map.getLayer(OTW_LINE_LAYER)) {
-        map.addLayer({
-          id: OTW_LINE_LAYER,
-          type: 'line',
-          source: OTW_ROUTE_SOURCE,
-          layout: { visibility: 'none' },
-          paint: {
-            'line-color': '#EF4444',
-            'line-width': 3,
-            'line-dasharray': [2, 2],
-          },
-        });
-      }
-    }, []);
-
-  const updateHydrantSources =
-    useCallback(() => {
-      const map = mapRef.current;
-
-      if (!map || !styleReadyRef.current) {
-        return;
-      }
-
-      const source = map.getSource(
-        HYDRANT_SOURCE,
-      ) as maplibregl.GeoJSONSource | undefined;
-
-      source?.setData(getHydrantData());
-
-      const targetSource = map.getSource(
-        OTW_TARGET_SOURCE,
-      ) as maplibregl.GeoJSONSource | undefined;
-
-      targetSource?.setData(getTargetData());
-
-      const currentFire = propsRef.current.fire;
-
-      (
-        map.getSource(FIRE_ZONE_SOURCE) as
-          | maplibregl.GeoJSONSource
-          | undefined
-      )?.setData(getHydrantData(true));
-
-      (
-        map.getSource(FIRE_RADIUS_SOURCE) as
-          | maplibregl.GeoJSONSource
-          | undefined
-      )?.setData(buildFireRadiusCollection(currentFire));
-
-      (
-        map.getSource(FIRE_SUPPLY_SOURCE) as
-          | maplibregl.GeoJSONSource
-          | undefined
-      )?.setData(buildFireSupplyCollection(currentFire));
-
-      // Clusters never hold fire-zone hydrants, so they
-      // dim with the rest of the map outside the radius.
-      const clusterOpacity = currentFire ? 0.35 : 1;
-
-      if (map.getLayer(CLUSTER_LAYER)) {
-        map.setPaintProperty(CLUSTER_LAYER, 'circle-opacity', clusterOpacity);
-        map.setPaintProperty(CLUSTER_LAYER, 'circle-stroke-opacity', clusterOpacity);
-      }
-
-      if (map.getLayer(CLUSTER_COUNT_LAYER)) {
-        map.setPaintProperty(CLUSTER_COUNT_LAYER, 'text-opacity', clusterOpacity);
-      }
-    }, [getHydrantData, getTargetData]);
-
-  const updateRoute = useCallback(() => {
-    const map = mapRef.current;
-
-    if (!map || !styleReadyRef.current) {
-      return;
-    }
-
-    ensureRouteLayers();
-
-    const source = map.getSource(
-      OTW_ROUTE_SOURCE,
-    ) as maplibregl.GeoJSONSource | undefined;
-
-    if (!source) {
-      return;
-    }
-
-    const currentOtwHydrant =
-      propsRef.current.otwHydrant;
-
-    const currentRoute =
-      propsRef.current.otwRoute;
-
-    const coordinates:
-      | [number, number][]
-      | [] =
-      currentOtwHydrant && userLocation
-        ? currentRoute ?? [
-            [
-              userLocation.lng,
-              userLocation.lat,
-            ],
-            [
-              currentOtwHydrant.lng,
-              currentOtwHydrant.lat,
-            ],
-          ]
-        : [];
-
-    source.setData({
-      type: 'FeatureCollection',
-      features:
-        coordinates.length > 0
-          ? [
-              {
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                  type: 'LineString',
-                  coordinates,
-                },
-              },
-            ]
-          : [],
+  const supercluster = useMemo(() => {
+    const index = new Supercluster<HydrantProps>({
+      radius: CLUSTER_RADIUS,
+      maxZoom: CLUSTER_MAX_ZOOM,
     });
+    // Hydrants around a pinned fire are left out of the index so they always
+    // render individually — seeing each one is the point of the fire view.
+    // With no placement entry they are simply never treated as clustered.
+    const clusterable = fireZoneIds ? hydrants.filter((h) => !fireZoneIds.has(h.id)) : hydrants;
+    index.load(
+      clusterable.map((h) => ({
+        type: 'Feature' as const,
+        properties: { hydrantId: h.id, status: h.status },
+        geometry: { type: 'Point' as const, coordinates: [h.lng, h.lat] },
+      })),
+    );
+    return index;
+  }, [hydrants, fireZoneIds]);
 
-    const visibility =
-      currentOtwHydrant ? 'visible' : 'none';
+  const layout = useMemo<ClusterLayout>(() => {
+    const clusters: ClusterMarker[] = [];
+    const placement: HydrantPlacement = new Map();
 
-    [
-      OTW_GLOW_LAYER,
-      OTW_BG_LAYER,
-      OTW_LINE_LAYER,
-    ].forEach((id) => {
-      if (map.getLayer(id)) {
-        map.setLayoutProperty(
-          id,
-          'visibility',
-          visibility,
-        );
+    for (const feature of supercluster.getClusters(WORLD_BBOX, clusterZoom)) {
+      const [lng, lat] = feature.geometry.coordinates;
+      if ('cluster' in feature.properties && feature.properties.cluster) {
+        const clusterId = feature.properties.cluster_id;
+        clusters.push({ id: clusterId, lng, lat, count: feature.properties.point_count });
+        for (const leaf of supercluster.getLeaves(clusterId, Infinity)) {
+          placement.set(leaf.properties.hydrantId, { lng, lat });
+        }
+      } else {
+        placement.set(feature.properties.hydrantId, null);
       }
-    });
-  }, [ensureRouteLayers, userLocation]);
-
-  useEffect(() => {
-    if (
-      !containerRef.current ||
-      mapRef.current
-    ) {
-      return;
     }
+    return { clusters, placement };
+  }, [supercluster, clusterZoom]);
+
+  // Style URL the map currently shows (or is loading).
+  const appliedStyleRef = useRef(isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT);
+
+  // ── Map lifecycle ─────────────────────────────────────────────────────────
+  // Created once; the theme swaps styles in place and the camera props are
+  // initial values only (as with DilimanMap's initialViewState).
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
     const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: isDark
-        ? MAP_STYLE_DARK
-        : MAP_STYLE_LIGHT,
-      center: [
-        initialCenter?.lng ??
-          DILIMAN_CENTER.lng,
-        initialCenter?.lat ??
-          DILIMAN_CENTER.lat,
-      ],
-      zoom:
-        initialZoom ?? DEFAULT_ZOOM,
+      container,
+      style: isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT,
+      center: [initialCenter?.lng ?? DILIMAN_CENTER.lng, initialCenter?.lat ?? DILIMAN_CENTER.lat],
+      zoom: initialZoom ?? DEFAULT_ZOOM,
+      // MapLibre allows -2; Mapbox stops at 0 (whole globe in view).
+      minZoom: 0,
+      // An automatic fallback (offline / Mapbox error) can mount this map while
+      // 3D is on; start tilted so the buildings layer matches.
       pitch: is3D ? 60 : 0,
-      attributionControl: {},
+      // Match Mapbox's pitch range for right-drag tilt.
+      maxPitch: 85,
+      fadeDuration: 400,
     });
 
-    mapRef.current = map;
-
+    // OpenFreeMap styles reference a few sprite icons they don't ship; resolve
+    // them to a transparent pixel instead of logging a warning for each.
     map.setMissingStyleImageResolver((id) => {
-      if (map.hasImage(id)) {
-        return;
-      }
-
-      map.addImage(id, {
-        width: 1,
-        height: 1,
-        data: new Uint8Array([0, 0, 0, 0]),
-      });
+      if (!map.hasImage(id)) map.addImage(id, TRANSPARENT_PIXEL);
     });
 
-    const handleError = (
-      event: maplibregl.ErrorEvent,
-    ) => {
-      console.warn(
-        'MapLibre map warning:',
-        event.error,
-      );
-      onError?.(event.error);
+    const handleStyleLoad = () => {
+      // A full style load resets the projection and sky to the style's own.
+      map.setProjection(GLOBE_PROJECTION);
+      map.setSky(atmosphereSky(appliedStyleRef.current === MAP_STYLE_DARK));
+      styleLoadedRef.current = true;
+      setStyleEpoch((e) => e + 1);
     };
 
-    const prepareStyle = async () => {
-      try {
-        styleReadyRef.current = false;
-
-        await ensureHydrantLayers();
-        ensureRouteLayers();
-
-        styleReadyRef.current = true;
-
-        updateHydrantSources();
-        updateRoute();
-      } catch (error) {
-        console.error(
-          'Failed to prepare Hydro-Scout MapLibre layers:',
-          error,
-        );
-        onError?.(error);
-      }
-    };
-
-    const handleLoad = async () => {
-      await prepareStyle();
-
+    const handleLoad = () => {
       map.resize();
-
-      const controller: MapController = {
-        zoomIn: () =>
-          map.easeTo({
-            zoom: map.getZoom() + 1,
-            duration: 500,
-          }),
-
-        zoomOut: () =>
-          map.easeTo({
-            zoom: map.getZoom() - 1,
-            duration: 500,
-          }),
-
-        flyTo: (lat, lng, zoom = 17) =>
-          map.flyTo({
-            center: [lng, lat],
-            zoom,
-            speed: 1.4,
-          }),
-
-        setPitch: (pitch) =>
-          map.easeTo({
-            pitch,
-            duration: 500,
-          }),
-
+      setClusterZoom(clusterLevel(map.getZoom()));
+      liveRef.current.onMapReady?.({
+        // Eased +/- zoom (slow silky settle), matching DilimanMap.
+        zoomIn: () => map.easeTo({ zoom: map.getZoom() + 1, duration: 700, easing: easeOutQuint }),
+        zoomOut: () => map.easeTo({ zoom: map.getZoom() - 1, duration: 700, easing: easeOutQuint }),
+        flyTo: (lat, lng, zoom = 17) => map.flyTo({ center: [lng, lat], zoom, speed: 1.4 }),
+        setPitch: (pitch) => map.easeTo({ pitch, duration: 600 }),
         fitRoute: (coords, padding = 60) => {
-          if (!coords.length) {
-            return;
-          }
-
-          const bounds =
-            new maplibregl.LngLatBounds();
-
-          coords.forEach(([lng, lat]) => {
-            bounds.extend([lng, lat]);
-          });
-
-          if (!bounds.isEmpty()) {
-            map.fitBounds(bounds, {
-              padding,
-              duration: 900,
-              maxZoom: 18,
-            });
-          }
+          if (!coords.length) return;
+          const lngs = coords.map(([lng]) => lng);
+          const lats = coords.map(([, lat]) => lat);
+          map.fitBounds(
+            [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+            { padding, duration: 900 },
+          );
         },
-
         setZoomLimits: (min, max) => {
           map.setMinZoom(min ?? 0);
           map.setMaxZoom(max ?? 22);
         },
-
-        getCenter: () => {
-          const center = map.getCenter();
-
-          return {
-            lat: center.lat,
-            lng: center.lng,
-          };
-        },
-
+        getCenter: () => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; },
         getZoom: () => map.getZoom(),
-
         project: (lat, lng) => {
           try {
-            const point = map.project([
-              lng,
-              lat,
-            ]);
-
-            return {
-              x: point.x,
-              y: point.y,
-            };
-          } catch {
-            return null;
-          }
+            const p = map.project([lng, lat]);
+            return { x: p.x, y: p.y };
+          } catch { return null; }
         },
-      };
-
-      onMapReady?.(controller);
-      onLoad?.();
-    };
-
-    // `style.load` fires before the new style's tiles
-    // arrive, while isStyleLoaded() ΓÇö which the layer
-    // setup requires ΓÇö is still false, so rebuild once
-    // the map settles. (On first load the `load`
-    // handler gets there first; this is then a no-op.)
-    const handleStyleLoad = () => {
-      map.once('idle', () => {
-        void prepareStyle();
       });
+      setMapInstance(map);
+      liveRef.current.onLoad?.();
     };
 
-    const handleClick = async (
-      event: maplibregl.MapMouseEvent,
-    ) => {
-      // Fire-pin mode: wherever the tap lands ΓÇö empty map, a pin or a
-      // cluster ΓÇö that is where the fire is.
-      if (propsRef.current.firePinMode) {
-        propsRef.current.onFirePin?.(
-          event.lngLat.lat,
-          event.lngLat.lng,
-        );
-        return;
-      }
-
-      const clickableLayers = [
-        HYDRANT_LAYER,
-        FIRE_ZONE_LAYER,
-        OTW_TARGET_LAYER,
-        CLUSTER_LAYER,
-      ].filter((id) => !!map.getLayer(id));
-
-      const features =
-        clickableLayers.length > 0
-          ? map.queryRenderedFeatures(
-              event.point,
-              {
-                layers: clickableLayers,
-              },
-            )
-          : [];
-
-      const top = features[0];
-
-      if (top?.layer.id === CLUSTER_LAYER) {
-        const clusterId =
-          Number(top.properties?.cluster_id);
-
-        const source = map.getSource(
-          HYDRANT_SOURCE,
-        ) as maplibregl.GeoJSONSource | undefined;
-
-        if (
-          source &&
-          Number.isFinite(clusterId)
-        ) {
-          try {
-            const zoom =
-              await source.getClusterExpansionZoom(
-                clusterId,
-              );
-
-            const point =
-              top.geometry.type === 'Point'
-                ? top.geometry.coordinates
-                : null;
-
-            if (
-              point &&
-              typeof point[0] === 'number' &&
-              typeof point[1] === 'number'
-            ) {
-              map.flyTo({
-                center: [point[0], point[1]],
-                zoom: Math.min(zoom, 18),
-                speed: 1.4,
-              });
-            }
-          } catch (error) {
-            console.warn(
-              'Unable to expand cluster:',
-              error,
-            );
-          }
-        }
-
-        return;
-      }
-
-      if (
-        top?.layer.id === HYDRANT_LAYER ||
-        top?.layer.id === FIRE_ZONE_LAYER ||
-        top?.layer.id === OTW_TARGET_LAYER
-      ) {
-        if (
-          !propsRef.current.addHydrantMode
-        ) {
-          const id = String(
-            top.properties?.id ?? '',
-          );
-
-          const hydrant =
-            hydrantByIdRef.current.get(id);
-
-          if (hydrant) {
-            propsRef.current.onSelectHydrant(
-              hydrant,
-            );
-          }
-        }
-
-        return;
-      }
-
-      if (propsRef.current.addHydrantMode) {
-        propsRef.current.onMapClick(
-          event.lngLat.lat,
-          event.lngLat.lng,
-        );
-      } else {
-        propsRef.current.onMapBackgroundClick();
-      }
+    const handleError = (e: maplibregl.ErrorEvent) => {
+      console.warn('MapLibre map warning:', e.error);
+      liveRef.current.onError?.(e.error);
     };
 
-    const handleMove = () => {
-      propsRef.current.onMapMove?.();
+    // Markers stop propagation of their own clicks, so this only sees taps on
+    // the map itself.
+    const handleClick = (e: maplibregl.MapMouseEvent) => {
+      const live = liveRef.current;
+      if (live.firePinMode) live.onFirePin?.(e.lngLat.lat, e.lngLat.lng);
+      else if (live.addHydrantMode) live.onMapClick(e.lngLat.lat, e.lngLat.lng);
+      else live.onMapBackgroundClick();
     };
 
-    map.on('error', handleError);
-    map.on('load', handleLoad);
     map.on('style.load', handleStyleLoad);
+    map.on('load', handleLoad);
+    map.on('error', handleError);
     map.on('click', handleClick);
-    map.on('move', handleMove);
 
     return () => {
-      styleReadyRef.current = false;
-
-      pendingMarkerRef.current?.remove();
-      pendingMarkerRef.current = null;
-
-      userMarkerRef.current?.remove();
-      userMarkerRef.current = null;
-
+      styleLoadedRef.current = false;
+      setMapInstance(null);
       map.remove();
-      mapRef.current = null;
     };
-
     // Intentionally create the MapLibre instance once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Theme swap. `diff: false` forces a full reload so `style.load` fires and
+  // the runtime layers get rebuilt — a diffed MapLibre swap strips them
+  // silently and fires nothing.
   useEffect(() => {
-    const map = mapRef.current;
+    const style = isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT;
+    if (!mapInstance || appliedStyleRef.current === style) return;
+    appliedStyleRef.current = style;
+    styleLoadedRef.current = false;
+    mapInstance.setStyle(style, { diff: false });
+  }, [isDark, mapInstance]);
 
-    if (!map) {
+  useEffect(() => {
+    if (!mapInstance) return;
+    const sync = () => {
+      const next = clusterLevel(mapInstance.getZoom());
+      setClusterZoom((prev) => (prev === next ? prev : next));
+    };
+    sync();
+    mapInstance.on('zoom', sync);
+    return () => { mapInstance.off('zoom', sync); };
+  }, [mapInstance]);
+
+  useEffect(() => {
+    if (!mapInstance) return;
+    mapInstance.getCanvas().style.cursor = crosshair ? 'crosshair' : '';
+  }, [crosshair, mapInstance]);
+
+  const crosshairRef = useRef(crosshair);
+  useEffect(() => { crosshairRef.current = crosshair; }, [crosshair]);
+
+  // Shift + left-drag rotates (right-drag / ctrl-drag rotate natively).
+  useEffect(() => {
+    if (!mapInstance) return;
+    mapInstance.boxZoom.disable();
+
+    const canvas = mapInstance.getCanvas();
+    let rotating = false;
+    let startX = 0;
+    let startBearing = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (!e.shiftKey || e.button !== 0) return;
+      rotating = true;
+      startX = e.clientX;
+      startBearing = mapInstance.getBearing();
+      mapInstance.dragPan.disable();
+      canvas.style.cursor = 'grabbing';
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!rotating) return;
+      mapInstance.setBearing(startBearing + (e.clientX - startX) * 0.4);
+    };
+
+    const onMouseUp = () => {
+      if (!rotating) return;
+      rotating = false;
+      mapInstance.dragPan.enable();
+      canvas.style.cursor = crosshairRef.current ? 'crosshair' : '';
+    };
+
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      canvas.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      mapInstance.dragPan.enable();
+      mapInstance.boxZoom.enable();
+    };
+  }, [mapInstance]);
+
+  // ── GL overlay layers ─────────────────────────────────────────────────────
+  // Re-added after every style load (styleEpoch). Order matches DilimanMap's
+  // stacking: OTW route, then the fire radius and supply line above it.
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || !styleLoadedRef.current) return;
+    const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+    if (!map.getSource(OTW_SOURCE)) {
+      map.addSource(OTW_SOURCE, { type: 'geojson', data: empty });
+      map.addLayer({ id: OTW_GLOW_LAYER, type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#DC2626', 'line-width': 22, 'line-opacity': 0.15, 'line-blur': 8 } });
+      map.addLayer({ id: OTW_BG_LAYER,   type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#F87171', 'line-width': 7, 'line-opacity': 0.5 } });
+      map.addLayer({ id: OTW_LINE_LAYER,  type: 'line', source: OTW_SOURCE, layout: { visibility: 'none' }, paint: { 'line-color': '#EF4444', 'line-width': 3, 'line-dasharray': [0, 4, 3] } });
+    }
+    if (!map.getSource(FIRE_RADIUS_SOURCE)) {
+      map.addSource(FIRE_RADIUS_SOURCE, { type: 'geojson', data: empty });
+      map.addLayer({ id: FIRE_RADIUS_FILL, type: 'fill', source: FIRE_RADIUS_SOURCE, paint: { 'fill-color': FIRE_COLOR, 'fill-opacity': FIRE_RADIUS_FILL_OPACITY } });
+      map.addLayer({ id: FIRE_RADIUS_LINE, type: 'line', source: FIRE_RADIUS_SOURCE, paint: { 'line-color': FIRE_COLOR, 'line-width': 2, 'line-opacity': 0.85, 'line-dasharray': FIRE_RADIUS_LINE_DASH } });
+    }
+    if (!map.getSource(FIRE_SUPPLY_SOURCE)) {
+      map.addSource(FIRE_SUPPLY_SOURCE, { type: 'geojson', data: empty });
+      map.addLayer({ id: FIRE_SUPPLY_GLOW, type: 'line', source: FIRE_SUPPLY_SOURCE, layout: { 'line-cap': 'round' }, paint: { 'line-color': SUPPLY_LINE_COLOR, 'line-width': 10, 'line-opacity': 0.2, 'line-blur': 4 } });
+      map.addLayer({ id: FIRE_SUPPLY_LINE, type: 'line', source: FIRE_SUPPLY_SOURCE, layout: { 'line-cap': 'round' }, paint: { 'line-color': SUPPLY_LINE_COLOR, 'line-width': 3.5, 'line-dasharray': SUPPLY_LINE_DASH } });
+    }
+  }, [mapInstance, styleEpoch]);
+
+  useEffect(() => {
+    if (!mapInstance) return;
+    const src = mapInstance.getSource(OTW_SOURCE) as maplibregl.GeoJSONSource | undefined;
+    if (!src) return;
+    if (otwHydrant && userLocation) {
+      const coordinates: [number, number][] = otwRoute ?? [[userLocation.lng, userLocation.lat], [otwHydrant.lng, otwHydrant.lat]];
+      src.setData({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } }] });
+    } else {
+      src.setData({ type: 'FeatureCollection', features: [] });
+    }
+  }, [mapInstance, otwHydrant, userLocation, otwRoute, styleEpoch]);
+
+  useEffect(() => {
+    if (!mapInstance) return;
+    const vis = otwHydrant ? 'visible' : 'none';
+    OTW_LAYERS.forEach((id) => { if (mapInstance.getLayer(id)) mapInstance.setLayoutProperty(id, 'visibility', vis); });
+
+    if (!otwHydrant) {
+      if (otwAnimRef.current) { cancelAnimationFrame(otwAnimRef.current); otwAnimRef.current = null; }
       return;
     }
 
-    map.getCanvas().style.cursor =
-      addHydrantMode || firePinMode
-        ? 'crosshair'
-        : '';
+    let step = 0;
+    let lastTs = 0;
+    const tick = (ts: number) => {
+      if (ts - lastTs > 80) {
+        if (mapInstance.getLayer(OTW_LINE_LAYER)) {
+          mapInstance.setPaintProperty(OTW_LINE_LAYER, 'line-dasharray', DASH_SEQUENCE[step]);
+        }
+        step = (step + 1) % DASH_SEQUENCE.length;
+        lastTs = ts;
+      }
+      otwAnimRef.current = requestAnimationFrame(tick);
+    };
+    otwAnimRef.current = requestAnimationFrame(tick);
+    return () => { if (otwAnimRef.current) { cancelAnimationFrame(otwAnimRef.current); otwAnimRef.current = null; } };
+  }, [mapInstance, otwHydrant, styleEpoch]);
 
-    updateHydrantSources();
-  }, [
-    addHydrantMode,
-    firePinMode,
-    fire,
-    hydrants,
-    selectedHydrantId,
-    otwHydrant,
-    otwRoute,
-    nearRouteIds,
-    updateHydrantSources,
-  ]);
-
-  useEffect(() => {
-    updateRoute();
-  }, [
-    otwHydrant,
-    otwRoute,
-    userLocation,
-    updateRoute,
-  ]);
-
-  /*
-   * Theme swap. `diff: false` forces a full style
-   * reload: the default diffed swap silently strips
-   * every source/layer added at runtime (all the
-   * hydrant, route and fire layers) and never fires
-   * `style.load`, so nothing rebuilt them ΓÇö every
-   * hydrant vanished on a light/dark toggle.
-   */
-  const appliedStyleRef = useRef(
-    isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT,
+  // Fire overlay geometry — search radius polygon and hydrant → fire line.
+  // Keyed on coordinates, not the overlay object, which is rebuilt whenever
+  // the hydrant feed ticks.
+  const supply = fire?.supply ?? null;
+  const fireLat = fire?.lat;
+  const fireLng = fire?.lng;
+  const fireRadiusM = fire?.radiusM;
+  const supplyLat = supply?.lat;
+  const supplyLng = supply?.lng;
+  const fireRadiusData = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: 'FeatureCollection',
+      features: fireLat === undefined || fireLng === undefined || fireRadiusM === undefined ? [] : [{
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'Polygon', coordinates: [circleRing(fireLat, fireLng, fireRadiusM)] },
+      }],
+    }),
+    [fireLat, fireLng, fireRadiusM],
+  );
+  const fireSupplyData = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: 'FeatureCollection',
+      features: fireLat === undefined || fireLng === undefined || supplyLat === undefined || supplyLng === undefined ? [] : [{
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: [[supplyLng, supplyLat], [fireLng, fireLat]] },
+      }],
+    }),
+    [fireLat, fireLng, supplyLat, supplyLng],
   );
 
   useEffect(() => {
-    const map = mapRef.current;
-    const style = isDark
-      ? MAP_STYLE_DARK
-      : MAP_STYLE_LIGHT;
-
-    // The map was created with this style already.
-    if (!map || appliedStyleRef.current === style) {
-      return;
-    }
-
-    appliedStyleRef.current = style;
-    map.setStyle(style, { diff: false });
-  }, [isDark]);
+    (mapInstance?.getSource(FIRE_RADIUS_SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(fireRadiusData);
+  }, [mapInstance, fireRadiusData, styleEpoch]);
 
   useEffect(() => {
-    const map = mapRef.current;
+    (mapInstance?.getSource(FIRE_SUPPLY_SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(fireSupplyData);
+  }, [mapInstance, fireSupplyData, styleEpoch]);
 
-    if (!map) {
-      return;
-    }
+  // 3D buildings from the OpenMapTiles building layer, slotted under the route
+  // and fire overlays so those stay readable on top of the extrusions.
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || !styleLoadedRef.current) return;
+    if (map.getLayer(BUILDINGS_LAYER)) map.removeLayer(BUILDINGS_LAYER);
+    if (!is3D || !map.getSource(BUILDINGS_SOURCE)) return;
+    map.addLayer({
+      id: BUILDINGS_LAYER,
+      type: 'fill-extrusion',
+      source: BUILDINGS_SOURCE,
+      'source-layer': 'building',
+      minzoom: 15,
+      filter: ['!', ['to-boolean', ['get', 'hide_3d']]],
+      paint: {
+        'fill-extrusion-color': isDark ? '#2a313a' : '#d4cfc9',
+        'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['coalesce', ['get', 'render_height'], 0]],
+        'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['coalesce', ['get', 'render_min_height'], 0]],
+        'fill-extrusion-opacity': 0.7,
+      },
+    }, map.getLayer(OTW_GLOW_LAYER) ? OTW_GLOW_LAYER : undefined);
+  }, [mapInstance, is3D, isDark, styleEpoch]);
 
-    map.easeTo({
-      pitch: is3D ? 60 : 0,
-      duration: 500,
-    });
-  }, [is3D]);
+  // Keep onMapMove in a ref so we don't re-register the listener on every render
+  const onMapMoveRef = useRef(onMapMove);
+  useEffect(() => { onMapMoveRef.current = onMapMove; }, [onMapMove]);
 
   useEffect(() => {
-    const map = mapRef.current;
+    if (!mapInstance) return;
+    const handler = () => onMapMoveRef.current?.();
+    mapInstance.on('move', handler);
+    return () => { mapInstance.off('move', handler); };
+  }, [mapInstance]);
 
-    if (!map || !styleReadyRef.current) {
-      return;
-    }
+  // ── Continuous wheel zoom (same loop as DilimanMap) ───────────────────────
+  // Replace MapLibre's stock scroll zoom with the accumulate-goal +
+  // exponential-glide loop. Each frame drives the camera with
+  // `easeTo({ around, duration: 0 })` — an instantaneous zoom pinned to the
+  // geographic point under the cursor at gesture start.
+  useEffect(() => {
+    if (!mapInstance) return;
+    const map = mapInstance;
+    // Listen on the CONTAINER, not the canvas. Cluster markers and the location
+    // orb are DOM elements stacked ON TOP of the canvas; a wheel over one of
+    // them targets that div and bubbles to the container but never reaches the
+    // canvas (a sibling), so canvas-bound zoom "locks" over a cluster. Capture
+    // phase so we still fire even if a marker stops propagation.
+    const container = map.getContainer();
+    // Our loop owns the wheel now; MapLibre's discrete handler must stand down.
+    map.scrollZoom.disable();
 
-    pendingMarkerRef.current?.remove();
-    pendingMarkerRef.current = null;
+    let active = false;   // rAF loop running
+    let gesture = false;  // wheel still spinning
+    let goalZoom = map.getZoom();
+    // Our own authoritative animated zoom, integrated each frame instead of
+    // read back from map.getZoom(): during the globe↔mercator transition the
+    // camera may not land exactly where we ask, and reading it back would keep
+    // the glide from ever converging (a hot rAF loop pinned in place).
+    let renderZoom = goalZoom;
+    let anchor: maplibregl.LngLat | null = null;   // lng/lat under the cursor, FROZEN at start (null → zoom about center)
+    let lastTs = 0;
+    let rafId = 0;
+    let idleTimer = 0;
+    let lastWheelTs = 0;
 
-    if (!pendingPin) {
-      return;
-    }
+    const stop = () => { active = false; gesture = false; setMlSmoothZoom(false); cancelAnimationFrame(rafId); };
 
-    pendingMarkerRef.current =
-      new maplibregl.Marker({
-        element: createPendingPinElement(),
-        anchor: 'center',
-        subpixelPositioning: true,
-      })
-        .setLngLat([
-          pendingPin.lng,
-          pendingPin.lat,
-        ])
-        .addTo(map);
-
-    return () => {
-      pendingMarkerRef.current?.remove();
-      pendingMarkerRef.current = null;
+    const frame = (now: number) => {
+      // Frame-rate-independent exponential glide toward the goal — no steps.
+      const dt = lastTs ? now - lastTs : 16.7;
+      lastTs = now;
+      const k = 1 - Math.exp((-dt / 1000) * GLIDE_K);
+      renderZoom += (goalZoom - renderZoom) * k;
+      // Keep gliding until fully converged once the wheel is idle; ending early
+      // is what makes the tail of a scroll feel like a jump.
+      const done = !gesture && Math.abs(goalZoom - renderZoom) < WHEEL_CONVERGE;
+      if (done) renderZoom = goalZoom;
+      // Sub-pixel markers mid-flight; let the settling frame round them crisp.
+      setMlSmoothZoom(!done);
+      // On the globe, cursor-anchoring rotates the sphere and fights the
+      // projection transition. Below the flat threshold zoom about center;
+      // above it pin the cursor. Keyed off renderZoom so the switch is
+      // deterministic mid-gesture.
+      const pin = anchor && renderZoom >= GLOBE_ANCHOR_MIN_ZOOM ? anchor : null;
+      map.easeTo(pin ? { zoom: renderZoom, around: pin, duration: 0 } : { zoom: renderZoom, duration: 0 });
+      if (done) { active = false; return; }
+      rafId = requestAnimationFrame(frame);
     };
-  }, [pendingPin]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-
-    if (!map || !styleReadyRef.current) {
-      return;
-    }
-
-    userMarkerRef.current?.remove();
-    userMarkerRef.current = null;
-
-    if (!userLocation) {
-      return;
-    }
-
-    userMarkerRef.current =
-      new maplibregl.Marker({
-        element: createUserLocationElement(),
-        anchor: 'center',
-        subpixelPositioning: true,
-      })
-        .setLngLat([
-          userLocation.lng,
-          userLocation.lat,
-        ])
-        .addTo(map);
-
-    return () => {
-      userMarkerRef.current?.remove();
-      userMarkerRef.current = null;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Start a fresh gesture on the first tick, or after a pause — both re-pin
+      // the cursor anchor so the next scroll zooms toward the new spot.
+      const reanchor = !active || e.timeStamp - lastWheelTs > WHEEL_REANCHOR_MS;
+      lastWheelTs = e.timeStamp;
+      if (reanchor) {
+        // Resync to the map's real zoom in case a flyTo/pan moved it while we
+        // were idle, then rebase the goal so re-anchoring hands off with no jump.
+        renderZoom = map.getZoom();
+        goalZoom = renderZoom;
+        const rect = container.getBoundingClientRect();
+        // On the globe a cursor over empty space (off-sphere) unprojects to
+        // garbage; only pin an anchor once we're flat, else zoom about center.
+        if (renderZoom >= GLOBE_ANCHOR_MIN_ZOOM) {
+          const p = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+          anchor = Number.isFinite(p.lng) && Number.isFinite(p.lat) ? p : null;
+        } else {
+          anchor = null;
+        }
+        if (!active) {
+          active = true;
+          map.stop();  // cancel any in-flight camera animation
+          lastTs = 0;
+          rafId = requestAnimationFrame(frame);
+        }
+      }
+      // Normalise line-mode deltas (Firefox) to ~pixel scale.
+      const dy = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY;
+      goalZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), goalZoom - dy * WHEEL_ZOOM_RATE));
+      gesture = true;
+      clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => { gesture = false; }, WHEEL_IDLE_MS);
     };
-  }, [userLocation]);
 
-  /*
-   * Fire marker. Unlike the GL layers it doesn't
-   * depend on the style, so it only needs the map.
-   */
-  const fireLat = fire?.lat;
-  const fireLng = fire?.lng;
+    // Any drag/tap hands the map back to native interaction — bail the glide so
+    // our per-frame re-anchoring can't fight a pan.
+    const onPointerDown = () => stop();
 
-  useEffect(() => {
-    const map = mapRef.current;
-
-    if (
-      !map ||
-      fireLat === undefined ||
-      fireLng === undefined
-    ) {
-      return;
-    }
-
-    const element = createFirePinElement();
-
-    // Don't let a tap on the pin read as a
-    // background tap (which closes panels).
-    element.addEventListener('click', (e) =>
-      e.stopPropagation(),
-    );
-
-    const marker = new maplibregl.Marker({
-      element,
-      anchor: 'center',
-      draggable: true,
-      subpixelPositioning: true,
-    })
-      .setLngLat([fireLng, fireLat])
-      .addTo(map);
-
-    marker.on('dragend', () => {
-      const { lat, lng } = marker.getLngLat();
-      propsRef.current.onFireMove?.(lat, lng);
-    });
-
+    container.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    container.addEventListener('mousedown', onPointerDown);
+    container.addEventListener('touchstart', onPointerDown, { passive: true });
     return () => {
-      marker.remove();
+      container.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions);
+      container.removeEventListener('mousedown', onPointerDown);
+      container.removeEventListener('touchstart', onPointerDown);
+      clearTimeout(idleTimer);
+      stop();
+      if (map.loaded()) map.scrollZoom.enable();
     };
-  }, [fireLat, fireLng]);
+  }, [mapInstance]);
 
-  /* Distance pill at the supply line's midpoint. */
-  const supplyLat = fire?.supply?.lat;
-  const supplyLng = fire?.supply?.lng;
-  const supplyLabel = fire?.supply?.label;
+  // In fire-pin mode a tap on a hydrant or cluster marker still means "the
+  // fire is HERE" — markers swallow the map click, so resolve the point under
+  // the pointer ourselves.
+  const pinFireAtEvent = useCallback((ev: MouseEvent) => {
+    if (!mapInstance || !onFirePin) return;
+    const rect = mapInstance.getContainer().getBoundingClientRect();
+    const p = mapInstance.unproject([ev.clientX - rect.left, ev.clientY - rect.top]);
+    onFirePin(p.lat, p.lng);
+  }, [mapInstance, onFirePin]);
 
-  useEffect(() => {
-    const map = mapRef.current;
+  const handleClusterClick = useCallback((e: MouseEvent, cluster: ClusterMarker) => {
+    if (firePinMode) { pinFireAtEvent(e); return; }
+    if (addHydrantMode || !mapInstance) return;
+    const zoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id), 18);
+    mapInstance.flyTo({ center: [cluster.lng, cluster.lat], zoom, speed: 1.4 });
+  }, [supercluster, addHydrantMode, firePinMode, pinFireAtEvent, mapInstance]);
 
-    if (
-      !map ||
-      fireLat === undefined ||
-      fireLng === undefined ||
-      supplyLat === undefined ||
-      supplyLng === undefined ||
-      supplyLabel === undefined
-    ) {
-      return;
-    }
+  const handleHydrantClick = useCallback((e: MouseEvent, h: Hydrant) => {
+    e.stopPropagation();
+    if (firePinMode) pinFireAtEvent(e);
+    else if (!addHydrantMode) onSelectHydrant(h);
+  }, [addHydrantMode, firePinMode, pinFireAtEvent, onSelectHydrant]);
 
-    const marker = new maplibregl.Marker({
-      element:
-        createSupplyLabelElement(supplyLabel),
-      anchor: 'center',
-      subpixelPositioning: true,
-    })
-      .setLngLat([
-        (supplyLng + fireLng) / 2,
-        (supplyLat + fireLat) / 2,
-      ])
-      .addTo(map);
-
-    return () => {
-      marker.remove();
-    };
-  }, [
-    fireLat,
-    fireLng,
-    supplyLat,
-    supplyLng,
-    supplyLabel,
-  ]);
+  const map = mapInstance;
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full w-full"
-      style={{
-        position: 'absolute',
-        inset: 0,
-      }}
-    />
+    <div style={{ position: 'absolute', inset: 0 }}>
+      {/* Space only once loaded — before the first frame it would flash dark. */}
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0, background: map ? SPACE_COLOR : undefined }} />
+
+      {map && (
+        <HydrantMarkers
+          map={map}
+          hydrants={hydrants}
+          placement={layout.placement}
+          clusters={layout.clusters}
+          clusterZoom={clusterZoom}
+          selectedHydrantId={selectedHydrantId}
+          otwHydrantId={otwHydrant?.id ?? null}
+          inOtwMode={!!otwRoute}
+          nearRouteIds={nearRouteIds}
+          fireZoneIds={fireZoneIds}
+          fireSupplyId={supply?.hydrantId ?? null}
+          crosshair={crosshair}
+          onHydrantClick={handleHydrantClick}
+          onClusterClick={handleClusterClick}
+        />
+      )}
+
+      {map && pendingPin && (
+        <MapMarker map={map} longitude={pendingPin.lng} latitude={pendingPin.lat} anchor="center">
+          <div style={{ width: 14, height: 14, background: '#FED42E', border: '2.5px solid #e0353b', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }} />
+        </MapMarker>
+      )}
+
+      {map && fire && supply && (
+        <MapMarker
+          map={map}
+          longitude={(supply.lng + fire.lng) / 2}
+          latitude={(supply.lat + fire.lat) / 2}
+          anchor="center"
+          style={SUPPLY_LABEL_STYLE}
+        >
+          <div className="fire-supply-label">{supply.label}</div>
+        </MapMarker>
+      )}
+
+      {map && fire && (
+        <MapMarker
+          map={map}
+          longitude={fire.lng}
+          latitude={fire.lat}
+          anchor="center"
+          draggable
+          onDragEnd={(p) => onFireMove?.(p.lat, p.lng)}
+          // Don't let a tap on the pin read as a background tap (closes panels).
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="fire-pin" title="Fire location — drag to adjust">
+            <span className="fire-pin-pulse" />
+            <span className="fire-pin-pulse fire-pin-pulse-late" />
+            <span className="fire-pin-core">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={FLAME_PATH} /></svg>
+            </span>
+          </div>
+        </MapMarker>
+      )}
+
+      {map && userLocation && (
+        <MapMarker map={map} longitude={userLocation.lng} latitude={userLocation.lat} anchor="center">
+          <div style={{ position: 'relative', width: 36, height: 36 }}>
+            <div className="user-location-pulse" />
+            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 24, height: 24, background: '#2fbf4f', borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 2px 12px rgba(0,0,0,0.4)' }} />
+          </div>
+        </MapMarker>
+      )}
+    </div>
   );
 }

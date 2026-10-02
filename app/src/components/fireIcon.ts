@@ -1,5 +1,5 @@
 // Shared visuals for the fire pin and its supply line, used by both the Mapbox
-// (JSX markers) and MapLibre (DOM markers) providers so the two match. Marker
+// and MapLibre providers so the two match. Marker
 // styling lives in globals.css under "Fire pin".
 
 // Material "local_fire_department" flame (Apache 2.0), 24×24 viewBox.
@@ -15,24 +15,3 @@ export const FIRE_RADIUS_FILL_OPACITY = 0.1;
 export const FIRE_RADIUS_LINE_DASH = [2, 1.5];
 export const SUPPLY_LINE_DASH = [1.5, 1.2];
 
-/** DOM version of the fire pin, for MapLibre's `Marker({ element })`. */
-export function createFirePinElement(): HTMLDivElement {
-  const root = document.createElement('div');
-  root.className = 'fire-pin';
-  root.title = 'Fire location — drag to adjust';
-  root.innerHTML =
-    '<span class="fire-pin-pulse"></span>' +
-    '<span class="fire-pin-pulse fire-pin-pulse-late"></span>' +
-    '<span class="fire-pin-core">' +
-    `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${FLAME_PATH}"/></svg>` +
-    '</span>';
-  return root;
-}
-
-/** DOM version of the supply-line distance pill. */
-export function createSupplyLabelElement(text: string): HTMLDivElement {
-  const el = document.createElement('div');
-  el.className = 'fire-supply-label';
-  el.textContent = text;
-  return el;
-}

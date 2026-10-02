@@ -1,4 +1,11 @@
 rules_version = '2';
+// unitLocations/{stationId}: stationId, updatedBy, lat, lng, accuracy, updatedAt.
+// Temporary F1 contract: station accounts have accountType == 'station' and stationId.
+//
+// F1 Station Accounts + AOR:
+// users/{uid}.aorBarangays contains the barangays inside that user's
+// Area of Responsibility. A station/authorized user may update only a
+// hydrant's operationalStatus when that hydrant belongs to their AOR.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -28,6 +35,23 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
 
+    // F1: true when the existing hydrant belongs to one of the
+    // barangays assigned to the signed-in user's Area of Responsibility.
+    //
+    // We deliberately check resource.data.barangay (the existing document),
+    // not request.resource.data.barangay, so a client cannot move a hydrant
+    // into its own AOR as part of an update.
+    function hydrantIsInUserAor() {
+      return isSignedIn()
+        && resource.data.barangay is string
+        && get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.aorBarangays is list
+        && resource.data.barangay in get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.aorBarangays;
+    }
+
     // ---------- users ----------
 
     match /users/{uid} {
@@ -39,7 +63,57 @@ service cloud.firestore {
 
       // New users can create their own document (signup flow).
       // Only admins can create documents for other users or delete any.
-      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      // Self-signup cannot grant a role or station assignment used by location rules.
+      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'email', 'displayName', 'role', 'createdAt', 'lastLoginAt'
+        ])
+        && request.resource.data.role == 'general');
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------- latest station positions ----------
+
+    function isAssignedStation(stationId) {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountType == 'station'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == stationId;
+    }
+
+    function isValidUnitLocation(stationId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'stationId',
+          'updatedBy',
+          'lat',
+          'lng',
+          'accuracy',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'stationId',
+          'updatedBy',
+          'lat',
+          'lng',
+          'accuracy',
+          'updatedAt'
+        ])
+        && data.stationId is string && data.stationId.size() <= 128
+        && data.stationId.matches('^[A-Za-z0-9_-]+$')
+        && data.stationId == stationId
+        && data.updatedBy is string && data.updatedBy.size() <= 128
+        && data.updatedBy == request.auth.uid
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    match /unitLocations/{stationId} {
+      allow read: if isAdmin() || isAssignedStation(stationId);
+      allow create, update: if isAssignedStation(stationId)
+        && isValidUnitLocation(stationId);
       allow delete: if isAdmin();
     }
 
@@ -51,16 +125,33 @@ service cloud.firestore {
 
       allow create: if isAuthorized() || isHead() || isAdmin();
 
-      // Only head and admin may edit an existing hydrant's status/details.
-      // Authorized users may still create hydrants and file damage reports
-      // (see the /reports subcollection below), just not edit directly.
+      // Existing permissions:
+      //   - Admin may update the hydrant.
+      //   - Head may update the existing approved field set.
+      //
+      // F1 AOR permission:
+      //   - Authorized/station users may update ONLY operationalStatus.
+      //   - The existing hydrant's barangay must belong to their AOR.
+      //   - They cannot change barangay or combine the status update with
+      //     another field.
       allow update: if isAdmin()
         || (isHead() && onlyChangedFields([
-              'operationalStatus', 'pressureStatus', 'waterCleanliness',
-              'hazards', 'photos', 'notes', 'fieldNotes', 'register',
-              'lastMaintenanceDate', 'nextMaintenanceDate',
-              'updatedBy', 'updatedAt'
-            ]));
+              'operationalStatus',
+              'pressureStatus',
+              'waterCleanliness',
+              'hazards',
+              'photos',
+              'notes',
+              'fieldNotes',
+              'register',
+              'lastMaintenanceDate',
+              'nextMaintenanceDate',
+              'updatedBy',
+              'updatedAt'
+            ]))
+        || (isAuthorized()
+            && hydrantIsInUserAor()
+            && onlyChangedFields(['operationalStatus']));
 
       allow delete: if isAdmin();
 
@@ -73,15 +164,17 @@ service cloud.firestore {
     }
 
     // ---------- reports collection group ----------
+
     // The ReportsPanel uses a collectionGroup('reports') query to gather
     // reports across ALL hydrants. Collection-group queries are NOT covered
-    // by the nested rule above — they need this recursive-wildcard match.
+    // by the nested rule above - they need this recursive-wildcard match.
     match /{path=**}/reports/{reportId} {
       allow read: if true;
     }
 
     // ---------- meta / counters ----------
-    // The hydrant ID counter (HYD-001, HYD-002, …) lives here.
+
+    // The hydrant ID counter (HYD-001, HYD-002, ...) lives here.
     // Authorized, head, and admin may read+write so createHydrant() can
     // atomically increment the counter inside a transaction.
     match /meta/{docId} {
@@ -89,6 +182,7 @@ service cloud.firestore {
     }
 
     // ---------- default deny ----------
+
     match /{document=**} {
       allow read, write: if false;
     }
