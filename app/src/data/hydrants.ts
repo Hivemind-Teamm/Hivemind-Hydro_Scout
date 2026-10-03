@@ -39,6 +39,7 @@ export interface Hydrant {
   mounting: string;
   keyWrench: string;
   area: string;
+  barangay: string;
   outlets: number;
   color: string;
   concessionaire: string;
@@ -258,6 +259,7 @@ export function hydrantFromDoc(id: string, d: DocumentData): Hydrant {
     mounting: d.mounting ?? 'Above ground',
     keyWrench: d.keyWrench ?? (d.keyWrenchNeeded ? 'Required' : 'None'),
     area: deriveArea(d.address),
+    barangay: typeof d.barangay === 'string' ? d.barangay : '',
     outlets: typeof d.outletCount === 'number' ? d.outletCount : 0,
     color: d.hydrantColor ?? 'Unspecified',
     concessionaire: d.ownershipJurisdiction ?? 'Unspecified',

@@ -50,6 +50,7 @@ export type Role = "general" | "authorized" | "head" | "admin" | null;
 interface AuthContextValue {
   user: User | null;
   role: Role;
+  aorBarangays: string[];
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -70,6 +71,7 @@ async function syncSessionCookie(idToken: string | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>(null);
+  const [aorBarangays, setAorBarangays] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const loginAttempt = useRef(0);
 
@@ -96,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           setUser(firebaseUser);
           setRole((data?.role ?? null) as Role);
+          setAorBarangays(Array.isArray(data?.aorBarangays) ? data.aorBarangays.filter((value): value is string => typeof value === "string") : []);
           // Re-issue the session cookie on every auth state change (including
           // page reload) so server routes like /api/upload can always verify the user.
           await syncSessionCookie(idToken);
@@ -103,10 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("Failed to load user role:", err);
           setUser(firebaseUser);
           setRole(null);
+          setAorBarangays([]);
         }
       } else {
         setUser(null);
         setRole(null);
+        setAorBarangays([]);
         await syncSessionCookie(null);
       }
       setLoading(false);
@@ -205,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, login, logout, signup, refreshSession }}>
+    <AuthContext.Provider value={{ user, role, aorBarangays, loading, login, logout, signup, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );
