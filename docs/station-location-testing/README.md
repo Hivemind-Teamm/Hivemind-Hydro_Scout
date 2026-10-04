@@ -77,27 +77,3 @@ fall back to 15 minutes. Keep `.env.local` out of Git.
   The bubble number counts hydrants only. Expand the cluster to restore pins.
 - Close the card, click the background or a hydrant, or press Escape to dismiss
   station details.
-
-## Troubleshooting
-
-If a pin is missing, check the profile fields, location permission, expiry time,
-and zoom level. Check the browser console for `Station location was not saved`
-or `Unit location listener failed`.
-
-The coordinates represent the reporting device, not the station's fixed address.
-Browser location estimates can jump or have poor accuracy. Current code does not
-filter large jumps or poor-accuracy readings; compare the card's GPS accuracy with
-the device's actual location when testing. A changed timestamp proves a new report
-was saved, not that its coordinates are accurate.
-
-## Automated checks
-
-Use Node 24 and run from the repository root:
-
-```powershell
-node --test test/unit-location.test.mjs test/unit-location-reporting.test.mjs test/unit-location-expiry.test.mjs test/map-unit-location.test.mjs test/map-clusters.test.mjs
-npx.cmd tsc --noEmit --incremental false
-npx.cmd eslint lib/auth-context.tsx lib/unit-location.ts lib/unit-location-expiry.ts lib/use-unit-locations.ts test/unit-location-reporting.test.mjs test/unit-location-expiry.test.mjs
-```
-
-These tests use fake coordinates and timers; they do not publish production locations.
