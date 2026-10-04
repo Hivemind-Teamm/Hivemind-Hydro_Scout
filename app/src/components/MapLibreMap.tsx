@@ -16,14 +16,15 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { createPortal } from 'react-dom';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import Supercluster from 'supercluster';
+import { createMapClusterIndex, mapClusterLayout, type ClusterMarker, type ClusterLayout, type HydrantPlacement } from '@/lib/map-clusters';
+import StationClusterBadge from './StationClusterBadge';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './hydrantIcon';
 import {
   FLAME_PATH, FIRE_COLOR, SUPPLY_LINE_COLOR,
   FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH,
 } from './fireIcon';
-import { STATUS_META, type Hydrant, type HydrantStatus } from '../data/hydrants';
+import { STATUS_META, type Hydrant } from '../data/hydrants';
 import { circleRing } from '@/lib/fire-response';
 import type { FireOverlay, MapController, PendingPin } from './MapView';
 
@@ -31,9 +32,6 @@ if (typeof window !== 'undefined') {
   maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 }
 
-const CLUSTER_RADIUS = 60;
-const CLUSTER_MAX_ZOOM = 15;
-const WORLD_BBOX: [number, number, number, number] = [-180, -85, 180, 85];
 const clusterLevel = (zoom: number) => Math.round(zoom);
 const PIN_GLIDE = '0.35s cubic-bezier(0.4, 0, 0.2, 1)';
 
@@ -110,23 +108,9 @@ function installSmoothMarkerZoom(MarkerClass: any) {
 installSmoothMarkerZoom(maplibregl.Marker);
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-type HydrantProps = { hydrantId: string; status: HydrantStatus };
-
-interface ClusterMarker {
-  id: number;
-  lng: number;
-  lat: number;
-  count: number;
-}
-
-type HydrantPlacement = Map<string, { lng: number; lat: number } | null>;
-
-interface ClusterLayout {
-  clusters: ClusterMarker[];
-  placement: HydrantPlacement;
-}
-
 interface MapLibreMapProps {
+  selectedStationId?: string | null;
+  onSelectStation: (stationId: string) => void;
   unitLocations?: import('@/lib/map-unit-location').MapUnitLocation[];
   hydrants: Hydrant[];
   selectedHydrantId: string | null;
@@ -390,6 +374,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
           <div
             className="anim-fade-scale"
             style={{
+              position: 'relative',
               width: 42,
               height: 42,
               background: 'linear-gradient(135deg, rgba(254,212,46,0.38) 0%, rgba(254,212,46,0.16) 100%)',
@@ -413,6 +398,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
             }}
           >
             {cluster.count}
+            <StationClusterBadge stationIds={cluster.stationIds} />
           </div>
         </MapMarker>
       ))}
@@ -449,6 +435,7 @@ const DASH_SEQUENCE = [
 const TRANSPARENT_PIXEL = { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) };
 
 export default function MapLibreMap({
+  selectedStationId, onSelectStation,
   unitLocations = [],
   hydrants, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
@@ -473,42 +460,15 @@ export default function MapLibreMap({
   }, [onLoad, onError, onMapReady, onMapClick, onMapBackgroundClick, onFirePin, addHydrantMode, firePinMode]);
 
   const supercluster = useMemo(() => {
-    const index = new Supercluster<HydrantProps>({
-      radius: CLUSTER_RADIUS,
-      maxZoom: CLUSTER_MAX_ZOOM,
-    });
-    // Hydrants around a pinned fire are left out of the index so they always
-    // render individually — seeing each one is the point of the fire view.
-    // With no placement entry they are simply never treated as clustered.
-    const clusterable = fireZoneIds ? hydrants.filter((h) => !fireZoneIds.has(h.id)) : hydrants;
-    index.load(
-      clusterable.map((h) => ({
-        type: 'Feature' as const,
-        properties: { hydrantId: h.id, status: h.status },
-        geometry: { type: 'Point' as const, coordinates: [h.lng, h.lat] },
-      })),
-    );
-    return index;
-  }, [hydrants, fireZoneIds]);
+    // Fire-zone hydrants stay individually visible, as before.
+    const clusterable = fireZoneIds ? hydrants.filter(h => !fireZoneIds.has(h.id)) : hydrants;
+    return createMapClusterIndex(clusterable, unitLocations);
+  }, [hydrants, fireZoneIds, unitLocations]);
 
-  const layout = useMemo<ClusterLayout>(() => {
-    const clusters: ClusterMarker[] = [];
-    const placement: HydrantPlacement = new Map();
-
-    for (const feature of supercluster.getClusters(WORLD_BBOX, clusterZoom)) {
-      const [lng, lat] = feature.geometry.coordinates;
-      if ('cluster' in feature.properties && feature.properties.cluster) {
-        const clusterId = feature.properties.cluster_id;
-        clusters.push({ id: clusterId, lng, lat, count: feature.properties.point_count });
-        for (const leaf of supercluster.getLeaves(clusterId, Infinity)) {
-          placement.set(leaf.properties.hydrantId, { lng, lat });
-        }
-      } else {
-        placement.set(feature.properties.hydrantId, null);
-      }
-    }
-    return { clusters, placement };
-  }, [supercluster, clusterZoom]);
+  const layout = useMemo<ClusterLayout>(
+    () => mapClusterLayout(supercluster, clusterZoom),
+    [supercluster, clusterZoom],
+  );
 
   // Style URL the map currently shows (or is loading).
   const appliedStyleRef = useRef(isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT);
@@ -1018,9 +978,10 @@ export default function MapLibreMap({
         </MapMarker>
       )}
 
-      {map && unitLocations.map(location => (
-        <MapMarker key={location.stationId} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom">
-          <StationUnitIcon location={location} />
+      {map && unitLocations.filter(location => !layout.clusteredStationIds.has(location.stationId)).map(location => (
+        <MapMarker key={location.stationId} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
+          <StationUnitIcon location={location} selected={selectedStationId === location.stationId}
+            onSelect={() => onSelectStation(location.stationId)} crosshair={crosshair} />
         </MapMarker>
       ))}
       {map && userLocation && (

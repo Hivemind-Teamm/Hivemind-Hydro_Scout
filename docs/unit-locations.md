@@ -3,9 +3,20 @@
 ## Live map icons
 
 The dashboard subscribes to `unitLocations` with Firestore `onSnapshot` and
-renders blue fire-station building icons labeled with the station ID on both Mapbox and MapLibre.
-New reports move the existing icon; deleted documents remove it. Hover text shows
-the last reported time and accuracy. Invalid coordinates are ignored.
+renders red fire-station building icons on both Mapbox and MapLibre.
+New reports move the existing icon; deleted documents remove it. Station icons
+show only the building at rest.
+When zoomed out, stations share the clustering index with hydrants. Clusters
+containing stations show a small building-logo badge; the full station pins are
+hidden until the cluster expands. Bubble counts still count hydrants only, and
+station-only groups remain individual station pins.
+
+Clicking an individual station selects the pin with a yellow pulse and
+opens a hydrant-style detail card at the lower left on desktop, or a bottom sheet
+on mobile, with its station ID, last reported time, accuracy, and coordinates.
+The card's header and View on map button zoom to the reported position. Clicking the
+same pin again, the map background, a hydrant, the close button, or Escape dismisses
+the details. Only one station is selected at a time. Invalid coordinates are ignored.
 
 Existing read permissions apply: admins see all station reports; explicitly
 marked station accounts see their own station. Other accounts do not subscribe.

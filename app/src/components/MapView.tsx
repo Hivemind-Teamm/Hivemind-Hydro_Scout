@@ -5,6 +5,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -12,6 +13,7 @@ import {
 import dynamic from 'next/dynamic';
 
 import DilimanMap from './DilimanMap';
+import StationInfoPanel from './StationInfoPanel';
 import { useTheme } from '@/lib/theme-context';
 import { useUnitLocations } from '@/lib/use-unit-locations';
 
@@ -348,6 +350,36 @@ function MapView({
 }: MapViewProps) {
   const { isDark } = useTheme();
   const { locations: unitLocations, error: unitLocationError } = useUnitLocations();
+  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  const controllerRef = useRef<MapController | null>(null);
+  const handleMapReady = useCallback((controller: MapController) => {
+    controllerRef.current = controller;
+    onMapReady(controller);
+  }, [onMapReady]);
+  useEffect(() => {
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedStationId(null);
+    };
+    window.addEventListener('keydown', dismiss);
+    return () => window.removeEventListener('keydown', dismiss);
+  }, []);
+  const closeStation = () => setSelectedStationId(null);
+  const selectStation = (stationId: string) => {
+    const location = unitLocations.find(unit => unit.stationId === stationId);
+    if (!location) return;
+    if (firePinMode) { onFirePin?.(location.lat, location.lng); return; }
+    if (addHydrantMode) { onMapClick(location.lat, location.lng); return; }
+    onMapBackgroundClick();
+    setSelectedStationId(current => current === stationId ? null : stationId);
+    if (selectedStationId !== stationId) {
+      controllerRef.current?.flyTo(location.lat, location.lng, 16);
+    }
+  };
+  const handleBackgroundClick = () => { closeStation(); onMapBackgroundClick(); };
+  const handleHydrantSelect = (hydrant: Hydrant) => { closeStation(); onSelectHydrant(hydrant); };
+  const visibleStationId = !addHydrantMode && !firePinMode && unitLocations.some(unit => unit.stationId === selectedStationId)
+    ? selectedStationId : null;
+  const selectedStation = unitLocations.find(unit => unit.stationId === visibleStationId);
 
   /*
    * Preload the MapLibre chunk.
@@ -399,6 +431,8 @@ function MapView({
       >
         {provider === 'mapbox' ? (
           <DilimanMap
+            selectedStationId={visibleStationId}
+            onSelectStation={selectStation}
             unitLocations={unitLocations}
             hydrants={
               hydrants
@@ -410,10 +444,10 @@ function MapView({
               onMapboxError
             }
             onMapReady={
-              onMapReady
+              handleMapReady
             }
             onSelectHydrant={
-              onSelectHydrant
+              handleHydrantSelect
             }
             addHydrantMode={
               addHydrantMode
@@ -422,7 +456,7 @@ function MapView({
               onMapClick
             }
             onMapBackgroundClick={
-              onMapBackgroundClick
+              handleBackgroundClick
             }
             pendingPin={
               pendingPin
@@ -469,6 +503,8 @@ function MapView({
           />
         ) : (
           <MapLibreMap
+            selectedStationId={visibleStationId}
+            onSelectStation={selectStation}
             unitLocations={unitLocations}
             hydrants={
               hydrants
@@ -480,10 +516,10 @@ function MapView({
               onMapboxError
             }
             onMapReady={
-              onMapReady
+              handleMapReady
             }
             onSelectHydrant={
-              onSelectHydrant
+              handleHydrantSelect
             }
             addHydrantMode={
               addHydrantMode
@@ -492,7 +528,7 @@ function MapView({
               onMapClick
             }
             onMapBackgroundClick={
-              onMapBackgroundClick
+              handleBackgroundClick
             }
             pendingPin={
               pendingPin
@@ -539,6 +575,10 @@ function MapView({
           />
         )}
       </MapErrorBoundary>
+      {selectedStation && (
+        <StationInfoPanel location={selectedStation} onClose={closeStation}
+          onLocate={() => controllerRef.current?.flyTo(selectedStation.lat, selectedStation.lng, 17)} />
+      )}
       {unitLocationError && (
         <div role="status" className="absolute bottom-8 left-3 rounded-lg bg-white px-3 py-2 text-xs text-red-700 shadow dark:bg-neutral-900 dark:text-red-300">
           Station locations unavailable. Reload to retry.
