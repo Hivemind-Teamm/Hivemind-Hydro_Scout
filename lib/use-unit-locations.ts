@@ -6,6 +6,9 @@ import { useAuth } from './auth-context';
 import { db } from './firebase';
 import { stationIdForLocation } from './unit-location';
 import { mapUnitLocation, type MapUnitLocation } from './map-unit-location';
+import { locationTimeoutMs, watchUnitLocationExpiry } from './unit-location-expiry';
+
+const TIMEOUT_MS = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES);
 
 export function useUnitLocations() {
   const { user, role, loading } = useAuth();
@@ -20,9 +23,18 @@ export function useUnitLocations() {
     let active = true;
     let stopLocations: Unsubscribe | undefined;
     let generation = 0;
+    let locationError = false;
+    const expiry = watchUnitLocationExpiry(locations => {
+      if (active) setState({ scope, locations, error: locationError });
+    }, TIMEOUT_MS);
     const publish = (locations: MapUnitLocation[], error = false) => {
-      if (active) setState({ scope, locations, error });
+      locationError = error;
+      if (active) expiry.update(locations);
     };
+    // Background tabs may throttle timers; recheck immediately on return.
+    const resume = () => { if (document.visibilityState === 'visible') expiry.refresh(); };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', expiry.refresh);
     const fail = (error: unknown) => {
       console.warn('Unit location listener failed:', error);
       publish([], true);
@@ -56,6 +68,9 @@ export function useUnitLocations() {
     });
     return () => {
       active = false;
+      expiry.stop();
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', expiry.refresh);
       stopProfile?.();
       stopLocations?.();
     };

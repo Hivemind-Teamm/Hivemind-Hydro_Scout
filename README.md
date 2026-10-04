@@ -2,6 +2,9 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+For live station reporting and stale-icon checks, see the
+[station location testing guide](docs/station-location-testing/README.md).
+
 First, run the development server:
 
 ```bash

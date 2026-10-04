@@ -29,7 +29,7 @@ export function stationIdForLocation(profile: StationProfile | undefined): strin
     ? id : null;
 }
 
-/** One fresh position per explicit login; location failure must not fail authentication. */
+/** Capture one fresh position; failure must not interrupt the signed-in session. */
 export async function writeLoginLocation(
   uid: string,
   dependencies: LocationDependencies,
@@ -69,4 +69,36 @@ export async function writeLoginLocation(
   } catch {
     return "failed";
   }
+}
+
+export const UNIT_LOCATION_REPORT_INTERVAL_MS = 3 * 60_000;
+
+/** One publisher per session; concurrent resume events never overlap GPS requests. */
+export function startStationLocationReporting(
+  uid: string,
+  dependencies: LocationDependencies & {
+    isActive: () => boolean;
+    onResult?: (result: LocationWriteResult) => void;
+  },
+  intervalMs = UNIT_LOCATION_REPORT_INTERVAL_MS,
+) {
+  let stopped = false;
+  let inFlight = false;
+  let lastStarted = -Infinity;
+  const isCurrent = () => !stopped && dependencies.isCurrentSession() && dependencies.isActive();
+  const refresh = async () => {
+    // Focus and visibility events commonly arrive together.
+    if (inFlight || !isCurrent() || Date.now() - lastStarted < 10_000) return;
+    inFlight = true;
+    lastStarted = Date.now();
+    try {
+      const result = await writeLoginLocation(uid, { ...dependencies, isCurrentSession: isCurrent });
+      if (!stopped) dependencies.onResult?.(result);
+    } finally {
+      inFlight = false;
+    }
+  };
+  const timer = setInterval(() => { void refresh(); }, intervalMs);
+  void refresh();
+  return { refresh, stop() { stopped = true; clearInterval(timer); } };
 }

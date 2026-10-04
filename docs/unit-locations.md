@@ -1,4 +1,4 @@
-# Station location on login
+# Station live location reporting
 
 ## Live map icons
 
@@ -10,6 +10,14 @@ When zoomed out, stations share the clustering index with hydrants. Clusters
 containing stations show a small building-logo badge; the full station pins are
 hidden until the cluster expands. Bubble counts still count hydrants only, and
 station-only groups remain individual station pins.
+
+Positions expire 15 minutes after their Firestore `updatedAt` timestamp. Expired
+positions and records without a valid timestamp are hidden from both map providers,
+cluster badges, and the station detail card. A timer hides them without requiring
+another database update; returning to a background tab rechecks expiry immediately.
+A fresh report restores the icon. Documents remain stored in Firestore.
+Set `NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES` before building to change the
+timeout (positive minutes up to 1440; omitted or invalid values use 15 minutes).
 
 Clicking an individual station selects the pin with a yellow pulse and
 opens a hydrant-style detail card at the lower left on desktop, or a bottom sheet
@@ -24,16 +32,24 @@ Listeners are removed on unmount, logout, and account or station changes. Listen
 errors clear icons and show an unavailable message. The public map does not expose
 station locations.
 
-These are the latest reported positions, not continuous GPS tracking or an online
-presence indicator: the current publisher still captures one position per login.
+These are the latest reported positions, not a guaranteed online presence indicator.
+The root auth provider captures a fresh position when a session starts (including
+login and restored sessions after reload), then every three minutes while the page
+is visible and online. Focus, visibility restoration, and reconnecting trigger a
+fresh report. Concurrent requests are coalesced and resume events within ten
+seconds of the previous request are ignored to avoid duplicate GPS requests.
+Background tabs, device sleep, shutdown, and connectivity loss stop fresh reports;
+pins expire 15 minutes after the last successful report. Resuming restores the pin
+once a fresh report succeeds. Logout, session replacement, or provider unmount
+cancels pending capture and removes timers and event listeners.
 
 
-After a successful explicit email/password login, the root auth provider reads
+Before each location capture, the root auth provider reads
 the user's profile from the server. An account with
 `users/{uid}.accountType == 'station'` and a valid `users/{uid}.stationId`
 requests one fresh browser position. It upserts
 `unitLocations/{stationId}`, replacing the previous position for that station.
-Signup, restored sessions, and token refreshes do not trigger capture.
+Individual accounts (including general-user signup) never request location access.
 
 ## F1 integration dependency
 
@@ -62,12 +78,13 @@ Individual accounts never publish a position, even if assigned a station.
 No placeholder records or fabricated coordinates are seeded. Firestore creates
 the collection with the first successful write. Multiple accounts assigned to
 one station share its latest-position document; this is not a movement history
-or continuous presence indicator. Positions remain after logout.
+or continuous presence indicator. Documents remain after logout, but expired
+positions are hidden from the map.
 
 Location capture runs independently of navigation and authentication. Denied
 permission, unavailable GPS, timeout, invalid coordinates, profile-read failures,
 and write failures do not reject login. Failures emit a console warning. Logging
-out or starting another login before GPS completes cancels the pending capture.
+out or replacing the signed-in session before GPS completes cancels the pending capture.
 The browser requires HTTPS (or localhost) and location permission. The coordinates
 represent that browser's device, not a fixed fire station address.
 
@@ -112,7 +129,7 @@ confirm login still works and the previous position is retained.
 ## Automated checks
 
 ```powershell
-node --test test/unit-location.test.mjs
+node --test test/unit-location.test.mjs test/unit-location-reporting.test.mjs test/unit-location-expiry.test.mjs
 npx.cmd -y firebase-tools@latest emulators:exec --only firestore --project demo-unit-locations "node test/unit-location-rules.test.mjs"
 npx.cmd tsc --noEmit --incremental false
 npx.cmd eslint lib/auth-context.tsx lib/unit-location.ts test/unit-location*.mjs

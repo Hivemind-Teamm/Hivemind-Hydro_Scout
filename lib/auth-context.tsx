@@ -21,7 +21,7 @@ import {
 import { doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import { auth, db } from "./firebase";
-import { writeLoginLocation } from "./unit-location";
+import { startStationLocationReporting } from "./unit-location";
 
 function friendlyAuthError(err: unknown): never {
   if (err instanceof FirebaseError) {
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>(null);
   const [loading, setLoading] = useState(true);
-  const loginAttempt = useRef(0);
+  const sessionGeneration = useRef(0);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -115,35 +115,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    let stopReporting: (() => void) | undefined;
+    const unsubscribe = onAuthStateChanged(auth, firebaseUser => {
+      stopReporting?.();
+      stopReporting = undefined;
+      if (!firebaseUser) return;
+      const generation = sessionGeneration.current;
+      const reporting = startStationLocationReporting(firebaseUser.uid, {
+        readProfile: async () => {
+          const snapshot = await getDocFromServer(doc(db, "users", firebaseUser.uid));
+          return snapshot.exists() ? snapshot.data() : undefined;
+        },
+        geolocation: typeof navigator !== "undefined" ? navigator.geolocation : undefined,
+        isCurrentSession: () => sessionGeneration.current === generation && auth.currentUser === firebaseUser,
+        isActive: () => document.visibilityState === "visible" && navigator.onLine,
+        writePosition: async (position) => {
+          await setDoc(doc(db, "unitLocations", position.stationId), {
+            ...position,
+            updatedAt: serverTimestamp(),
+          });
+        },
+        onResult: (result) => {
+          if (result === "unavailable" || result === "failed") {
+            console.warn(`Station location was not saved (${result}). Will retry while the app is active.`);
+          }
+        },
+      });
+      const resume = () => { void reporting.refresh(); };
+      document.addEventListener("visibilitychange", resume);
+      window.addEventListener("focus", resume);
+      window.addEventListener("online", resume);
+      stopReporting = () => {
+        reporting.stop();
+        document.removeEventListener("visibilitychange", resume);
+        window.removeEventListener("focus", resume);
+        window.removeEventListener("online", resume);
+      };
+    });
+    return () => { unsubscribe(); stopReporting?.(); };
+  }, []);
+
   async function login(email: string, password: string) {
-    const attempt = ++loginAttempt.current;
     let cred;
     try {
       cred = await signInWithEmailAndPassword(auth, email, password);
     } catch (err) {
       friendlyAuthError(err);
     }
-
-    // Runs only after explicit sign-in, never signup, reload, or token refresh.
-    // Keep this in the root provider so dashboard navigation cannot cancel it.
-    void writeLoginLocation(cred.user.uid, {
-      readProfile: async () => {
-        const snapshot = await getDocFromServer(doc(db, "users", cred.user.uid));
-        return snapshot.exists() ? snapshot.data() : undefined;
-      },
-      geolocation: typeof navigator !== "undefined" ? navigator.geolocation : undefined,
-      isCurrentSession: () => loginAttempt.current === attempt && auth.currentUser === cred.user,
-      writePosition: async (position) => {
-        await setDoc(doc(db, "unitLocations", position.stationId), {
-          ...position,
-          updatedAt: serverTimestamp(),
-        });
-      },
-    }).then((result) => {
-      if (result === "unavailable" || result === "failed") {
-        console.warn(`Station location was not saved (${result}). Login is still available.`);
-      }
-    });
 
     // Only update lastLoginAt on an EXISTING document — never create one here,
     // since a document created without a role field causes the user to appear
@@ -192,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    ++loginAttempt.current;
+    ++sessionGeneration.current;
     await firebaseSignOut(auth);
     await syncSessionCookie(null);
   }
