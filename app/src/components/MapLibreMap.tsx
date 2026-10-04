@@ -1,4 +1,5 @@
 'use client';
+import StationUnitIcon from './StationUnitIcon';
 
 // MapLibre mirror of DilimanMap (the Mapbox provider). Same DOM-marker hydrant
 // pins, Supercluster CSS-glide clustering, eased wheel/button zoom, globe,
@@ -126,6 +127,7 @@ interface ClusterLayout {
 }
 
 interface MapLibreMapProps {
+  unitLocations?: import('@/lib/map-unit-location').MapUnitLocation[];
   hydrants: Hydrant[];
   selectedHydrantId: string | null;
   onLoad?: () => void;
@@ -447,6 +449,7 @@ const DASH_SEQUENCE = [
 const TRANSPARENT_PIXEL = { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) };
 
 export default function MapLibreMap({
+  unitLocations = [],
   hydrants, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
   firePinMode = false, fire = null, onFirePin, onFireMove,
@@ -1015,6 +1018,11 @@ export default function MapLibreMap({
         </MapMarker>
       )}
 
+      {map && unitLocations.map(location => (
+        <MapMarker key={location.stationId} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom">
+          <StationUnitIcon location={location} />
+        </MapMarker>
+      ))}
       {map && userLocation && (
         <MapMarker map={map} longitude={userLocation.lng} latitude={userLocation.lat} anchor="center">
           <div style={{ position: 'relative', width: 36, height: 36 }}>

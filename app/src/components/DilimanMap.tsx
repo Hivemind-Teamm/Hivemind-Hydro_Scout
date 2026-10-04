@@ -1,4 +1,5 @@
 'use client';
+import StationUnitIcon from './StationUnitIcon';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapGL, { Marker, Layer, Source, type MapRef, type MarkerEvent } from 'react-map-gl/mapbox';
@@ -95,6 +96,7 @@ interface ClusterLayout {
 }
 
 interface DilimanMapProps {
+  unitLocations?: import('@/lib/map-unit-location').MapUnitLocation[];
   hydrants: Hydrant[];
   selectedHydrantId: string | null;
   onLoad?: () => void;
@@ -347,6 +349,7 @@ const DASH_SEQUENCE = [
 ];
 
 export default function DilimanMap({
+  unitLocations = [],
   hydrants, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
   firePinMode = false, fire = null, onFirePin, onFireMove,
@@ -866,6 +869,11 @@ export default function DilimanMap({
           </Marker>
         )}
 
+        {unitLocations.map(location => (
+          <Marker key={location.stationId} longitude={location.lng} latitude={location.lat} anchor="bottom">
+            <StationUnitIcon location={location} />
+          </Marker>
+        ))}
         {userLocation && (
           <Marker longitude={userLocation.lng} latitude={userLocation.lat} anchor="center">
             <div style={{ position: 'relative', width: 36, height: 36 }}>

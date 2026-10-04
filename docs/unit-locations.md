@@ -1,5 +1,22 @@
 # Station location on login
 
+## Live map icons
+
+The dashboard subscribes to `unitLocations` with Firestore `onSnapshot` and
+renders blue fire-station building icons labeled with the station ID on both Mapbox and MapLibre.
+New reports move the existing icon; deleted documents remove it. Hover text shows
+the last reported time and accuracy. Invalid coordinates are ignored.
+
+Existing read permissions apply: admins see all station reports; explicitly
+marked station accounts see their own station. Other accounts do not subscribe.
+Listeners are removed on unmount, logout, and account or station changes. Listener
+errors clear icons and show an unavailable message. The public map does not expose
+station locations.
+
+These are the latest reported positions, not continuous GPS tracking or an online
+presence indicator: the current publisher still captures one position per login.
+
+
 After a successful explicit email/password login, the root auth provider reads
 the user's profile from the server. An account with
 `users/{uid}.accountType == 'station'` and a valid `users/{uid}.stationId`

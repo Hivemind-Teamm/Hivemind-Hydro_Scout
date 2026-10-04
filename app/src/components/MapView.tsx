@@ -13,6 +13,7 @@ import dynamic from 'next/dynamic';
 
 import DilimanMap from './DilimanMap';
 import { useTheme } from '@/lib/theme-context';
+import { useUnitLocations } from '@/lib/use-unit-locations';
 
 import type { Hydrant } from '../data/hydrants';
 
@@ -346,6 +347,7 @@ function MapView({
   onFireMove,
 }: MapViewProps) {
   const { isDark } = useTheme();
+  const { locations: unitLocations, error: unitLocationError } = useUnitLocations();
 
   /*
    * Preload the MapLibre chunk.
@@ -397,6 +399,7 @@ function MapView({
       >
         {provider === 'mapbox' ? (
           <DilimanMap
+            unitLocations={unitLocations}
             hydrants={
               hydrants
             }
@@ -466,6 +469,7 @@ function MapView({
           />
         ) : (
           <MapLibreMap
+            unitLocations={unitLocations}
             hydrants={
               hydrants
             }
@@ -535,6 +539,11 @@ function MapView({
           />
         )}
       </MapErrorBoundary>
+      {unitLocationError && (
+        <div role="status" className="absolute bottom-8 left-3 rounded-lg bg-white px-3 py-2 text-xs text-red-700 shadow dark:bg-neutral-900 dark:text-red-300">
+          Station locations unavailable. Reload to retry.
+        </div>
+      )}
     </div>
   );
 }
