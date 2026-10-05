@@ -6,7 +6,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import Supercluster from 'supercluster';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
-import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER } from './hydrantIcon';
+import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER, OWN_AOR_PIN_FILTER, OTHER_AOR_PIN_FILTER } from './hydrantIcon';
 import {
   FLAME_PATH, FIRE_COLOR, SUPPLY_LINE_COLOR,
   FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH,
@@ -96,6 +96,7 @@ interface ClusterLayout {
 
 interface DilimanMapProps {
   hydrants: Hydrant[];
+  aorBarangays: string[];
   selectedHydrantId: string | null;
   onLoad?: () => void;
   onError?: (error: unknown) => void;
@@ -126,6 +127,7 @@ const MAP_STYLE_DARK = 'mapbox://styles/mapbox/dark-v11';
 interface HydrantMarkersProps {
   map: ReturnType<MapRef['getMap']>;
   hydrants: Hydrant[];
+  aorBarangays: string[];
   placement: HydrantPlacement;
   clusters: ClusterMarker[];
   clusterZoom: number;
@@ -151,7 +153,7 @@ interface HydrantMarkersProps {
 // previous behaviour — clustered pins are invisible, so a slightly stale
 // offset between integer zooms is never seen.
 const HydrantMarkers = memo(function HydrantMarkers({
-  map, hydrants, placement, clusters, clusterZoom, selectedHydrantId,
+  map, hydrants, aorBarangays, placement, clusters, clusterZoom, selectedHydrantId,
   otwHydrantId, inOtwMode, nearRouteIds, fireZoneIds, fireSupplyId, crosshair, onHydrantClick, onClusterClick,
 }: HydrantMarkersProps) {
   return (
@@ -173,6 +175,14 @@ const HydrantMarkers = memo(function HydrantMarkers({
 
         const selected = selectedHydrantId === h.id;
         const meta = STATUS_META[h.status];
+        const hasAorContext = aorBarangays.length > 0;
+        const hasBarangay = h.barangay.length > 0;
+        const isOwnAor = hasAorContext && hasBarangay && aorBarangays.includes(h.barangay);
+        const pinFilter = !hasAorContext || !hasBarangay
+          ? HYDRANT_PIN_FILTER
+          : isOwnAor
+            ? OWN_AOR_PIN_FILTER
+            : OTHER_AOR_PIN_FILTER;
 
         // OTW mode visual states
         const nearRoute = nearRouteIds?.has(h.id) ?? false;
@@ -238,7 +248,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
                     title={`${h.name} — ${meta.legendLabel}`}
                     width={HYDRANT_ICON_WIDTH}
                     height={HYDRANT_ICON_HEIGHT}
-                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
+                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: pinFilter }}
                   />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -248,7 +258,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
                     aria-hidden
                     width={HYDRANT_ICON_WIDTH}
                     height={HYDRANT_ICON_HEIGHT}
-                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: HYDRANT_PIN_FILTER }}
+                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: pinFilter }}
                   />
                   <span className="cut" />
                 </div>
@@ -266,7 +276,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
                       width: HYDRANT_ICON_WIDTH,
                       height: HYDRANT_ICON_HEIGHT,
                       objectFit: 'contain',
-                      filter: HYDRANT_PIN_FILTER,
+                      filter: pinFilter,
                     }}
                   />
                   {/* Water only spouts from the focused pin — the selected
@@ -347,7 +357,7 @@ const DASH_SEQUENCE = [
 ];
 
 export default function DilimanMap({
-  hydrants, selectedHydrantId, onLoad, onError, onMapReady,
+  hydrants, aorBarangays, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
   firePinMode = false, fire = null, onFirePin, onFireMove,
 }: DilimanMapProps) {
@@ -814,6 +824,7 @@ export default function DilimanMap({
           <HydrantMarkers
             map={map}
             hydrants={hydrants}
+            aorBarangays={aorBarangays}
             placement={layout.placement}
             clusters={layout.clusters}
             clusterZoom={clusterZoom}

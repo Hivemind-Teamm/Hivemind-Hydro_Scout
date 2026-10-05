@@ -214,7 +214,7 @@ export default function HydroScoutDashboard() {
   const [mapReady, setMapReady] = useState(false);
   const splashStartedRef = useRef(false);
 
-  const { role } = useAuth();
+  const { role, aorBarangays } = useAuth();
   const isMobile = useIsMobile();
   // Fire response planning is for responders — the same roles that can route
   // (see DashboardOverlay). A pin restored from storage stays hidden for
@@ -1118,6 +1118,7 @@ export default function HydroScoutDashboard() {
         <MapView
           provider={provider}
           hydrants={visibleHydrants}
+          aorBarangays={role === 'authorized' ? aorBarangays : []}
           selectedHydrantId={selectedHydrant?.id ?? null}
           onMapboxError={handleMapboxError}
           onMapReady={handleMapReady}

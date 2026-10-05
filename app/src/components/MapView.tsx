@@ -217,6 +217,8 @@ interface MapViewProps {
 
   hydrants: Hydrant[];
 
+  aorBarangays: string[];
+
   selectedHydrantId:
     | string
     | null;
@@ -304,6 +306,8 @@ function MapView({
   provider,
 
   hydrants,
+
+  aorBarangays,
 
   selectedHydrantId,
 
@@ -400,6 +404,9 @@ function MapView({
             hydrants={
               hydrants
             }
+            aorBarangays={
+              aorBarangays
+            }
             selectedHydrantId={
               selectedHydrantId
             }
@@ -468,6 +475,9 @@ function MapView({
           <MapLibreMap
             hydrants={
               hydrants
+            }
+            aorBarangays={
+              aorBarangays
             }
             selectedHydrantId={
               selectedHydrantId
