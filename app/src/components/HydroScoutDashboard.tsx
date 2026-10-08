@@ -129,7 +129,7 @@ export default function HydroScoutDashboard() {
   const [showPinHydrant,   setShowPinHydrant]   = useState(false);
   const [addHydrantMode,   setAddHydrantMode]   = useState(false);
   const [pendingLocation,  setPendingLocation]  = useState<{ lat: number; lng: number; address: string } | null>(null);
-  const [userLocation,     setUserLocation]     = useState<{ lat: number; lng: number } | null>(null);
+  const [storedUserLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [otwHydrant,       setOtwHydrant]       = useState<Hydrant | null>(null);
   const [otwRoute,         setOtwRoute]         = useState<[number, number][] | null>(null);
   const [viewingUser, setViewingUser] = useState<ViewingUser | null>(null);
@@ -214,7 +214,10 @@ export default function HydroScoutDashboard() {
   const [mapReady, setMapReady] = useState(false);
   const splashStartedRef = useRef(false);
 
-  const { role } = useAuth();
+  const { role, canUseDeviceLocation } = useAuth();
+  const userLocation = canUseDeviceLocation ? storedUserLocation : null;
+  const locationAllowedRef = useRef(canUseDeviceLocation);
+  useEffect(() => { locationAllowedRef.current = canUseDeviceLocation; }, [canUseDeviceLocation]);
   const isMobile = useIsMobile();
   // Fire response planning is for responders — the same roles that can route
   // (see DashboardOverlay). A pin restored from storage stays hidden for
@@ -438,9 +441,10 @@ export default function HydroScoutDashboard() {
   const watchIdRef = useRef<number | null>(null);
   const geoErrorRef = useRef<GeolocationPositionError | null>(null);
   useEffect(() => {
-    if (!('geolocation' in navigator)) return;
+    if (!canUseDeviceLocation || !('geolocation' in navigator)) return;
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        if (!locationAllowedRef.current) return;
         geoErrorRef.current = null;
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
@@ -461,7 +465,7 @@ export default function HydroScoutDashboard() {
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     };
-  }, []);
+  }, [canUseDeviceLocation]);
 
   const showGeoError = useCallback((msg: string) => {
     setGeoError(msg);
@@ -470,6 +474,7 @@ export default function HydroScoutDashboard() {
   }, []);
 
   const handleLocate = useCallback(() => {
+    if (!locationAllowedRef.current) { showGeoError('Enable location sharing in Location privacy first.'); return; }
     if (userLocation) {
       controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 17);
       return;
@@ -483,6 +488,7 @@ export default function HydroScoutDashboard() {
       return;
     }
     const onSuccess = (pos: GeolocationPosition) => {
+      if (!locationAllowedRef.current) return;
       geoErrorRef.current = null;
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setUserLocation(loc);
@@ -500,10 +506,12 @@ export default function HydroScoutDashboard() {
           : 'Could not determine your location. Please try again.',
       );
     };
+    if (!locationAllowedRef.current) { showGeoError("Enable location sharing in Location privacy first."); return; }
     navigator.geolocation.getCurrentPosition(
       onSuccess,
       (err) => {
         if (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE) {
+          if (!locationAllowedRef.current) { showGeoError("Enable location sharing in Location privacy first."); return; }
           navigator.geolocation.getCurrentPosition(onSuccess, onFinalError, {
             enableHighAccuracy: false,
             timeout: 15000,
@@ -656,6 +664,7 @@ export default function HydroScoutDashboard() {
   // to live directly inside handleRoute. Split out so the non-operational
   // confirm toast can trigger it after the user chooses "Route Anyway".
   const proceedRoute = useCallback((hydrant: Hydrant) => {
+    if (!locationAllowedRef.current) { showGeoError('Enable location sharing in Location privacy first.'); return; }
     // Already have a fix — enter route mode immediately.
     if (userLocation) {
       setOtwHydrant(hydrant);
@@ -675,6 +684,7 @@ export default function HydroScoutDashboard() {
     }
 
     const onSuccess = (pos: GeolocationPosition) => {
+      if (!locationAllowedRef.current) return;
       geoErrorRef.current = null;
       setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       // Only enter route mode once we actually have a position.
@@ -690,10 +700,12 @@ export default function HydroScoutDashboard() {
           : 'Could not get your location — routing unavailable.',
       );
     };
+    if (!locationAllowedRef.current) { showGeoError("Enable location sharing in Location privacy first."); return; }
     navigator.geolocation.getCurrentPosition(
       onSuccess,
       (err) => {
         if (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE) {
+          if (!locationAllowedRef.current) { showGeoError("Enable location sharing in Location privacy first."); return; }
           navigator.geolocation.getCurrentPosition(onSuccess, onFinalError, {
             enableHighAccuracy: false,
             timeout: 15000,
@@ -873,6 +885,7 @@ export default function HydroScoutDashboard() {
   }, [firePinMode]);
 
   const handleTargetLocation = useCallback(() => {
+    if (!locationAllowedRef.current) { showGeoError('Enable location sharing in Location privacy first.'); return; }
     // "Here" means the fire in fire-pin mode, a new hydrant in add mode.
     const placeAt = firePinMode ? handleFirePin : handleMapClick;
     if (userLocation) {
@@ -888,6 +901,7 @@ export default function HydroScoutDashboard() {
       return;
     }
     const onSuccess = (pos: GeolocationPosition) => {
+      if (!locationAllowedRef.current) return;
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setUserLocation(loc);
       placeAt(loc.lat, loc.lng);
@@ -901,7 +915,8 @@ export default function HydroScoutDashboard() {
           : 'Could not determine your location. Please try again.',
       );
     };
-    navigator.geolocation.getCurrentPosition(onSuccess, onFinalError, {
+    if (!locationAllowedRef.current) { showGeoError("Enable location sharing in Location privacy first."); return; }
+          navigator.geolocation.getCurrentPosition(onSuccess, onFinalError, {
       enableHighAccuracy: true,
       timeout: 15000,
       maximumAge: 30000,

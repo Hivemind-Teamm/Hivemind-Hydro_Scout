@@ -5,6 +5,9 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 For live station reporting and stale-icon checks, see the
 [station location testing guide](docs/station-location-testing/README.md).
 
+For consent setup, withdrawal and browser background-reporting limits, see
+[location consent instructions](docs/location-consent.md).
+
 First, run the development server:
 
 ```bash

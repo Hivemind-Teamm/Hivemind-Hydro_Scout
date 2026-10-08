@@ -21,7 +21,10 @@ import {
 import { doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import { auth, db } from "./firebase";
-import { startStationLocationReporting } from "./unit-location";
+import { startStationLocationReporting, stationIdForLocation } from "./unit-location";
+import { useLocationConsent } from './use-location-consent';
+import { readLocationConsent } from './location-consent';
+import LocationConsentNotice from '@/app/src/components/LocationConsentNotice';
 
 function friendlyAuthError(err: unknown): never {
   if (err instanceof FirebaseError) {
@@ -48,6 +51,7 @@ function friendlyAuthError(err: unknown): never {
 export type Role = "general" | "authorized" | "head" | "admin" | null;
 
 interface AuthContextValue {
+  canUseDeviceLocation: boolean;
   user: User | null;
   role: Role;
   loading: boolean;
@@ -72,6 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role>(null);
   const [loading, setLoading] = useState(true);
   const sessionGeneration = useRef(0);
+  const locationConsent = useLocationConsent(user?.uid);
+  const { stationId, granted: locationGranted } = locationConsent;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -116,20 +122,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    let stopReporting: (() => void) | undefined;
-    const unsubscribe = onAuthStateChanged(auth, firebaseUser => {
-      stopReporting?.();
-      stopReporting = undefined;
-      if (!firebaseUser) return;
+      const firebaseUser = user;
+      if (!firebaseUser || !stationId || !locationGranted) return;
       const generation = sessionGeneration.current;
       const reporting = startStationLocationReporting(firebaseUser.uid, {
         readProfile: async () => {
           const snapshot = await getDocFromServer(doc(db, "users", firebaseUser.uid));
-          return snapshot.exists() ? snapshot.data() : undefined;
+          const profile = snapshot.exists() ? snapshot.data() : undefined;
+          // Reassignment requires a new, station-specific consent decision.
+          return stationIdForLocation(profile) === stationId ? profile : undefined;
         },
         geolocation: typeof navigator !== "undefined" ? navigator.geolocation : undefined,
-        isCurrentSession: () => sessionGeneration.current === generation && auth.currentUser === firebaseUser,
-        isActive: () => document.visibilityState === "visible" && navigator.onLine,
+        isCurrentSession: () => sessionGeneration.current === generation && auth.currentUser === firebaseUser
+          && readLocationConsent(firebaseUser.uid, stationId)?.decision === 'granted',
+        isActive: () => navigator.onLine,
         writePosition: async (position) => {
           await setDoc(doc(db, "unitLocations", position.stationId), {
             ...position,
@@ -146,15 +152,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.addEventListener("visibilitychange", resume);
       window.addEventListener("focus", resume);
       window.addEventListener("online", resume);
-      stopReporting = () => {
+      return () => {
         reporting.stop();
         document.removeEventListener("visibilitychange", resume);
         window.removeEventListener("focus", resume);
         window.removeEventListener("online", resume);
       };
-    });
-    return () => { unsubscribe(); stopReporting?.(); };
-  }, []);
+  }, [user, stationId, locationGranted]);
 
   async function login(email: string, password: string) {
     let cred;
@@ -224,8 +228,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, login, logout, signup, refreshSession }}>
+    <AuthContext.Provider value={{ user, role, loading, login, logout, signup, refreshSession, canUseDeviceLocation: locationConsent.canUseDeviceLocation }}>
       {children}
+      {stationId && (
+        <button type="button" onClick={locationConsent.openNotice} className="fixed right-3 top-20 z-[5000] rounded-lg bg-white px-3 py-2 text-xs font-semibold text-neutral-700 shadow dark:bg-neutral-800 dark:text-white">
+          Location privacy · {locationGranted ? 'On' : 'Off'}
+        </button>
+      )}
+      {locationConsent.noticeOpen && <LocationConsentNotice granted={locationGranted} storageError={locationConsent.storageError}
+        onAllow={() => locationConsent.decide('granted')} onDecline={() => { ++sessionGeneration.current; locationConsent.decide('declined'); }} onClose={locationConsent.closeNotice} />}
     </AuthContext.Provider>
   );
 }

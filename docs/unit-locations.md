@@ -33,15 +33,20 @@ errors clear icons and show an unavailable message. The public map does not expo
 station locations.
 
 These are the latest reported positions, not a guaranteed online presence indicator.
-The root auth provider captures a fresh position when a session starts (including
+After explicit location consent, the root auth provider captures a fresh position when a session starts (including
 login and restored sessions after reload), then every three minutes while the page
-is visible and online. Focus, visibility restoration, and reconnecting trigger a
+is online. Background tabs attempt updates where the browser permits acquisition.
+Focus, visibility restoration, and reconnecting trigger a
 fresh report. Concurrent requests are coalesced and resume events within ten
 seconds of the previous request are ignored to avoid duplicate GPS requests.
-Background tabs, device sleep, shutdown, and connectivity loss stop fresh reports;
+Browser suspension, device sleep, shutdown, and connectivity loss can stop fresh reports;
 pins expire 15 minutes after the last successful report. Resuming restores the pin
 once a fresh report succeeds. Logout, session replacement, or provider unmount
 cancels pending capture and removes timers and event listeners.
+
+Station accounts must opt in through the location privacy notice before capture
+or publishing. See [consent setup and testing](location-consent.md). Withdrawal
+stops new collection; already stored reports expire from the map normally.
 
 
 Before each location capture, the root auth provider reads
