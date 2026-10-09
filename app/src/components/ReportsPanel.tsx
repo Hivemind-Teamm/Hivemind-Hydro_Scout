@@ -3,37 +3,43 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
-import { STATUS_COLORS, type ReportStatus, type Report } from '../data/reports';
+import { STATUS_COLORS, type Report } from '../data/reports';
 import { updateReportStatus, deleteReport } from '../data/store';
 import PillBadge from './PillBadge';
+import type { Hydrant } from '../data/hydrants';
+import { reportsRegisterItems, filterRegisterItems, formatHistoryDate, type RegisterFilter, type ReportsRegisterItem } from '../data/hydrant-history';
 
-type Filter = 'all' | ReportStatus;
+type Filter = RegisterFilter;
 
 interface ReportsPanelProps {
   reports: Report[];
+  hydrants: Hydrant[];
   loading: boolean;
   onViewUser: (name: string, role: string) => void;
 }
 
-export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPanelProps) {
+export default function ReportsPanel({ reports, hydrants, loading, onViewUser }: ReportsPanelProps) {
   const { role } = useAuth();
   const isMobile = useIsMobile();
   const canResolve = role === 'head' || role === 'admin';
   const [filter, setFilter] = useState<Filter>('all');
 
-  if (!role || role === 'general') return null;
+  if (role !== 'authorized' && role !== 'head' && role !== 'admin') return null;
 
+  const items = reportsRegisterItems(reports, hydrants);
   const counts = {
-    all:      reports.length,
+    all:      items.length,
+    updates:  items.filter(item => item.kind === 'update').length,
     pending:  reports.filter((r) => r.status === 'pending').length,
     resolved: reports.filter((r) => r.status === 'resolved').length,
     denied:   reports.filter((r) => r.status === 'denied').length,
   };
 
-  const visible = filter === 'all' ? reports : reports.filter((r) => r.status === filter);
+  const visible = filterRegisterItems(items, filter);
 
   const TABS: { key: Filter; label: string }[] = [
     { key: 'all',      label: `All (${counts.all})`           },
+    { key: 'updates',  label: `Updates (${counts.updates})` },
     { key: 'pending',  label: `Pending (${counts.pending})`   },
     { key: 'resolved', label: `Resolved (${counts.resolved})` },
     { key: 'denied',   label: `Denied (${counts.denied})`     },
@@ -73,8 +79,10 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
 
       {/* Report list */}
       <div className="scroll-fade min-h-0 flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
-        {visible.map((report) => (
-          <ReportCard key={report.id} report={report} onViewUser={onViewUser} canResolve={canResolve} />
+        {visible.map(item => item.kind === 'report' ? (
+          <ReportCard key={item.key} report={item.report} onViewUser={onViewUser} canResolve={canResolve} />
+        ) : (
+          <HydrantUpdateCard key={item.key} item={item} onViewUser={onViewUser} />
         ))}
         {loading && (
           <p className="px-4 py-8 text-center text-xs text-neutral-400 dark:text-neutral-500">Loading reports…</p>
@@ -87,6 +95,29 @@ export default function ReportsPanel({ reports, loading, onViewUser }: ReportsPa
   );
 }
 
+function HydrantUpdateCard({ item, onViewUser }: {
+  item: Extract<ReportsRegisterItem, { kind: 'update' }>;
+  onViewUser: (name: string, role: string) => void;
+}) {
+  const { entry } = item;
+  return (
+    <div className="px-4 py-3" style={{ borderLeft: `3px solid ${entry.statusColor}` }}>
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <span className="text-[10px] font-bold text-[#e0353b]">{item.hydrantId}</span>
+        <PillBadge dot={entry.statusColor} color={entry.statusColor} label="Hydrant update" />
+      </div>
+      <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">{entry.action}</p>
+      <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">{item.location}</p>
+      <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
+        by{' '}
+        <button onClick={() => onViewUser(entry.by, entry.role)} className="font-semibold text-[#e0353b] hover:underline">
+          {entry.by}
+        </button>
+        {' '}· {entry.role} · {formatHistoryDate(entry.date)}
+      </p>
+    </div>
+  );
+}
 function ReportCard({ report, onViewUser, canResolve }: { report: Report; onViewUser: (name: string, role: string) => void; canResolve: boolean }) {
   const { user, role } = useAuth();
   const sc = STATUS_COLORS[report.status];

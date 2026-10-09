@@ -11,8 +11,8 @@ NEXT_PUBLIC_LOCATION_PRIVACY_CONTACT=Your privacy officer contact details
 ```
 
 These are public notice fields. Supply real details, not placeholder values.
-Until both are configured, the notice is visible but its consent button is
-disabled. Declining still permits use of the map.
+The consent button is currently enabled while these details are pending
+configuration. Declining still permits use of the map.
 
 The notice follows the information categories described by the
 [NPC right-to-be-informed guidance](https://privacy.gov.ph/the-right-to-be-informed/)
@@ -21,6 +21,10 @@ purpose, collected fields, recipients, actual storage behavior, device/browser
 limits, withdrawal and data-subject rights. It is not a certification of legal
 compliance. The controller must review the notice and establish its retention
 and privacy-request procedures before operational deployment.
+
+All signed-in dashboard roles (admin, authorized, head, and general) can view
+all station reports. The October 9, 2026 notice version requires a new consent
+choice for this expanded audience before station reporting resumes.
 
 ## Consent behavior
 

@@ -26,9 +26,10 @@ The card's header and View on map button zoom to the reported position. Clicking
 same pin again, the map background, a hydrant, the close button, or Escape dismisses
 the details. Only one station is selected at a time. Invalid coordinates are ignored.
 
-Existing read permissions apply: admins see all station reports; explicitly
-marked station accounts see their own station. Other accounts do not subscribe.
-Listeners are removed on unmount, logout, and account or station changes. Listener
+All signed-in dashboard roles (admin, authorized, head, and general) can see all
+station reports, without needing a station assignment. Anonymous users and unknown
+roles cannot read station reports. Listeners are removed on unmount, logout, and
+account or role changes. Listener
 errors clear icons and show an unavailable message. The public map does not expose
 station locations.
 
@@ -104,10 +105,9 @@ npx.cmd -y firebase-tools@latest deploy --only firestore:rules --project hydro-s
 
 Only explicitly marked station accounts can create or update their assigned station's
 position. The same field, type, coordinate-range, writer-UID, and server-timestamp
-validation applies to both operations. Admins may read/delete; station accounts
-may read their own station document. General and anonymous users have no access.
-An admin can list all positions; station clients should fetch their document by ID
-or query by document ID. Arbitrary collection-wide station queries are denied.
+validation applies to both operations. All recognized signed-in roles may read
+individual positions and list all positions; only admins may delete positions.
+Anonymous users, missing profiles, and unrecognized roles are denied access.
 
 Self-signup is limited to `role: general` and the existing signup fields, closing
 the previous ability to self-assign an operational role or station. Admin-managed
@@ -174,3 +174,12 @@ Focused rules-auditor result (not a whole-application security assessment):
   "findings": []
 }
 ```
+
+Validation on October 9, 2026: TypeScript, targeted ESLint, ten consent/map/expiry
+unit tests, and the focused Firestore emulator suite passed. The suite confirms
+all recognized signed-in roles can get and list reports, including general users
+and accounts assigned to other stations, while anonymous/missing/invalid roles
+are denied. Existing station-write, payload validation, deletion, and profile
+privilege checks also passed. The notice audience was updated and its version
+bumped to `2026-10-09-v2` to require a renewed station consent choice.
+Live deployment of this access change is pending Firebase CLI authentication.

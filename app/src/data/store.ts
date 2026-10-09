@@ -97,7 +97,7 @@ export async function updateHydrantStatus(hydrantId: string, input: EditHydrantI
       action: `Status set to ${toOperationalStatus(input.status)}`,
       by: input.by,
       role: input.role,
-      date: dateStr,
+      date: nowIso,
     }),
   };
 

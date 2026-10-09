@@ -1495,7 +1495,7 @@ export default function HydroScoutDashboard() {
       {showReports && (
         <>
           <div className="pointer-events-auto absolute inset-0 z-[1400]" onClick={() => setShowReports(false)} />
-          <ReportsPanel reports={reports} loading={reportsLoading} onViewUser={handleViewUser} />
+          <ReportsPanel reports={reports} hydrants={hydrants} loading={reportsLoading || loading} onViewUser={handleViewUser} />
         </>
       )}
 
@@ -1564,7 +1564,7 @@ export default function HydroScoutDashboard() {
         />
       )}
 
-      {showOpsDashboard && (
+      {showOpsDashboard && (role === 'head' || role === 'admin') && (
         <OperationsDashboard
           hydrants={hydrants}
           reports={reports}
@@ -1579,7 +1579,7 @@ export default function HydroScoutDashboard() {
         />
       )}
 
-      {showAdminDashboard && (
+      {showAdminDashboard && role === 'admin' && (
         <div className="anim-fade absolute inset-0 z-[6000] overflow-auto">
           <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
         </div>

@@ -17,6 +17,7 @@ try {
     general: { role: 'general', stationId: 'station-1' },
     firefighter: { role: 'authorized', stationId: 'station-1' },
     admin: { role: 'admin' },
+    invalidRole: { role: 'invalid' },
   };
   await env.withSecurityRulesDisabled(async ctx => {
     for (const [uid, data] of Object.entries(profiles)) await ctx.firestore().doc(`users/${uid}`).set(data);
@@ -37,12 +38,18 @@ try {
   assert.ok(stored.updatedAt.toMillis() > 0);
   await assertSucceeds(ref('head').set(payload('head')));
   await assertSucceeds(ref('station').set(payload('station')));
-  for (const uid of [null, 'general', 'firefighter', 'other', 'missing', 'admin', 'unknown']) {
+  for (const uid of [null, 'general', 'firefighter', 'other', 'missing', 'admin', 'unknown', 'invalidRole']) {
     await assertFails(ref(uid).set(payload(uid ?? 'anonymous')));
   }
-  for (const uid of [null, 'general', 'firefighter', 'other', 'missing']) {
+  for (const uid of Object.keys(profiles).filter(uid => uid !== 'invalidRole')) {
+    await assertSucceeds(ref(uid).get());
+    await assertSucceeds(db(uid).collection('unitLocations').get());
+  }
+  for (const uid of [null, 'unknown', 'invalidRole']) {
     await assertFails(ref(uid).get());
     await assertFails(db(uid).collection('unitLocations').get());
+  }
+  for (const uid of [null, 'general', 'firefighter', 'other', 'missing', 'head', 'unknown', 'invalidRole']) {
     await assertFails(ref(uid).delete());
   }
   await assertSucceeds(ref('station').get());

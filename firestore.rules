@@ -111,7 +111,8 @@ service cloud.firestore {
     }
 
     match /unitLocations/{stationId} {
-      allow read: if isAdmin() || isAssignedStation(stationId);
+      // All signed-in map roles can view the latest station reports.
+      allow read: if isAnyRole();
       allow create, update: if isAssignedStation(stationId)
         && isValidUnitLocation(stationId);
       allow delete: if isAdmin();

@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from './auth-context';
 import { db } from './firebase';
-import { stationIdForLocation } from './unit-location';
 import { mapUnitLocation, type MapUnitLocation } from './map-unit-location';
 import { locationTimeoutMs, watchUnitLocationExpiry } from './unit-location-expiry';
 
@@ -13,7 +12,8 @@ const TIMEOUT_MS = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEO
 export function useUnitLocations() {
   const { user, role, loading } = useAuth();
   const uid = user?.uid;
-  const scope = !loading && uid ? `${uid}:${role}` : null;
+  const hasMapRole = role === 'admin' || role === 'authorized' || role === 'general' || role === 'head';
+  const scope = !loading && uid && hasMapRole ? `${uid}:${role}` : null;
   const [state, setState] = useState<{
     scope: string | null; locations: MapUnitLocation[]; error: boolean;
   }>({ scope: null, locations: [], error: false });
@@ -21,8 +21,6 @@ export function useUnitLocations() {
   useEffect(() => {
     if (!scope || !uid) return;
     let active = true;
-    let stopLocations: Unsubscribe | undefined;
-    let generation = 0;
     let locationError = false;
     const expiry = watchUnitLocationExpiry(locations => {
       if (active) setState({ scope, locations, error: locationError });
@@ -39,40 +37,18 @@ export function useUnitLocations() {
       console.warn('Unit location listener failed:', error);
       publish([], true);
     };
-    if (role === 'admin') {
-      stopLocations = onSnapshot(collection(db, 'unitLocations'), snapshot => {
-        publish(snapshot.docs.flatMap(record => {
-          const location = mapUnitLocation(record.id, record.data());
-          return location ? [location] : [];
-        }));
-      }, fail);
-    }
-    // Observe profile changes so reassignment also replaces the station listener.
-    const stopProfile = role === 'admin' ? undefined : onSnapshot(doc(db, 'users', uid), snapshot => {
-      const currentGeneration = ++generation;
-      stopLocations?.();
-      stopLocations = undefined;
-      publish([]);
-      const stationId = stationIdForLocation(snapshot.data());
-      if (!stationId) return;
-      stopLocations = onSnapshot(doc(db, 'unitLocations', stationId), record => {
-        if (currentGeneration !== generation) return;
-        const location = record.exists() ? mapUnitLocation(record.id, record.data()) : null;
-        publish(location ? [location] : []);
-      }, error => { if (currentGeneration === generation) fail(error); });
-    }, error => {
-      ++generation;
-      stopLocations?.();
-      stopLocations = undefined;
-      fail(error);
-    });
+    const stopLocations = onSnapshot(collection(db, 'unitLocations'), snapshot => {
+      publish(snapshot.docs.flatMap(record => {
+        const location = mapUnitLocation(record.id, record.data());
+        return location ? [location] : [];
+      }));
+    }, fail);
     return () => {
       active = false;
       expiry.stop();
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('focus', expiry.refresh);
-      stopProfile?.();
-      stopLocations?.();
+      stopLocations();
     };
   }, [scope, uid, role]);
 

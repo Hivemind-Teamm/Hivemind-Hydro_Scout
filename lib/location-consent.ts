@@ -1,4 +1,4 @@
-export const LOCATION_NOTICE_VERSION = '2026-10-06-v1';
+export const LOCATION_NOTICE_VERSION = '2026-10-09-v2';
 export type LocationConsentDecision = 'granted' | 'declined';
 export interface LocationConsentRecord {
   version: string;

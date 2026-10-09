@@ -10,6 +10,7 @@ import { formatDistance } from '@/lib/haversine';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { deleteHydrantPhoto, setDisplayPhoto, validateHydrant, flagForReinspection, deleteHydrant } from '../data/store';
 import PillBadge from './PillBadge';
+import { registerEntriesNewestFirst, formatHistoryDate } from '../data/hydrant-history';
 import AvatarPlaceholder from './AvatarPlaceholder';
 import { FiX, FiCheck } from 'react-icons/fi';
 
@@ -46,7 +47,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
   const canAnnotate   = role === 'authorized' || role === 'head' || role === 'admin';
   // General users (and not-signed-in guests) get the restricted, view-only,
   // anonymized version of the panel.
-  const isGeneralView = !role || role === 'general';
+  const isGeneralView = !canAnnotate;
 
   // Close menu on outside click
   useEffect(() => {
@@ -83,6 +84,8 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
     : isGeneralView
       ? ['quick', 'details']
       : ['quick', 'details', 'log'];
+
+  const activeTab = tabs.includes(tab) ? tab : 'quick';
 
   const tabLabel: Record<Tab, string> = { quick: 'Quick', details: 'Details', log: 'Log', admin: 'Admin' };
 
@@ -150,7 +153,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2.5 transition-colors ${
-              tab === t
+              activeTab === t
                 ? 'border-b-2 border-[#FED42E] text-[#FED42E]'
                 : 'text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
             }`}
@@ -162,10 +165,10 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
 
       {/* ── Tab content ── */}
       <div className="scroll-fade min-h-0 flex-1 overflow-y-auto">
-        {tab === 'quick'   && <QuickTab   hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
-        {tab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} isGeneralView={isGeneralView} onPhotoContextMenu={handlePhotoContextMenu} onViewPhoto={setLightbox} />}
-        {tab === 'log'     && <MaintenanceTab hydrant={hydrant} linkedReports={linkedReports} onViewUser={onViewUser} />}
-        {tab === 'admin'   && <AdminTab   hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} onClose={onClose} />}
+        {activeTab === 'quick'   && <QuickTab   hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
+        {activeTab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} isGeneralView={isGeneralView} onPhotoContextMenu={handlePhotoContextMenu} onViewPhoto={setLightbox} />}
+        {activeTab === 'log'     && <MaintenanceTab hydrant={hydrant} linkedReports={linkedReports} onViewUser={onViewUser} />}
+        {activeTab === 'admin'   && <AdminTab   hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} onClose={onClose} />}
       </div>
 
       {/* Photo context menu — rendered via portal to escape the CSS transform stacking context */}
@@ -423,8 +426,9 @@ function MaintenanceTab({ hydrant, linkedReports, onViewUser }: {
   linkedReports: Report[];
   onViewUser: (name: string, role: string) => void;
 }) {
+  const history = registerEntriesNewestFirst(hydrant.register);
   // Most recent register entry — treated as the latest sign-off.
-  const latest = hydrant.register[hydrant.register.length - 1];
+  const latest = history[0];
   const verifier = latest?.by || hydrant.inspector;
   const verifierRole = latest?.role || 'Authorized';
 
@@ -463,14 +467,14 @@ function MaintenanceTab({ hydrant, linkedReports, onViewUser }: {
       {/* Status change history — what changed, when, and why */}
       <div className="mt-5">
         <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
-          Status Change History
+          Status Change History · Newest first
         </p>
         <div className="flex flex-col gap-3">
-          {hydrant.register.map((entry, i) => (
+          {history.map((entry, i) => (
             <div key={i} className="flex gap-2.5">
               <div className="flex flex-col items-center">
                 <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: entry.statusColor }} />
-                {i < hydrant.register.length - 1 && <div className="mt-1 w-px flex-1 bg-neutral-200 dark:bg-neutral-700" />}
+                {i < history.length - 1 && <div className="mt-1 w-px flex-1 bg-neutral-200 dark:bg-neutral-700" />}
               </div>
               <div className="pb-3">
                 <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">{entry.action}</p>
@@ -484,7 +488,7 @@ function MaintenanceTab({ hydrant, linkedReports, onViewUser }: {
                   </button>
                   {' '}· {entry.role}
                 </p>
-                <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{fmtDate(entry.date)}</p>
+                <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{formatHistoryDate(entry.date)}</p>
               </div>
             </div>
           ))}

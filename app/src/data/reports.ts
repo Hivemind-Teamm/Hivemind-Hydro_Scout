@@ -19,6 +19,7 @@ export interface Report {
   date: string;
   time: string;
   status: ReportStatus;
+  createdAt?: string; // Exact report instant for ordering with hydrant updates.
 }
 
 export const STATUS_COLORS: Record<ReportStatus, { border: string; badge: string; text: string; label: string }> = {
@@ -34,7 +35,7 @@ function toStatus(value: unknown): ReportStatus {
 }
 
 // Firestore createdAt Timestamp | string → { date, time }
-function toDateTime(value: unknown, fallbackDate?: string, fallbackTime?: string): { date: string; time: string } {
+function toDateTime(value: unknown, fallbackDate?: string, fallbackTime?: string): { date: string; time: string; createdAt?: string } {
   let d: Date | null = null;
   if (value && typeof value === 'object' && 'toDate' in value) {
     try { d = (value as { toDate: () => Date }).toDate(); } catch { /* ignore */ }
@@ -44,6 +45,7 @@ function toDateTime(value: unknown, fallbackDate?: string, fallbackTime?: string
   }
   if (d) {
     return {
+      createdAt: d.toISOString(),
       date: d.toISOString().slice(0, 10),
       time: d.toTimeString().slice(0, 5),
     };
@@ -65,7 +67,7 @@ function displayReportId(reportNo: unknown, firestoreId: string): string {
 
 // Maps a raw Firestore report document → the UI `Report` view-model.
 export function reportFromDoc(id: string, hydrantId: string, d: DocumentData): Report {
-  const { date, time } = toDateTime(d.createdAt, d.date, d.time);
+  const { date, time, createdAt } = toDateTime(d.createdAt, d.date, d.time);
   const title = d.title ?? d.damageType ?? 'Reported issue';
   return {
     id: displayReportId(d.reportNo, id),
@@ -78,5 +80,6 @@ export function reportFromDoc(id: string, hydrantId: string, d: DocumentData): R
     date,
     time,
     status: toStatus(d.status),
+    createdAt,
   };
 }

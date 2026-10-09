@@ -57,7 +57,7 @@ function computeTrendData(hydrants: Hydrant[]): { points: number[]; labels: stri
     let counted = 0;
     for (const h of hydrants) {
       counted++;
-      const before = h.register.filter(r => r.date && r.date <= weekEndStr);
+      const before = h.register.filter(r => r.date && r.date.slice(0, 10) <= weekEndStr);
       if (before.length === 0) {
         if (h.status === 'operational') operational++;
       } else {
