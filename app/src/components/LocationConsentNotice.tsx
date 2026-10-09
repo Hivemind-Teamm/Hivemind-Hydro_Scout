@@ -24,13 +24,13 @@ export default function LocationConsentNotice({ granted, storageError, onAllow, 
         <p><strong>Map services.</strong> If you use routing or nearby-hydrant searches, your coordinates may also be sent to Mapbox or the routing provider configured by the app. Browser location estimates can be inaccurate.</p>
         <p><strong>Consent record.</strong> Your account, station, decision, notice version and decision time are stored on this browser until you clear site data or a new notice requires another choice. Other devices must make their own choice. Shared station accounts do not give permission to track every person using them.</p>
         <p><strong>Controller:</strong> {controller || 'Not yet configured by the project administrator.'}<br /><strong>Privacy contact:</strong> {contact || 'Not yet configured by the project administrator.'}</p>
-        {(!controller || !contact) && <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Location sharing is unavailable until the administrator supplies the controller and privacy contact details.</p>}
+        {(!controller || !contact) && <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Controller and privacy contact details are pending configuration.</p>}
         <a href="https://privacy.gov.ph/data-privacy-act-/" target="_blank" rel="noreferrer" className="text-red-600 underline">Read the Data Privacy Act of 2012</a>
       </div>
       {storageError && <p role="alert" className="mt-3 text-sm text-red-600">Your choice could not be saved. Enable browser storage and try again. Sharing remains disabled unless consent was already saved.</p>}
       <div className="mt-5 flex flex-wrap gap-3">
         <button type="button" onClick={onDecline} className="flex-1 rounded-lg border border-neutral-300 px-4 py-3 text-sm font-semibold">{granted ? 'Withdraw consent' : 'Continue without sharing'}</button>
-        <button type="button" onClick={onAllow} disabled={!controller || !contact} className="flex-1 rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-40">I consent to location sharing</button>
+        <button type="button" onClick={onAllow} className="flex-1 rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white">I consent to location sharing</button>
         {granted && <button type="button" onClick={onClose} className="w-full text-sm underline">Close notice</button>}
       </div>
     </dialog>
