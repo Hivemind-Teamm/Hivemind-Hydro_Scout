@@ -2,11 +2,10 @@
 //
 // F1 Station Accounts + Area of Responsibility (AOR)
 //
-// Seeds placeholder fire-station/AOR definitions into Firestore.
+// Seeds verified BFP Station 4 substation/AOR definitions into Firestore.
 //
-// This script intentionally uses PLACEHOLDER barangay assignments.
-// Replace them with the official station-to-barangay AOR list once
-// that information has been confirmed.
+// Contains the confirmed BFP Station 4 substation-to-barangay AOR list.
+// Account assignments are managed separately.
 //
 // Firestore structure:
 //
@@ -70,16 +69,13 @@ const SERVICE_ACCOUNT =
 const STATIONS_COLLECTION = 'stations';
 
 /* -------------------------------------------------------------------------- */
-/* Placeholder F1 station / AOR data                                          */
+/* BFP Station 4 substation / AOR data                                          */
 /* -------------------------------------------------------------------------- */
 
 /**
- * PLACEHOLDER DATA ONLY.
+ * Confirmed BFP Station 4 substation AOR assignments.
  *
- * Do not treat these barangay names as official BFP AOR assignments.
- *
- * Once the official AOR list is available, replace the values below while
- * keeping each stationId stable wherever possible.
+ * Keep station IDs stable after accounts have been assigned.
  *
  * stationId is intended to become the stable identifier used by:
  *
@@ -89,35 +85,46 @@ const STATIONS_COLLECTION = 'stations';
  */
 const STATIONS = [
   {
-    stationId: 'station-001',
-    name: 'Placeholder Fire Station 1',
+    stationId: 'bfp-station-4-paligsahan',
+    name: 'Paligsahan Substation',
     aorBarangays: [
-      'PLACEHOLDER_BARANGAY_01',
-      'PLACEHOLDER_BARANGAY_02',
-      'PLACEHOLDER_BARANGAY_03',
+      'Kalusugan',
+      'Kristong Hari',
+      'Paligsahan',
+      'Roxas District',
     ],
   },
-
   {
-    stationId: 'station-002',
-    name: 'Placeholder Fire Station 2',
+    stationId: 'bfp-station-4-krus-na-ligas',
+    name: 'Krus na Ligas Substation',
     aorBarangays: [
-      'PLACEHOLDER_BARANGAY_04',
-      'PLACEHOLDER_BARANGAY_05',
-      'PLACEHOLDER_BARANGAY_06',
+      'Krus na Ligas',
+      'UP Campus',
+      'UP Village',
+      'Botocan',
+      'Teachers Village East',
     ],
   },
-
   {
-    stationId: 'station-003',
-    name: 'Placeholder Fire Station 3',
+    stationId: 'bfp-station-4-central',
+    name: 'Central Substation',
     aorBarangays: [
-      'PLACEHOLDER_BARANGAY_07',
-      'PLACEHOLDER_BARANGAY_08',
-      'PLACEHOLDER_BARANGAY_09',
+      'Central',
+      'Old Capitol Site',
     ],
   },
-];
+  {
+    stationId: 'bfp-station-4-laging-handa',
+    name: 'Laging Handa Substation',
+    aorBarangays: [
+      'Kamuning',
+      'Laging Handa',
+      'Obrero',
+      'Sacred Heart',
+      'South Triangle',
+    ],
+  },
+]
 
 /* -------------------------------------------------------------------------- */
 /* Validation                                                                 */
@@ -220,6 +227,21 @@ async function initializeFirebase() {
 async function seedStationAor() {
   validateStations(STATIONS);
 
+  if (!process.argv.includes('--apply')) {
+    console.log('Hydro-Scout BFP Station 4 AOR preview');
+    console.log('------------------------------------');
+
+    for (const station of STATIONS) {
+      console.log(station.stationId + ': ' + station.name);
+      console.log('  AOR: ' + station.aorBarangays.join(', '));
+    }
+
+    console.log('');
+    console.log('DRY RUN: No Firebase connection or database writes.');
+    console.log('Use --apply to write these records.');
+    return;
+  }
+
   const db = await initializeFirebase();
 
   console.log('');
@@ -246,28 +268,21 @@ async function seedStationAor() {
       .collection(STATIONS_COLLECTION)
       .doc(stationId);
 
+    const existing = await ref.get();
+
     batch.set(
       ref,
       {
         stationId,
-
         name: station.name.trim(),
-
         aorBarangays,
-
-        // Explicitly marks these records as temporary.
-        placeholder: true,
-
+        placeholder: false,
         updatedAt: FieldValue.serverTimestamp(),
-
-        // This may be overwritten on a re-run, which is acceptable for
-        // placeholder seed data. Once stations become production records,
-        // creation timestamps can be managed separately.
-        createdAt: FieldValue.serverTimestamp(),
+        ...(!existing.exists
+          ? { createdAt: FieldValue.serverTimestamp() }
+          : {}),
       },
-      {
-        merge: true,
-      },
+      { merge: true },
     );
 
     console.log(
@@ -283,16 +298,16 @@ async function seedStationAor() {
 
   console.log('');
   console.log(
-    `Done. ${STATIONS.length} placeholder station/AOR records written to "${STATIONS_COLLECTION}".`,
+    `Done. ${STATIONS.length} BFP substation/AOR records written to "${STATIONS_COLLECTION}".`,
   );
 
   console.log('');
   console.log(
-    'NOTE: These are placeholder AOR assignments only.',
+    'BFP Station 4 substation AOR records applied.',
   );
 
   console.log(
-    'Replace them with the official station/barangay assignments before production use.',
+    'Existing user account assignments were not modified.',
   );
 }
 
@@ -300,12 +315,15 @@ async function seedStationAor() {
 /* Execute                                                                    */
 /* -------------------------------------------------------------------------- */
 
-try {
-  await seedStationAor();
-  process.exit(0);
-} catch (error) {
-  console.error('');
-  console.error('Station/AOR seed failed.');
-  console.error(error);
-  process.exit(1);
+export { STATIONS };
+
+if (process.argv[1] && resolve(process.argv[1]) === __filename) {
+  try {
+    await seedStationAor();
+  } catch (error) {
+    console.error('');
+    console.error('Station/AOR seed failed.');
+    console.error(error);
+    process.exitCode = 1;
+  }
 }
