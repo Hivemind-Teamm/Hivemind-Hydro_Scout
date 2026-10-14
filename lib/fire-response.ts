@@ -1,96 +1,20 @@
 /**
  * fire-response.ts
  * Domain logic for the "pin a fire" feature: which hydrants can feed a fire at
- * a given point, and how much apparatus (hose + fire trucks) it takes to get
- * water from a hydrant to the fire.
+ * a given point, and which one the supply line is drawn from.
  *
- * The supply-line calculation is deliberately parameter-driven. Until the
- * field data is known, every parameter below is `null` and the estimator
- * reports `status: 'pending'` — the UI renders that as "Pending data" instead
- * of a made-up number. Fill in SUPPLY_LINE_PARAMS (or swap the body of
- * `estimateSupplyLine` for a different model) and the fire panel picks the
- * results up with no UI changes.
+ * How much hose and how many fire trucks that line takes is worked out in
+ * supply-line.ts, from the values in fire-response.config.ts.
  */
 
+import { FIRE_RESPONSE_CONFIG } from './fire-response.config';
 import { haversineM } from './haversine';
 import type { Hydrant } from '../app/src/data/hydrants';
 
 // ─── Search radius ────────────────────────────────────────────────────────────
 
 /** Hydrants within this straight-line distance of the fire are candidates. */
-export const FIRE_HYDRANT_RADIUS_M = 500;
-
-// ─── Supply-line estimate ─────────────────────────────────────────────────────
-
-export interface SupplyLineParams {
-  /**
-   * Length of one hose section, in metres. A 50 ft section is 15.24 m; a
-   * 100 ft section is 30.48 m.
-   */
-  hoseSectionLengthM: number | null;
-  /**
-   * Longest hose lay a single fire truck can push water through while still
-   * delivering usable pressure at the far end, in metres. Past this, another
-   * truck has to relay-pump in between. Normally derived from pump pressure,
-   * hose diameter, flow rate and friction loss.
-   */
-  maxPumpDistanceM: number | null;
-  /**
-   * Multiplier from straight-line distance to real hose-lay distance. Hose
-   * follows streets and goes around buildings, so it is always ≥ 1
-   * (1.3 is a common rule of thumb for urban grids).
-   */
-  layoutFactor: number | null;
-}
-
-/**
- * The numbers the supply-line model needs. `null` = not known yet — the panel
- * shows "Pending data" until all of them are set.
- */
-export const SUPPLY_LINE_PARAMS: SupplyLineParams = {
-  hoseSectionLengthM: null,
-  maxPumpDistanceM: null,
-  layoutFactor: null,
-};
-
-export type SupplyLineEstimate =
-  | { status: 'pending'; missing: (keyof SupplyLineParams)[] }
-  | {
-      status: 'ready';
-      /** Estimated length of hose actually laid, in metres. */
-      hoseLengthM: number;
-      /** Number of hose sections needed to cover that length. */
-      hoseSections: number;
-      /** Fire trucks needed: one at the hydrant plus any relay pumpers. */
-      fireTrucks: number;
-    };
-
-/**
- * Estimate the apparatus needed to run a supply line `distanceM` metres
- * (straight-line) from a hydrant to the fire.
- *
- * Model (relay pumping): the hose lay is the straight-line distance scaled by
- * the layout factor; it is cut into whole hose sections; every
- * `maxPumpDistanceM` of hose needs its own truck pumping.
- */
-export function estimateSupplyLine(
-  distanceM: number,
-  params: SupplyLineParams = SUPPLY_LINE_PARAMS,
-): SupplyLineEstimate {
-  const { hoseSectionLengthM, maxPumpDistanceM, layoutFactor } = params;
-  if (hoseSectionLengthM === null || maxPumpDistanceM === null || layoutFactor === null) {
-    const missing = (Object.keys(params) as (keyof SupplyLineParams)[]).filter((k) => params[k] === null);
-    return { status: 'pending', missing };
-  }
-
-  const hoseLengthM = distanceM * layoutFactor;
-  return {
-    status: 'ready',
-    hoseLengthM: Math.round(hoseLengthM),
-    hoseSections: Math.max(1, Math.ceil(hoseLengthM / hoseSectionLengthM)),
-    fireTrucks: Math.max(1, Math.ceil(hoseLengthM / maxPumpDistanceM)),
-  };
-}
+export const FIRE_HYDRANT_RADIUS_M = FIRE_RESPONSE_CONFIG.hydrantSearchRadiusM;
 
 // ─── Hydrants near a fire ─────────────────────────────────────────────────────
 
@@ -168,4 +92,25 @@ export function circleRing(lat: number, lng: number, radiusM: number, steps = 72
     ring.push([(λ2 * 180) / Math.PI, (φ2 * 180) / Math.PI]);
   }
   return ring;
+}
+
+/**
+ * The `[lng, lat]` point halfway along a path by distance, for placing a
+ * label on a line that bends.
+ */
+export function pathMidpoint(path: [number, number][]): [number, number] {
+  const lengths = path.slice(1).map(([lng, lat], i) => haversineM(path[i][1], path[i][0], lat, lng));
+  let remaining = lengths.reduce((sum, length) => sum + length, 0) / 2;
+
+  for (let i = 0; i < lengths.length; i++) {
+    if (remaining <= lengths[i]) {
+      const t = lengths[i] > 0 ? remaining / lengths[i] : 0;
+      return [
+        path[i][0] + (path[i + 1][0] - path[i][0]) * t,
+        path[i][1] + (path[i + 1][1] - path[i][1]) * t,
+      ];
+    }
+    remaining -= lengths[i];
+  }
+  return path[path.length - 1];
 }

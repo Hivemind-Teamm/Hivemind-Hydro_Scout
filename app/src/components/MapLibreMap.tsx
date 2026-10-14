@@ -25,7 +25,7 @@ import {
   FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH,
 } from './fireIcon';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
-import { circleRing } from '@/lib/fire-response';
+import { circleRing, pathMidpoint } from '@/lib/fire-response';
 import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 if (typeof window !== 'undefined') {
@@ -728,6 +728,7 @@ export default function MapLibreMap({
   const fireRadiusM = fire?.radiusM;
   const supplyLat = supply?.lat;
   const supplyLng = supply?.lng;
+  const supplyPath = supply?.path ?? null;
   const fireRadiusData = useMemo<GeoJSON.FeatureCollection>(
     () => ({
       type: 'FeatureCollection',
@@ -739,17 +740,24 @@ export default function MapLibreMap({
     }),
     [fireLat, fireLng, fireRadiusM],
   );
+  // The routed line when there is one, else straight from hydrant to fire.
+  const supplyCoords = useMemo<[number, number][] | null>(
+    () => fireLat === undefined || fireLng === undefined || supplyLat === undefined || supplyLng === undefined
+      ? null : supplyPath ?? [[supplyLng, supplyLat], [fireLng, fireLat]],
+    [fireLat, fireLng, supplyLat, supplyLng, supplyPath],
+  );
   const fireSupplyData = useMemo<GeoJSON.FeatureCollection>(
     () => ({
       type: 'FeatureCollection',
-      features: fireLat === undefined || fireLng === undefined || supplyLat === undefined || supplyLng === undefined ? [] : [{
+      features: !supplyCoords ? [] : [{
         type: 'Feature',
         properties: {},
-        geometry: { type: 'LineString', coordinates: [[supplyLng, supplyLat], [fireLng, fireLat]] },
+        geometry: { type: 'LineString', coordinates: supplyCoords },
       }],
     }),
-    [fireLat, fireLng, supplyLat, supplyLng],
+    [supplyCoords],
   );
+  const supplyLabelAt = useMemo(() => supplyCoords && pathMidpoint(supplyCoords), [supplyCoords]);
 
   useEffect(() => {
     (mapInstance?.getSource(FIRE_RADIUS_SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(fireRadiusData);
@@ -956,11 +964,11 @@ export default function MapLibreMap({
         </MapMarker>
       )}
 
-      {map && fire && supply && (
+      {map && fire && supply && supplyLabelAt && (
         <MapMarker
           map={map}
-          longitude={(supply.lng + fire.lng) / 2}
-          latitude={(supply.lat + fire.lat) / 2}
+          longitude={supplyLabelAt[0]}
+          latitude={supplyLabelAt[1]}
           anchor="center"
           style={SUPPLY_LABEL_STYLE}
         >

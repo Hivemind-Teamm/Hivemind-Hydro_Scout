@@ -43,6 +43,7 @@ import {
   pickSupplyHydrant,
   rankHydrantsNearFire,
 } from '@/lib/fire-response';
+import { useSupplyLine } from '@/lib/use-supply-line';
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
 const OTW_ROUTE_KEY    = 'hydroscout_otw_route';
@@ -571,6 +572,9 @@ export default function HydroScoutDashboard() {
     () => (fireRanking ? pickSupplyHydrant(fireRanking.inRadius, fireSupplyChoice) : null),
     [fireRanking, fireSupplyChoice],
   );
+  // Hose and truck estimate for that line; starts from the straight-line
+  // distance and switches to the routed one when it arrives.
+  const supplyLine = useSupplyLine(fire, fireSupply);
   const fireOverlay = useMemo<FireOverlay | null>(() => {
     if (fireLat === undefined || fireLng === undefined || !fireRanking) return null;
     return {
@@ -582,10 +586,11 @@ export default function HydroScoutDashboard() {
         hydrantId: fireSupply.hydrant.id,
         lat: fireSupply.hydrant.lat,
         lng: fireSupply.hydrant.lng,
-        label: formatDistance(fireSupply.distanceM),
+        label: formatDistance(supplyLine?.estimate.status === 'ready' ? supplyLine.estimate.hoseLengthM : fireSupply.distanceM),
+        path: supplyLine?.path ?? null,
       },
     };
-  }, [fireLat, fireLng, fireRanking, fireSupply]);
+  }, [fireLat, fireLng, fireRanking, fireSupply, supplyLine]);
 
   // Chime once when hazards first appear during OTW mode
   const prevHazardCountRef = useRef(0);
@@ -1067,6 +1072,7 @@ export default function HydroScoutDashboard() {
         candidates={fireRanking.inRadius}
         nearestOutside={fireRanking.nearestOutside}
         supply={fireSupply}
+        estimate={supplyLine?.estimate ?? null}
         loading={loading}
         maxHeight={isMobile ? '42dvh' : 'calc(100dvh - 24rem)'}
         onSelectSupply={setFireSupplyChoice}

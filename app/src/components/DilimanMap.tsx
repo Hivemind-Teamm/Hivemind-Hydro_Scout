@@ -14,7 +14,7 @@ import {
   FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH,
 } from './fireIcon';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
-import { circleRing } from '@/lib/fire-response';
+import { circleRing, pathMidpoint } from '@/lib/fire-response';
 import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 const clusterLevel = (zoom: number) => Math.round(zoom);
@@ -686,6 +686,7 @@ export default function DilimanMap({
   const fireRadiusM = fire?.radiusM;
   const supplyLat = supply?.lat;
   const supplyLng = supply?.lng;
+  const supplyPath = supply?.path ?? null;
   const fireRadiusData = useMemo<GeoJSON.Feature<GeoJSON.Polygon> | null>(
     () => fireLat === undefined || fireLng === undefined || fireRadiusM === undefined ? null : {
       type: 'Feature',
@@ -694,14 +695,21 @@ export default function DilimanMap({
     },
     [fireLat, fireLng, fireRadiusM],
   );
+  // The routed line when there is one, else straight from hydrant to fire.
+  const supplyCoords = useMemo<[number, number][] | null>(
+    () => fireLat === undefined || fireLng === undefined || supplyLat === undefined || supplyLng === undefined
+      ? null : supplyPath ?? [[supplyLng, supplyLat], [fireLng, fireLat]],
+    [fireLat, fireLng, supplyLat, supplyLng, supplyPath],
+  );
   const fireSupplyData = useMemo<GeoJSON.Feature<GeoJSON.LineString> | null>(
-    () => fireLat === undefined || fireLng === undefined || supplyLat === undefined || supplyLng === undefined ? null : {
+    () => supplyCoords && {
       type: 'Feature',
       properties: {},
-      geometry: { type: 'LineString', coordinates: [[supplyLng, supplyLat], [fireLng, fireLat]] },
+      geometry: { type: 'LineString', coordinates: supplyCoords },
     },
-    [fireLat, fireLng, supplyLat, supplyLng],
+    [supplyCoords],
   );
+  const supplyLabelAt = useMemo(() => supplyCoords && pathMidpoint(supplyCoords), [supplyCoords]);
 
   const map = mapInstance;
 
@@ -809,10 +817,10 @@ export default function DilimanMap({
           </Marker>
         )}
 
-        {fire && supply && (
+        {fire && supply && supplyLabelAt && (
           <Marker
-            longitude={(supply.lng + fire.lng) / 2}
-            latitude={(supply.lat + fire.lat) / 2}
+            longitude={supplyLabelAt[0]}
+            latitude={supplyLabelAt[1]}
             anchor="center"
             style={{ pointerEvents: 'none' }}
           >
