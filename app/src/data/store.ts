@@ -33,6 +33,7 @@ import {
   type HydrantStatus,
 } from './hydrants';
 import { reportFromDoc, type Report } from './reports';
+import { logFirestoreLatency, logFirestoreError } from './qa-logging';
 
 /* ───────────────────────────── Hydrants ───────────────────────────── */
 
@@ -48,9 +49,32 @@ export function useHydrants(): HydrantsState {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const listenerStartedAtMs = Date.now();
+    const loggedUpdates = new Map<string, number>();
+
     const unsub = onSnapshot(
       collection(db, 'hydrants'),
+      { includeMetadataChanges: true },
       (snap) => {
+        const receivedAtMs = Date.now();
+
+        if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) {
+          for (const change of snap.docChanges({ includeMetadataChanges: true })) {
+            if (change.type !== 'modified' && change.type !== 'added') continue;
+            if (change.doc.metadata.hasPendingWrites) continue;
+
+            const updatedAt = change.doc.data().updatedAt;
+            if (!updatedAt || typeof updatedAt.toMillis !== 'function') continue;
+
+            const writtenAtMs = updatedAt.toMillis();
+            if (writtenAtMs < listenerStartedAtMs) continue;
+            if (loggedUpdates.get(change.doc.id) === writtenAtMs) continue;
+
+            loggedUpdates.set(change.doc.id, writtenAtMs);
+            logFirestoreLatency('hydrants', change.doc.id, updatedAt, receivedAtMs);
+          }
+        }
+
         const list = snap.docs
           .map((d) => hydrantFromDoc(d.id, d.data()))
           // Drop docs without usable coordinates so they don't pile up at 0,0.
@@ -59,6 +83,7 @@ export function useHydrants(): HydrantsState {
         setLoading(false);
       },
       (err) => {
+        logFirestoreError('subscribe:hydrants', err);
         console.error('Failed to load hydrants:', err);
         setError(err.message);
         setLoading(false);
@@ -113,7 +138,12 @@ export async function updateHydrantStatus(hydrantId: string, input: EditHydrantI
     });
   }
 
-  await updateDoc(ref, payload);
+  try {
+    await updateDoc(ref, payload);
+  } catch (error) {
+    logFirestoreError('update:hydrant-status', error);
+    throw error;
+  }
 }
 
 /* ───────────────────────────── Reports ────────────────────────────── */
@@ -130,10 +160,34 @@ export function useReports(): ReportsState {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const listenerStartedAtMs = Date.now();
+    const loggedReports = new Set<string>();
     // collectionGroup gathers the `reports` subcollection across every hydrant.
     const unsub = onSnapshot(
       collectionGroup(db, 'reports'),
+      { includeMetadataChanges: true },
       (snap) => {
+        const receivedAtMs = Date.now();
+
+        if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) {
+          for (const change of snap.docChanges({ includeMetadataChanges: true })) {
+            if (change.type !== 'added') continue;
+            if (change.doc.metadata.hasPendingWrites) continue;
+
+            const createdAt = change.doc.data().createdAt;
+            if (!createdAt || typeof createdAt.toMillis !== 'function') continue;
+
+            const writtenAtMs = createdAt.toMillis();
+            if (writtenAtMs < listenerStartedAtMs) continue;
+
+            const key = change.doc.ref.path;
+            if (loggedReports.has(key)) continue;
+
+            loggedReports.add(key);
+            logFirestoreLatency('reports', change.doc.id, createdAt, receivedAtMs);
+          }
+        }
+
         const list = snap.docs.map((d) => {
           // parent.parent is the hydrant document
           const hydrantId = d.ref.parent.parent?.id ?? '—';
@@ -145,6 +199,7 @@ export function useReports(): ReportsState {
         setLoading(false);
       },
       (err) => {
+        logFirestoreError('subscribe:reports', err);
         console.error('Failed to load reports:', err);
         setError(err.message);
         setLoading(false);
@@ -168,16 +223,21 @@ export interface CreateReportInput {
 // Files a damage report into hydrants/{id}/reports.
 export async function createReport(hydrantId: string, input: CreateReportInput): Promise<void> {
   const ref = collection(db, 'hydrants', hydrantId, 'reports');
-  await addDoc(ref, {
-    title: input.title,
-    description: input.description,
-    location: input.location,
-    reporter: input.reporter,
-    role: input.role,
-    photos: input.photos ?? [],
-    status: 'pending',
-    createdAt: serverTimestamp(),
-  });
+  try {
+    await addDoc(ref, {
+      title: input.title,
+      description: input.description,
+      location: input.location,
+      reporter: input.reporter,
+      role: input.role,
+      photos: input.photos ?? [],
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    logFirestoreError('create:report', error);
+    throw error;
+  }
 }
 
 // Permanently removes a report from hydrants/{id}/reports (head / admin only —
