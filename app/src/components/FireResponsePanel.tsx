@@ -4,7 +4,8 @@ import { FiAlertTriangle, FiChevronDown, FiInfo, FiMove, FiX } from 'react-icons
 import { MdCenterFocusStrong, MdFireTruck, MdLocalFireDepartment, MdWaterDrop } from 'react-icons/md';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
 import { formatDistance } from '@/lib/haversine';
-import { estimateSupplyLine, type FireHydrantCandidate } from '@/lib/fire-response';
+import type { FireHydrantCandidate } from '@/lib/fire-response';
+import type { SupplyLineEstimate } from '@/lib/supply-line';
 
 interface FireResponsePanelProps {
   lat: number;
@@ -18,6 +19,8 @@ interface FireResponsePanelProps {
   nearestOutside: FireHydrantCandidate | null;
   /** Hydrant the supply line is drawn from. */
   supply: FireHydrantCandidate | null;
+  /** Hose and truck estimate for that supply line. */
+  estimate: SupplyLineEstimate | null;
   /** Hydrant feed still loading — the list isn't meaningful yet. */
   loading: boolean;
   maxHeight: string;
@@ -31,7 +34,7 @@ interface FireResponsePanelProps {
 }
 
 export default function FireResponsePanel({
-  lat, lng, address, radiusM, candidates, nearestOutside, supply, loading, maxHeight,
+  lat, lng, address, radiusM, candidates, nearestOutside, supply, estimate, loading, maxHeight,
   onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize,
 }: FireResponsePanelProps) {
   const operationalCount = candidates.filter((c) => c.hydrant.status === 'operational').length;
@@ -82,7 +85,7 @@ export default function FireResponsePanel({
           <Stat value={radiusLabel} label="Radius" />
         </div>
 
-        {supply && <SupplyEstimate supply={supply} onViewHydrant={onViewHydrant} />}
+        {supply && <SupplyEstimate supply={supply} estimate={estimate} onViewHydrant={onViewHydrant} />}
 
         {/* Hydrant list */}
         <div className="px-3.5 pb-1 pt-3">
@@ -172,18 +175,24 @@ export default function FireResponsePanel({
 
 /* ---------------------------------------------------------------- */
 
-function SupplyEstimate({ supply, onViewHydrant }: { supply: FireHydrantCandidate; onViewHydrant: (h: Hydrant) => void }) {
+function SupplyEstimate({ supply, estimate, onViewHydrant }: {
+  supply: FireHydrantCandidate;
+  estimate: SupplyLineEstimate | null;
+  onViewHydrant: (h: Hydrant) => void;
+}) {
   const { hydrant, distanceM } = supply;
   const meta = STATUS_META[hydrant.status];
-  const estimate = estimateSupplyLine(distanceM);
-  const ready = estimate.status === 'ready';
+  const ready = estimate?.status === 'ready' ? estimate : null;
+  // Until a routing service answers, the hose length is a straight-line estimate.
+  const routed = ready !== null && ready.distance.source !== 'straight-line';
 
   return (
     <div className="border-b border-neutral-100 px-3.5 py-3 dark:border-neutral-800">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[10px] font-bold uppercase tracking-wide text-sky-600 dark:text-sky-400">Supply Line</p>
         <p className="text-[10px] text-neutral-400 dark:text-neutral-500">
-          <span className="text-sm font-extrabold tabular-nums text-sky-600 dark:text-sky-400">{formatDistance(distanceM)}</span> straight-line
+          <span className="text-sm font-extrabold tabular-nums text-sky-600 dark:text-sky-400">{formatDistance(ready ? ready.hoseLengthM : distanceM)}</span>{' '}
+          {routed ? 'by road' : ready ? 'estimated' : 'straight-line'}
         </p>
       </div>
 
@@ -214,13 +223,18 @@ function SupplyEstimate({ supply, onViewHydrant }: { supply: FireHydrantCandidat
         <EstimateTile
           icon={<MdFireTruck className="h-4 w-4" />}
           label="Fire trucks"
-          value={ready ? String(estimate.fireTrucks) : null}
+          value={ready ? String(ready.fireTrucks) : null}
+          detail={ready
+            ? `${ready.trucks.engineAtFire} at fire · ${ready.trucks.pumperAtHydrant} at hydrant · ${ready.trucks.relayPumpers} relay`
+            : undefined}
         />
         <EstimateTile
           icon={<MdWaterDrop className="h-4 w-4" />}
           label="Hose sections"
-          value={ready ? String(estimate.hoseSections) : null}
-          detail={ready ? `${formatDistance(estimate.hoseLengthM)} of hose` : undefined}
+          value={ready ? String(ready.hoseSections) : null}
+          detail={ready
+            ? ready.hose.sections.filter((size) => size.count > 0).map((size) => `${size.count} × ${size.lengthFt} ft`).join(' · ')
+            : undefined}
         />
       </div>
 

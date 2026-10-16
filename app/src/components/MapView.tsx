@@ -208,6 +208,12 @@ export interface FireOverlay {
     lat: number;
     lng: number;
     label: string;
+
+    /*
+     * Routed line as [lng, lat] points, hydrant
+     * first. Null: draw a straight line.
+     */
+    path: [number, number][] | null;
   } | null;
 }
 
