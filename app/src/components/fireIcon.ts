@@ -15,3 +15,8 @@ export const FIRE_RADIUS_FILL_OPACITY = 0.1;
 export const FIRE_RADIUS_LINE_DASH = [2, 1.5];
 export const SUPPLY_LINE_DASH = [1.5, 1.2];
 
+
+// Where each supply-line truck badge hangs off its point: the pumper just
+// below the hydrant pin (which stands above its point), relays centred on the
+// hose, and the engine below the fire pin (see .fire-truck-engine).
+export const TRUCK_ANCHOR = { pumper: 'top', relay: 'center', engine: 'top' } as const;

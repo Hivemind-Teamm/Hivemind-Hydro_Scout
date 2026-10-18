@@ -14,6 +14,11 @@ export interface SupplyLine {
    * route arrives or when routing failed — draw a straight line then.
    */
   path: [number, number][] | null;
+  /**
+   * `loading` while the route is looked up, `failed` when no routing service
+   * answered. Either way the estimate is the straight-line fallback.
+   */
+  routing: 'loading' | 'routed' | 'failed';
 }
 
 /**
@@ -58,6 +63,7 @@ export function useSupplyLine(
   const current = key !== null && fetched?.key === key ? fetched : null;
   const route = current?.route ?? null;
   const failed = current !== null && current.route === null;
+  const routing = current === null ? 'loading' : failed ? 'failed' : 'routed';
 
   // Routing fails when the connection drops, which is likely at a fire scene:
   // look the route up again once the connection is back.
@@ -74,5 +80,6 @@ export function useSupplyLine(
       FIRE_RESPONSE_CONFIG,
     ),
     path: route?.path ?? null,
-  }), [straightLineM, route]);
+    routing,
+  }), [straightLineM, route, routing]);
 }

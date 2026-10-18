@@ -1,11 +1,16 @@
 'use client';
 
-import { FiAlertTriangle, FiChevronDown, FiInfo, FiMove, FiX } from 'react-icons/fi';
+import { Fragment } from 'react';
+import { FiAlertTriangle, FiChevronDown, FiChevronRight, FiInfo, FiMove, FiX } from 'react-icons/fi';
 import { MdCenterFocusStrong, MdFireTruck, MdLocalFireDepartment, MdWaterDrop } from 'react-icons/md';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
 import { formatDistance } from '@/lib/haversine';
 import type { FireHydrantCandidate } from '@/lib/fire-response';
+import { supplyStages } from '@/lib/supply-layout';
 import type { SupplyLineEstimate } from '@/lib/supply-line';
+import type { SupplyLine } from '@/lib/use-supply-line';
+
+type ReadyEstimate = Extract<SupplyLineEstimate, { status: 'ready' }>;
 
 interface FireResponsePanelProps {
   lat: number;
@@ -21,6 +26,8 @@ interface FireResponsePanelProps {
   supply: FireHydrantCandidate | null;
   /** Hose and truck estimate for that supply line. */
   estimate: SupplyLineEstimate | null;
+  /** Whether the hose route has been looked up yet. */
+  routing: SupplyLine['routing'];
   /** Hydrant feed still loading — the list isn't meaningful yet. */
   loading: boolean;
   maxHeight: string;
@@ -34,7 +41,7 @@ interface FireResponsePanelProps {
 }
 
 export default function FireResponsePanel({
-  lat, lng, address, radiusM, candidates, nearestOutside, supply, estimate, loading, maxHeight,
+  lat, lng, address, radiusM, candidates, nearestOutside, supply, estimate, routing, loading, maxHeight,
   onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize,
 }: FireResponsePanelProps) {
   const operationalCount = candidates.filter((c) => c.hydrant.status === 'operational').length;
@@ -46,10 +53,7 @@ export default function FireResponsePanel({
       style={{ maxHeight }}
     >
       {/* ── Header ── */}
-      <div
-        className="flex shrink-0 items-start gap-2.5 px-3.5 py-3 text-white"
-        style={{ background: 'linear-gradient(135deg, #e0353b 0%, #f97316 100%)' }}
-      >
+      <div className="flex shrink-0 items-start gap-2.5 bg-[#e0353b] px-3.5 py-3 text-white">
         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20">
           <MdLocalFireDepartment className="h-5 w-5" />
         </span>
@@ -78,24 +82,23 @@ export default function FireResponsePanel({
 
       {/* ── Scrollable body ── */}
       <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {/* Summary */}
-        <div className="grid grid-cols-3 divide-x divide-neutral-100 border-b border-neutral-100 dark:divide-neutral-800 dark:border-neutral-800">
-          <Stat value={loading ? '…' : String(candidates.length)} label="In radius" />
-          <Stat value={loading ? '…' : String(operationalCount)} label="Operational" accent={operationalCount > 0 ? STATUS_META.operational.color : undefined} />
-          <Stat value={radiusLabel} label="Radius" />
-        </div>
-
-        {supply && <SupplyEstimate supply={supply} estimate={estimate} onViewHydrant={onViewHydrant} />}
+        {supply && <SupplyEstimate supply={supply} estimate={estimate} routing={routing} onViewHydrant={onViewHydrant} />}
 
         {/* Hydrant list */}
-        <div className="px-3.5 pb-1 pt-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
-            Hydrants within {radiusLabel}
-          </p>
-          {candidates.length > 1 && (
-            <p className="mt-0.5 text-[10px] text-neutral-400 dark:text-neutral-500">Tap one to run the supply line from it.</p>
+        <div className="flex items-baseline justify-between gap-2 px-3.5 pb-1 pt-3">
+          <SectionLabel>Hydrants within {radiusLabel}</SectionLabel>
+          {!loading && candidates.length > 0 && (
+            <p className="shrink-0 text-[10px] text-neutral-400 dark:text-neutral-500">
+              {candidates.length} in range ·{' '}
+              <span className="font-semibold" style={operationalCount > 0 ? { color: STATUS_META.operational.color } : undefined}>
+                {operationalCount} operational
+              </span>
+            </p>
           )}
         </div>
+        {candidates.length > 1 && (
+          <p className="px-3.5 pb-1 text-[10px] text-neutral-400 dark:text-neutral-500">Tap one to run the supply line from it.</p>
+        )}
 
         {loading ? (
           <p className="px-3.5 py-3 text-xs italic text-neutral-400 dark:text-neutral-500">Loading hydrants…</p>
@@ -115,7 +118,7 @@ export default function FireResponsePanel({
             )}
           </div>
         ) : (
-          <ul className="pb-1">
+          <ul className="pb-1.5">
             {candidates.map((c, index) => {
               const meta = STATUS_META[c.hydrant.status];
               const selected = supply?.hydrant.id === c.hydrant.id;
@@ -175,9 +178,10 @@ export default function FireResponsePanel({
 
 /* ---------------------------------------------------------------- */
 
-function SupplyEstimate({ supply, estimate, onViewHydrant }: {
+function SupplyEstimate({ supply, estimate, routing, onViewHydrant }: {
   supply: FireHydrantCandidate;
   estimate: SupplyLineEstimate | null;
+  routing: SupplyLine['routing'];
   onViewHydrant: (h: Hydrant) => void;
 }) {
   const { hydrant, distanceM } = supply;
@@ -187,20 +191,52 @@ function SupplyEstimate({ supply, estimate, onViewHydrant }: {
   const routed = ready !== null && ready.distance.source !== 'straight-line';
 
   return (
-    <div className="border-b border-neutral-100 px-3.5 py-3 dark:border-neutral-800">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-sky-600 dark:text-sky-400">Supply Line</p>
+    <div className="border-b border-neutral-100 px-3.5 pb-3.5 pt-3 dark:border-neutral-800">
+      <div className="flex items-baseline justify-between">
+        <SectionLabel>Supply line</SectionLabel>
         <p className="text-[10px] text-neutral-400 dark:text-neutral-500">
-          <span className="text-sm font-extrabold tabular-nums text-sky-600 dark:text-sky-400">{formatDistance(ready ? ready.hoseLengthM : distanceM)}</span>{' '}
-          {routed ? 'by road' : ready ? 'estimated' : 'straight-line'}
+          <span className="text-sm font-extrabold tabular-nums text-sky-600 dark:text-sky-400">
+            {ready && !routed && '~'}{formatDistance(ready ? ready.hoseLengthM : distanceM)}
+          </span>{' '}
+          {routed ? 'routed' : ready ? 'estimated' : 'straight-line'}
         </p>
       </div>
 
+      {ready && <SupplyDiagram estimate={ready} estimated={!routed} />}
+
+      <div className="mt-3 grid grid-cols-2 divide-x divide-neutral-100 dark:divide-neutral-800">
+        <Count
+          label="Fire trucks"
+          value={ready?.fireTrucks}
+          detail={ready && [
+            `${ready.trucks.pumperAtHydrant} at hydrant`,
+            `${ready.trucks.relayPumpers} relay`,
+            `${ready.trucks.engineAtFire} at fire`,
+          ]}
+        />
+        <Count
+          label="Hose sections"
+          value={ready?.hoseSections}
+          detail={ready && ready.hose.sections.filter((size) => size.count > 0).map((size) => `${size.count} × ${size.lengthFt} ft`)}
+          inset
+        />
+      </div>
+
+      {ready && !routed && (
+        <Note tone={routing === 'failed' ? 'warn' : 'muted'}>
+          {routing === 'failed'
+            ? 'No route found. Counts are estimated from the straight-line distance.'
+            : 'Finding the hose route. Counts may change.'}
+        </Note>
+      )}
+      {!ready && <Note tone="muted">Truck and hose counts will appear once the calculation data is configured.</Note>}
+
       <button
         onClick={() => onViewHydrant(hydrant)}
-        className="group mb-2.5 flex w-full items-center gap-2 rounded-lg bg-neutral-50 px-2.5 py-2 text-left hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+        className="group mt-3 flex w-full items-center gap-2.5 rounded-lg bg-neutral-50 px-2.5 py-2 text-left transition-colors hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700"
         title="Open hydrant details"
       >
+        <MdWaterDrop className="h-4 w-4 shrink-0 text-sky-500" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-xs font-bold text-neutral-800 dark:text-neutral-100">{hydrant.name}</span>
           <span className="flex items-center gap-1.5 whitespace-nowrap text-[10px]">
@@ -209,59 +245,110 @@ function SupplyEstimate({ supply, estimate, onViewHydrant }: {
             <span className="min-w-0 truncate text-neutral-400 dark:text-neutral-500">· {hydrant.pressure} pressure</span>
           </span>
         </span>
-        <span className="shrink-0 text-[11px] font-semibold text-[#e0353b] group-hover:underline">Details →</span>
+        <FiChevronRight className="h-4 w-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5" />
       </button>
 
       {hydrant.status !== 'operational' && (
-        <p className="mb-2.5 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] leading-snug text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
-          <FiAlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+        <Note tone="warn" icon={<FiAlertTriangle className="mt-px h-3 w-3 shrink-0" />}>
           This hydrant is {meta.legendLabel.toLowerCase()} — it may not deliver enough water.
-        </p>
+        </Note>
       )}
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-2 gap-2">
-        <EstimateTile
-          icon={<MdFireTruck className="h-4 w-4" />}
-          label="Fire trucks"
-          value={ready ? String(ready.fireTrucks) : null}
-          detail={ready
-            ? `${ready.trucks.engineAtFire} at fire · ${ready.trucks.pumperAtHydrant} at hydrant · ${ready.trucks.relayPumpers} relay`
-            : undefined}
-        />
-        <EstimateTile
-          icon={<MdWaterDrop className="h-4 w-4" />}
-          label="Hose sections"
-          value={ready ? String(ready.hoseSections) : null}
-          detail={ready
-            ? ready.hose.sections.filter((size) => size.count > 0).map((size) => `${size.count} × ${size.lengthFt} ft`).join(' · ')
-            : undefined}
-        />
+/**
+ * The supply line drawn left to right: hydrant and its pumper, each hose
+ * stage (to scale) with a relay pumper between stages, then the engine at the
+ * fire. Dashed hose means the length is still a straight-line estimate.
+ */
+function SupplyDiagram({ estimate, estimated }: { estimate: ReadyEstimate; estimated: boolean }) {
+  const stages = supplyStages(estimate);
+  const relays = estimate.trucks.relayPumpers;
+  const summary = `Hydrant, ${estimate.fireTrucks} fire trucks and ${stages.length} hose ${stages.length === 1 ? 'stage' : 'stages'} to the fire`;
+  // Past four stages one node per relay no longer fits the panel: show the
+  // relays as one counted truck in the middle of the line instead.
+  const collapsed = stages.length > 4;
+
+  return (
+    <div className="mt-2.5" role="img" aria-label={summary}>
+      <div className={`flex items-center ${collapsed ? '' : 'pb-4'}`}>
+        <DiagramNode kind="hydrant" />
+        <DiagramNode kind="truck" />
+        {collapsed ? (
+          <>
+            <Hose estimated={estimated} />
+            <DiagramNode kind="truck" />
+            <span className="ml-0.5 text-[10px] font-bold tabular-nums text-[#e0353b]">×{relays}</span>
+            <Hose estimated={estimated} />
+          </>
+        ) : stages.map((meters, i) => (
+          <Fragment key={i}>
+            {i > 0 && <DiagramNode kind="truck" />}
+            <Hose estimated={estimated} meters={meters} />
+          </Fragment>
+        ))}
+        <DiagramNode kind="truck" />
+        <DiagramNode kind="fire" />
       </div>
-
-      {!ready && (
-        <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-snug text-neutral-400 dark:text-neutral-500">
-          <FiInfo className="mt-px h-3 w-3 shrink-0" />
-          Truck and hose counts will appear once the calculation data is configured.
+      {collapsed && (
+        <p className="mt-1 text-center text-[9px] font-semibold text-neutral-400 dark:text-neutral-500">
+          {relays} relay pumpers · {stages.length} stages of up to {formatDistance(estimate.stageLengthM)}
         </p>
       )}
     </div>
   );
 }
 
-function EstimateTile({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string | null; detail?: string }) {
+/** One hose stage, as wide as its share of the line, labelled with its length when given. */
+function Hose({ estimated, meters }: { estimated: boolean; meters?: number }) {
   return (
-    <div className="rounded-lg border border-neutral-100 px-2.5 py-2 dark:border-neutral-800">
-      <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
-        {icon} {label}
-      </p>
-      {value !== null ? (
+    <span className="relative mx-1 min-w-4" style={{ flex: `${Math.max(meters ?? 1, 1)} 1 0` }}>
+      <span className={`block w-full ${estimated ? 'border-t-[3px] border-dashed border-sky-500' : 'h-[3px] rounded-full bg-sky-500'}`} />
+      {meters !== undefined && (
+        <span className="absolute left-1/2 top-1.5 -translate-x-1/2 whitespace-nowrap text-[9px] font-semibold tabular-nums text-neutral-400 dark:text-neutral-500">
+          {formatDistance(meters)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function DiagramNode({ kind }: { kind: 'hydrant' | 'truck' | 'fire' }) {
+  const look = {
+    hydrant: { className: 'bg-sky-500', icon: <MdWaterDrop className="h-3 w-3" /> },
+    truck: { className: 'bg-[#e0353b]', icon: <MdFireTruck className="h-3 w-3" /> },
+    fire: { className: 'bg-orange-500', icon: <MdLocalFireDepartment className="h-3 w-3" /> },
+  }[kind];
+  return (
+    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ring-2 ring-white dark:ring-neutral-900 ${look.className}`}>
+      {look.icon}
+    </span>
+  );
+}
+
+function Count({ label, value, detail, inset = false }: { label: string; value: number | undefined; detail: string[] | null | undefined; inset?: boolean }) {
+  return (
+    <div className={inset ? 'pl-3' : 'pr-3'}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{label}</p>
+      {value !== undefined ? (
         <>
-          <p className="mt-0.5 text-lg font-extrabold leading-tight tabular-nums text-neutral-800 dark:text-neutral-100">{value}</p>
-          {detail && <p className="text-[10px] text-neutral-400 dark:text-neutral-500">{detail}</p>}
+          <p className="text-xl font-extrabold leading-tight tabular-nums text-neutral-800 dark:text-neutral-100">{value}</p>
+          {detail && (
+            // Wraps between items, never inside one.
+            <p className="text-[10px] leading-snug text-neutral-500 dark:text-neutral-400">
+              {detail.map((item, i) => (
+                <Fragment key={item}>
+                  {i > 0 && ' · '}
+                  <span className="whitespace-nowrap">{item}</span>
+                </Fragment>
+              ))}
+            </p>
+          )}
         </>
       ) : (
         <>
-          <p className="mt-0.5 text-lg font-extrabold leading-tight text-neutral-300 dark:text-neutral-600">—</p>
+          <p className="text-xl font-extrabold leading-tight text-neutral-300 dark:text-neutral-600">—</p>
           <span className="inline-block rounded-full bg-neutral-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
             Pending data
           </span>
@@ -271,15 +358,19 @@ function EstimateTile({ icon, label, value, detail }: { icon: React.ReactNode; l
   );
 }
 
-function Stat({ value, label, accent }: { value: string; label: string; accent?: string }) {
+function Note({ tone, icon, children }: { tone: 'muted' | 'warn'; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="px-2 py-2 text-center">
-      <p className="text-base font-extrabold leading-tight tabular-nums text-neutral-800 dark:text-neutral-100" style={accent ? { color: accent } : undefined}>
-        {value}
-      </p>
-      <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{label}</p>
-    </div>
+    <p className={`mt-2.5 flex items-start gap-1.5 text-[10px] leading-snug ${
+      tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-400 dark:text-neutral-500'
+    }`}>
+      {icon ?? <FiInfo className="mt-px h-3 w-3 shrink-0" />}
+      {children}
+    </p>
   );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{children}</p>;
 }
 
 function HeaderButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {

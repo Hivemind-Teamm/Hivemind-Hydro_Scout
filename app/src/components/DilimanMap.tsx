@@ -11,10 +11,11 @@ import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER, OWN_AOR_PIN_FILTER, OTHER_AOR_PIN_FILTER } from './hydrantIcon';
 import {
   FLAME_PATH, FIRE_COLOR, SUPPLY_LINE_COLOR,
-  FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH,
+  FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH, TRUCK_ANCHOR,
 } from './fireIcon';
+import FireTruckBadge from './FireTruckBadge';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
-import { circleRing, pathMidpoint } from '@/lib/fire-response';
+import { circleRing } from '@/lib/fire-response';
 import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 const clusterLevel = (zoom: number) => Math.round(zoom);
@@ -709,7 +710,6 @@ export default function DilimanMap({
     },
     [supplyCoords],
   );
-  const supplyLabelAt = useMemo(() => supplyCoords && pathMidpoint(supplyCoords), [supplyCoords]);
 
   const map = mapInstance;
 
@@ -817,16 +817,29 @@ export default function DilimanMap({
           </Marker>
         )}
 
-        {fire && supply && supplyLabelAt && (
+        {fire && supply && (
           <Marker
-            longitude={supplyLabelAt[0]}
-            latitude={supplyLabelAt[1]}
+            longitude={supply.labelAt[0]}
+            latitude={supply.labelAt[1]}
             anchor="center"
             style={{ pointerEvents: 'none' }}
           >
             <div className="fire-supply-label">{supply.label}</div>
           </Marker>
         )}
+
+        {/* Trucks on the supply line, under the fire pin. */}
+        {fire && supply?.trucks.map((truck, i) => (
+          <Marker
+            key={`${truck.role}-${i}`}
+            longitude={truck.at[0]}
+            latitude={truck.at[1]}
+            anchor={TRUCK_ANCHOR[truck.role]}
+            style={{ pointerEvents: 'none' }}
+          >
+            <FireTruckBadge role={truck.role} count={truck.count} />
+          </Marker>
+        ))}
 
         {fire && (
           <Marker

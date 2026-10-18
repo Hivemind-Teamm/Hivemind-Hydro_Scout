@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { SupplyTruck } from '@/lib/supply-layout';
 
 import dynamic from 'next/dynamic';
 
@@ -214,6 +215,15 @@ export interface FireOverlay {
      * first. Null: draw a straight line.
      */
     path: [number, number][] | null;
+
+    /* [lng, lat] the distance label sits at. */
+    labelAt: [number, number];
+
+    /*
+     * Fire trucks along the line, hydrant end
+     * first. Empty while the counts are pending.
+     */
+    trucks: SupplyTruck[];
   } | null;
 }
 

@@ -490,6 +490,41 @@ body {
   pointer-events: none;
 }
 
+/* Fire trucks on the supply line (FireTruckBadge). They never take taps, so
+   a tap on one in fire-pin mode still places the fire. */
+.fire-truck {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e0353b;
+  border: 2px solid #ffffff;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.fire-truck svg { width: 14px; height: 14px; }
+.fire-truck-pumper { transform: translateY(3px); }
+.fire-truck-engine { transform: translateY(17px); }
+/* Trucks drawn as one badge (a relay right by the fire, with the engine). */
+.fire-truck-count {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #e0353b;
+  font: 800 10px/15px Arial, sans-serif;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fire-pin-pulse, .fire-supply-ring { animation: none; opacity: 0; }
 }

@@ -22,10 +22,11 @@ import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER, OWN_AOR_PIN_FILTER, OTHER_AOR_PIN_FILTER } from './hydrantIcon';
 import {
   FLAME_PATH, FIRE_COLOR, SUPPLY_LINE_COLOR,
-  FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH,
+  FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH, TRUCK_ANCHOR,
 } from './fireIcon';
+import FireTruckBadge from './FireTruckBadge';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
-import { circleRing, pathMidpoint } from '@/lib/fire-response';
+import { circleRing } from '@/lib/fire-response';
 import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 if (typeof window !== 'undefined') {
@@ -433,7 +434,7 @@ const FIRE_SUPPLY_LINE = 'fire-supply-line';
 const BUILDINGS_SOURCE = 'openmaptiles';
 const BUILDINGS_LAYER = '3d-buildings';
 
-const SUPPLY_LABEL_STYLE: CSSProperties = { pointerEvents: 'none' };
+const SUPPLY_MARKER_STYLE: CSSProperties = { pointerEvents: 'none' };
 
 const DASH_SEQUENCE = [
   [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5],
@@ -757,7 +758,6 @@ export default function MapLibreMap({
     }),
     [supplyCoords],
   );
-  const supplyLabelAt = useMemo(() => supplyCoords && pathMidpoint(supplyCoords), [supplyCoords]);
 
   useEffect(() => {
     (mapInstance?.getSource(FIRE_RADIUS_SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(fireRadiusData);
@@ -964,17 +964,31 @@ export default function MapLibreMap({
         </MapMarker>
       )}
 
-      {map && fire && supply && supplyLabelAt && (
+      {map && fire && supply && (
         <MapMarker
           map={map}
-          longitude={supplyLabelAt[0]}
-          latitude={supplyLabelAt[1]}
+          longitude={supply.labelAt[0]}
+          latitude={supply.labelAt[1]}
           anchor="center"
-          style={SUPPLY_LABEL_STYLE}
+          style={SUPPLY_MARKER_STYLE}
         >
           <div className="fire-supply-label">{supply.label}</div>
         </MapMarker>
       )}
+
+      {/* Trucks on the supply line, under the fire pin. */}
+      {map && fire && supply?.trucks.map((truck, i) => (
+        <MapMarker
+          key={`${truck.role}-${i}`}
+          map={map}
+          longitude={truck.at[0]}
+          latitude={truck.at[1]}
+          anchor={TRUCK_ANCHOR[truck.role]}
+          style={SUPPLY_MARKER_STYLE}
+        >
+          <FireTruckBadge role={truck.role} count={truck.count} />
+        </MapMarker>
+      ))}
 
       {map && fire && (
         <MapMarker

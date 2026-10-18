@@ -93,24 +93,3 @@ export function circleRing(lat: number, lng: number, radiusM: number, steps = 72
   }
   return ring;
 }
-
-/**
- * The `[lng, lat]` point halfway along a path by distance, for placing a
- * label on a line that bends.
- */
-export function pathMidpoint(path: [number, number][]): [number, number] {
-  const lengths = path.slice(1).map(([lng, lat], i) => haversineM(path[i][1], path[i][0], lat, lng));
-  let remaining = lengths.reduce((sum, length) => sum + length, 0) / 2;
-
-  for (let i = 0; i < lengths.length; i++) {
-    if (remaining <= lengths[i]) {
-      const t = lengths[i] > 0 ? remaining / lengths[i] : 0;
-      return [
-        path[i][0] + (path[i + 1][0] - path[i][0]) * t,
-        path[i][1] + (path[i + 1][1] - path[i][1]) * t,
-      ];
-    }
-    remaining -= lengths[i];
-  }
-  return path[path.length - 1];
-}

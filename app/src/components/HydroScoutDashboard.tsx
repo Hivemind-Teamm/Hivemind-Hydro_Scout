@@ -44,6 +44,7 @@ import {
   rankHydrantsNearFire,
 } from '@/lib/fire-response';
 import { useSupplyLine } from '@/lib/use-supply-line';
+import { layoutSupplyLine } from '@/lib/supply-layout';
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
 const OTW_ROUTE_KEY    = 'hydroscout_otw_route';
@@ -577,18 +578,34 @@ export default function HydroScoutDashboard() {
   const supplyLine = useSupplyLine(fire, fireSupply);
   const fireOverlay = useMemo<FireOverlay | null>(() => {
     if (fireLat === undefined || fireLng === undefined || !fireRanking) return null;
+    let supply: FireOverlay['supply'] = null;
+    if (fireSupply) {
+      const ready = supplyLine?.estimate.status === 'ready' ? supplyLine.estimate : null;
+      const path = supplyLine?.path ?? null;
+      // Trucks and label sit on the routed line, or on the straight stand-in.
+      const { labelAt, trucks } = layoutSupplyLine(
+        path ?? [[fireSupply.hydrant.lng, fireSupply.hydrant.lat], [fireLng, fireLat]],
+        ready,
+      );
+      supply = {
+        hydrantId: fireSupply.hydrant.id,
+        lat: fireSupply.hydrant.lat,
+        lng: fireSupply.hydrant.lng,
+        // `~` marks a straight-line estimate drawn before (or without) a route.
+        label: ready
+          ? `${ready.distance.source === 'straight-line' ? '~' : ''}${formatDistance(ready.hoseLengthM)}`
+          : formatDistance(fireSupply.distanceM),
+        path,
+        labelAt,
+        trucks,
+      };
+    }
     return {
       lat: fireLat,
       lng: fireLng,
       radiusM: FIRE_HYDRANT_RADIUS_M,
       zoneIds: new Set(fireRanking.inRadius.map((c) => c.hydrant.id)),
-      supply: fireSupply && {
-        hydrantId: fireSupply.hydrant.id,
-        lat: fireSupply.hydrant.lat,
-        lng: fireSupply.hydrant.lng,
-        label: formatDistance(supplyLine?.estimate.status === 'ready' ? supplyLine.estimate.hoseLengthM : fireSupply.distanceM),
-        path: supplyLine?.path ?? null,
-      },
+      supply,
     };
   }, [fireLat, fireLng, fireRanking, fireSupply, supplyLine]);
 
@@ -1073,6 +1090,7 @@ export default function HydroScoutDashboard() {
         nearestOutside={fireRanking.nearestOutside}
         supply={fireSupply}
         estimate={supplyLine?.estimate ?? null}
+        routing={supplyLine?.routing ?? 'loading'}
         loading={loading}
         maxHeight={isMobile ? '42dvh' : 'calc(100dvh - 24rem)'}
         onSelectSupply={setFireSupplyChoice}
