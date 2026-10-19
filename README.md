@@ -8,6 +8,21 @@ For live station reporting and stale-icon checks, see the
 For consent setup, withdrawal and browser background-reporting limits, see
 [location consent instructions](docs/location-consent.md).
 
+Admins can open **Admin Dashboard > Chapter 3 Build Version Log** to view the
+running version and record a frozen production build with optional notes. Each
+record retains the build ID, source commit, source working-tree status, build
+time, server-confirmed freeze time (displayed in Philippine time), and admin UID.
+Records are shared through the existing Firestore database and cannot be edited
+or deleted through the app. A freeze records a baseline; it does not archive
+the deployment or snapshot live data. Build details are admin attestations,
+not cryptographic verification of the deployed artifact.
+
+Deploy the updated `firestore.rules` with the application before using this
+feature. A production build requires the Git checkout or
+`VERCEL_GIT_COMMIT_SHA` to identify its source; development previews cannot
+record freezes. The first entry is created when an admin selects
+**Record frozen build**; no historical freeze date is assumed.
+
 First, run the development server:
 
 ```bash

@@ -26,6 +26,7 @@ import {
 import { useHydrants, createHydrant } from '../data/store';
 import { type HydrantStatus } from '../data/hydrants';
 import PillBadge from './PillBadge';
+import BuildVersionLog from './BuildVersionLog';
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
@@ -90,6 +91,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
 
       {/* ── Body — grows naturally, window scrolls ── */}
       <div className="flex flex-col gap-4 p-3 md:gap-5 md:p-6">
+        <BuildVersionLog adminNames={Object.fromEntries(users.map(account => [account.uid, account.displayName]))} />
         <ManageUsersCard
           users={users}
           loading={loading}
