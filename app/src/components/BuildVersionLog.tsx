@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '@/lib/auth-context';
 import { db } from '@/lib/firebase';
-import { BUILD_ENVIRONMENTS, isDeploymentUrl, type BuildEnvironment } from '@/lib/build-version';
+import { isDeploymentUrl } from '@/lib/build-version';
 
 const build = {
   version: process.env.NEXT_PUBLIC_BUILD_VERSION ?? '',
@@ -26,7 +26,6 @@ type FrozenBuild = {
   notes: string;
   sourceState: string;
   pending: boolean;
-  environment?: BuildEnvironment;
   deploymentUrl?: string;
   releaseSummary?: string;
 };
@@ -47,7 +46,6 @@ export default function BuildVersionLog({ adminNames = {} }: { adminNames?: Reco
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [environment, setEnvironment] = useState<BuildEnvironment | ''>('');
   const [deploymentUrl, setDeploymentUrl] = useState(() => typeof window === 'undefined' ? '' : window.location.origin);
   const [releaseSummary, setReleaseSummary] = useState('');
 
@@ -77,8 +75,8 @@ export default function BuildVersionLog({ adminNames = {} }: { adminNames?: Reco
   async function freeze(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (disabled || !user) return;
-    if (!BUILD_ENVIRONMENTS.some(value => value === environment) || !isDeploymentUrl(deploymentUrl.trim()) || !releaseSummary.trim()) {
-      setSaveError('Select an environment, enter a valid HTTP or HTTPS deployment link, and add a release summary.');
+    if (!isDeploymentUrl(deploymentUrl.trim()) || !releaseSummary.trim()) {
+      setSaveError('Enter a valid HTTP or HTTPS deployment link and add a release summary.');
       return;
     }
     setSaving(true);
@@ -94,7 +92,6 @@ export default function BuildVersionLog({ adminNames = {} }: { adminNames?: Reco
         frozenAt: serverTimestamp(),
         frozenBy: user.uid,
         notes: notes.trim(),
-        environment,
         deploymentUrl: deploymentUrl.trim(),
         releaseSummary: releaseSummary.trim(),
       });
@@ -122,15 +119,7 @@ export default function BuildVersionLog({ adminNames = {} }: { adminNames?: Reco
         </dl>
         {build.sourceState !== 'clean' && <p className="text-xs text-amber-700 dark:text-amber-400">{build.sourceState === 'modified' ? 'This build includes uncommitted source changes.' : 'Source working-tree status is unavailable.'} This status will be included in the freeze record.</p>}
         <form onSubmit={freeze} className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="block text-sm font-bold" htmlFor="build-environment">Environment</label>
-              <select id="build-environment" required disabled={disabled} value={environment} onChange={event => setEnvironment(event.target.value as BuildEnvironment | '')}
-                className="w-full rounded-lg border border-neutral-300 p-3 text-sm disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-950">
-                <option value="">Select environment</option>
-                {BUILD_ENVIRONMENTS.map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}
-              </select>
-            </div>
+          <div>
             <div className="space-y-2">
               <label className="block text-sm font-bold" htmlFor="build-deployment-url">Deployment link</label>
               <input id="build-deployment-url" type="url" required maxLength={2048} disabled={disabled} value={deploymentUrl} onChange={event => setDeploymentUrl(event.target.value)}
@@ -165,11 +154,11 @@ export default function BuildVersionLog({ adminNames = {} }: { adminNames?: Reco
               <table style={{ minWidth: 1100 }} className="w-full text-left text-sm">
                 <caption className="sr-only">Frozen build history; all times in Asia/Manila</caption>
                 <thead className="border-b border-neutral-200 text-xs text-neutral-500 dark:border-neutral-700"><tr>
-                  <th scope="col" className="p-3">Version / Build</th><th scope="col" className="p-3">Environment / Deployment</th><th scope="col" className="p-3">Release summary</th><th scope="col" className="p-3">Frozen at (PH)</th><th scope="col" className="p-3">Recorded by</th><th scope="col" className="p-3">Notes</th>
+                  <th scope="col" className="p-3">Version / Build</th><th scope="col" className="p-3">Deployment link</th><th scope="col" className="p-3">Release summary</th><th scope="col" className="p-3">Frozen at (PH)</th><th scope="col" className="p-3">Recorded by</th><th scope="col" className="p-3">Notes</th>
                 </tr></thead>
                 <tbody>{records.map(record => <tr key={record.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
                   <td className="p-3"><p className="font-bold">{record.version}{record.id === build.id ? ' (running build)' : ''}</p><p className="mt-1 break-all font-mono text-xs">{record.id}</p><p className="mt-1 break-all font-mono text-xs text-neutral-500">Commit: {record.commit}</p><p className="mt-1 text-xs text-neutral-500">Built: {dateLabel(record.builtAt.toDate())}</p>{record.sourceState !== 'clean' && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">{record.sourceState === 'modified' ? 'Includes uncommitted changes' : 'Source status unknown'}</p>}</td>
-                  <td className="max-w-64 break-words p-3"><p className="capitalize">{record.environment || 'Not recorded'}</p>{record.deploymentUrl && isDeploymentUrl(record.deploymentUrl) ? <a href={record.deploymentUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block break-all text-[#e0353b] underline">{record.deploymentUrl}</a> : <p className="mt-1 text-xs text-neutral-500">No deployment link recorded</p>}</td>
+                  <td className="max-w-64 break-words p-3">{record.deploymentUrl && isDeploymentUrl(record.deploymentUrl) ? <a href={record.deploymentUrl} target="_blank" rel="noopener noreferrer" className="block break-all text-[#e0353b] underline">{record.deploymentUrl}</a> : <p className="text-xs text-neutral-500">No deployment link recorded</p>}</td>
                   <td className="min-w-48 whitespace-pre-wrap break-words p-3">{record.releaseSummary || 'Not recorded'}</td>
                   <td className="whitespace-nowrap p-3">{record.pending ? 'Awaiting server confirmation' : dateLabel(record.frozenAt?.toDate() ?? null)}</td>
                   <td className="max-w-48 break-all p-3"><p>{adminNames[record.frozenBy] || 'Admin'}</p><p className="mt-1 font-mono text-xs text-neutral-500">{record.frozenBy}</p></td>

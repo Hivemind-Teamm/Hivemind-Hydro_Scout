@@ -1,6 +1,3 @@
-export const BUILD_ENVIRONMENTS = ['production', 'staging', 'testing'] as const;
-export type BuildEnvironment = typeof BUILD_ENVIRONMENTS[number];
-
 export function isDeploymentUrl(value: string): boolean {
   if (!value || value.length > 2048 || /\s/.test(value)) return false;
   try {
