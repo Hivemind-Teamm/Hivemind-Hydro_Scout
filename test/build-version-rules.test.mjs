@@ -22,6 +22,14 @@ try {
   });
   const ref = (uid = 'admin', buildId = id) => db(uid).doc(`buildVersions/${buildId}`);
   await assertSucceeds(ref().set(payload()));
+  for (const environment of ['production', 'staging', 'testing']) {
+    const newId = randomUUID();
+    await assertSucceeds(ref('admin', newId).set({ ...payload(newId), environment,
+      deploymentUrl: 'https://hydro-scout.example.com/deployment/123', releaseSummary: 'Added build version history.\nImproved admin tools.',
+    }));
+    await assertFails(ref('admin', newId).update({ releaseSummary: 'Rewritten' }));
+    await assertFails(ref('admin', newId).delete());
+  }
   for (const uid of ['admin', 'second-admin']) {
     await assertSucceeds(ref(uid).get());
     await assertSucceeds(db(uid).collection('buildVersions').orderBy('frozenAt', 'desc').get());
@@ -42,6 +50,10 @@ try {
     { commit: 'unknown' }, { buildId: randomUUID() }, { frozenBy: 'second-admin' },
     { builtAt: Timestamp.fromMillis(Date.now() + 86400000) }, { builtAt: 'today' },
     { frozenAt: Timestamp.fromMillis(0) }, { notes: 'x'.repeat(1001) }, { notes: null }, { sourceState: 'invalid' }, { extra: true },
+    { environment: 'invalid' }, { environment: null }, { deploymentUrl: 'javascript:alert(1)' },
+    { deploymentUrl: 'https://user:password@example.com' }, { deploymentUrl: 'https://example.com/with space' },
+    { deploymentUrl: 'https://example.com/' + 'x'.repeat(2048) }, { deploymentUrl: 123 },
+    { releaseSummary: '' }, { releaseSummary: ' \n\t' }, { releaseSummary: 'x'.repeat(2001) }, { releaseSummary: null },
   ]) {
     const newId = randomUUID();
     await assertFails(ref('admin', newId).set({ ...payload(newId), ...patch }));

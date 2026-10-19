@@ -8,10 +8,14 @@ For live station reporting and stale-icon checks, see the
 For consent setup, withdrawal and browser background-reporting limits, see
 [location consent instructions](docs/location-consent.md).
 
-Admins can open **Admin Dashboard > Chapter 3 Build Version Log** to view the
+Admins can open **Admin Dashboard > Build Version Log** to view the
 running version and record a frozen production build with optional notes. Each
 record retains the build ID, source commit, source working-tree status, build
 time, server-confirmed freeze time (displayed in Philippine time), and admin UID.
+New records also include the selected environment (production, staging, or
+testing), deployment link, and release summary. The deployment link defaults
+to the current site; use a permanent deployment URL when available. Older
+records display missing details as "Not recorded" and remain unchanged.
 Records are shared through the existing Firestore database and cannot be edited
 or deleted through the app. A freeze records a baseline; it does not archive
 the deployment or snapshot live data. Build details are admin attestations,

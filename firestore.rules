@@ -182,13 +182,19 @@ service cloud.firestore {
       allow read, write: if isAuthorized() || isHead() || isAdmin();
     }
 
-    // ---------- immutable Chapter 3 build version log ----------
+    // ---------- immutable build version log ----------
     // buildVersions/{buildId}: chapter, version, commit, buildId, builtAt,
-    // frozenAt, frozenBy, notes, sourceState. Admin-only; no updates or deletes.
+    // frozenAt, frozenBy, notes, sourceState. Optional environment, deploymentUrl,
+    // releaseSummary support older clients/records. Admin-only; immutable.
     function isValidFrozenBuild(buildId) {
       let data = request.resource.data;
       return data.keys().hasAll(['chapter', 'version', 'commit', 'buildId', 'builtAt', 'frozenAt', 'frozenBy', 'notes', 'sourceState'])
-        && data.keys().hasOnly(['chapter', 'version', 'commit', 'buildId', 'builtAt', 'frozenAt', 'frozenBy', 'notes', 'sourceState'])
+        && data.keys().hasOnly(['chapter', 'version', 'commit', 'buildId', 'builtAt', 'frozenAt', 'frozenBy', 'notes', 'sourceState', 'environment', 'deploymentUrl', 'releaseSummary'])
+        && (!('environment' in data) || data.environment in ['production', 'staging', 'testing'])
+        && (!('deploymentUrl' in data) || (data.deploymentUrl is string && data.deploymentUrl.size() <= 2048
+          && data.deploymentUrl.matches('^https?://[A-Za-z0-9][A-Za-z0-9.:-]*([/?#][^[:space:]]*)?$')))
+        && (!('releaseSummary' in data) || (data.releaseSummary is string && data.releaseSummary.size() <= 2000
+          && data.releaseSummary.matches('(?s).*[^[:space:]].*')))
         && data.sourceState in ['clean', 'modified', 'unknown']
         && data.chapter is int && data.chapter == 3
         && data.version is string && data.version.size() > 0 && data.version.size() <= 64
