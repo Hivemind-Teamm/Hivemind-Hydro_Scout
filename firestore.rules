@@ -1,5 +1,5 @@
 rules_version = '2';
-// unitLocations/{stationId}: stationId, updatedBy, lat, lng, accuracy, updatedAt.
+// unitLocations/{uid}_{incidentId}: stationId, updatedBy, incidentId, location (GeoPoint), accuracy, updatedAt.
 // Temporary F1 contract: station accounts have accountType == 'station' and stationId.
 //
 // F1 Station Accounts + AOR:
@@ -18,7 +18,8 @@ service cloud.firestore {
 
     function userRole() {
       return isSignedIn()
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', null)
         : null;
     }
 
@@ -73,51 +74,91 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ---------- latest station positions ----------
+    // ---------- incident-linked substation positions ----------
 
-    function isAssignedStation(stationId) {
-      return isSignedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountType == 'station'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == stationId;
+    function isSubAdmin() {
+      return isSignedIn() && userRole() == 'sub_admin';
     }
 
-    function isValidUnitLocation(stationId) {
+    function isStationAccount() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('accountType', null) == 'station';
+    }
+
+    function isLocationOwner(locationId) {
+      return isSignedIn()
+        && locationId.matches('^' + request.auth.uid + '_[A-Za-z0-9_-]+$');
+    }
+
+    function incidentIdIsValid(incidentId) {
+      return incidentId is string
+        && incidentId.matches('^[A-Za-z0-9_-]+$');
+    }
+
+    function validIncidentLocation() {
       let data = request.resource.data;
-      return data.keys().hasAll([
-          'stationId',
-          'updatedBy',
-          'lat',
-          'lng',
-          'accuracy',
-          'updatedAt'
+      return incidentIdIsValid(data.incidentId)
+        && incidentIsActiveAndNearby(data.incidentId, data.location);
+    }
+
+    function incidentIsActiveAndNearby(incidentId, location) {
+      let incidentPath = /databases/$(database)/documents/incidents/$(incidentId);
+      return exists(incidentPath)
+        && get(incidentPath).data.get('status', null) == 'active'
+        && get(incidentPath).data.get('location', null) is latlng
+        && location.distance(get(incidentPath).data.location) <= 550;
+    }
+
+    function validUnitLocation(locationId) {
+      let data = request.resource.data;
+      return isSubAdmin()
+        && isStationAccount()
+        && isLocationOwner(locationId)
+        && data.keys().hasAll([
+          'stationId', 'updatedBy', 'incidentId',
+          'location', 'accuracy', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'stationId',
-          'updatedBy',
-          'lat',
-          'lng',
-          'accuracy',
-          'updatedAt'
+          'stationId', 'updatedBy', 'incidentId',
+          'location', 'accuracy', 'updatedAt'
         ])
-        && data.stationId is string && data.stationId.size() <= 128
+        && data.stationId is string
+        && data.stationId.size() > 0
+        && data.stationId.size() <= 128
         && data.stationId.matches('^[A-Za-z0-9_-]+$')
-        && data.stationId == stationId
-        && data.updatedBy is string && data.updatedBy.size() <= 128
+        && data.stationId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('stationId', null)
         && data.updatedBy == request.auth.uid
-        && data.lat is number && data.lat >= -90 && data.lat <= 90
-        && data.lng is number && data.lng >= -180 && data.lng <= 180
-        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
-        && data.updatedAt is timestamp && data.updatedAt == request.time;
+        && data.incidentId is string
+        && locationId == request.auth.uid + '_' + data.incidentId
+        && data.location is latlng
+        && data.accuracy is number
+        && data.accuracy >= 0
+        && data.accuracy <= 40075000
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time
+        && validIncidentLocation();
     }
 
-    match /unitLocations/{stationId} {
-      // All signed-in map roles can view the latest station reports.
-      allow read: if isAnyRole();
-      allow create, update: if isAssignedStation(stationId)
-        && isValidUnitLocation(stationId);
-      allow delete: if isAdmin();
+    match /incidents/{incidentId} {
+      // Incident provisioning remains restricted to trusted server processes.
+      allow read, write: if false;
     }
 
+    match /unitLocations/{locationId} {
+      allow read: if isStationAccount() || isAdmin();
+
+      allow create: if validUnitLocation(locationId);
+
+      allow update: if validUnitLocation(locationId)
+        && resource.data.updatedBy == request.auth.uid
+        && resource.data.stationId == request.resource.data.stationId
+        && resource.data.incidentId == request.resource.data.incidentId;
+
+      allow delete: if isAdmin()
+        || (isLocationOwner(locationId)
+            && resource.data.updatedBy == request.auth.uid);
+    }
     // ---------- hydrants ----------
 
     match /hydrants/{hydrantId} {
