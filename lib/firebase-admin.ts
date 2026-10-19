@@ -11,6 +11,18 @@ export function adminApp(): App {
   const existing = getApps();
   if (existing.length) return existing[0];
 
+  // Allow credential-free initialization ONLY against both local emulators
+  // using a Firebase demo project. Never enable this for production.
+  const projectId = process.env.GCLOUD_PROJECT;
+  const emulatorMode =
+    process.env.FIREBASE_AUTH_EMULATOR_HOST === "127.0.0.1:9099" &&
+    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8080" &&
+    projectId === "demo-hydro-scout-api" &&
+    process.env.NODE_ENV !== "production";
+
+  if (emulatorMode) {
+    return initializeApp({ projectId });
+  }
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!raw) {
     throw new Error(

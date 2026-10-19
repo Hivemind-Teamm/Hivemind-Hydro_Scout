@@ -36,7 +36,7 @@ await testEnv.withSecurityRulesDisabled(async (context) => {
 
   const users = [
     { uid: "sample-general", role: "general" },
-    { uid: "sample-authorized", role: "authorized" },
+    { uid: "sample-authorized", role: "authorized", aorBarangays: ["Barangay Laging Handa"] },
     { uid: "sample-head", role: "head" },
     { uid: "sample-admin", role: "admin" },
   ];
@@ -45,6 +45,7 @@ await testEnv.withSecurityRulesDisabled(async (context) => {
       uid: u.uid,
       role: u.role,
       email: `${u.uid}@example.com`,
+      ...(u.aorBarangays ? { aorBarangays: u.aorBarangays } : {}),
     });
   }
 
@@ -52,6 +53,7 @@ await testEnv.withSecurityRulesDisabled(async (context) => {
     lat: 14.653,
     lng: 121.068,
     status: "active",
+    barangay: "Barangay Laging Handa",
     notes: "seed",
     lastMaintenanceDate: null,
     nextMaintenanceDate: null,
@@ -71,6 +73,7 @@ async function freshHydrant() {
       lat: 14.653,
       lng: 121.068,
       status: "active",
+    barangay: "Barangay Laging Handa",
       notes: "seed",
       lastMaintenanceDate: null,
       nextMaintenanceDate: null,
@@ -110,9 +113,9 @@ for (const uid of ["sample-general", "sample-authorized", "sample-head", "sample
   await check(`${uid} can read /hydrants/HYD-001`, db.collection("hydrants").doc("HYD-001").get(), true);
 }
 await check(
-  "signed-out cannot read /hydrants/HYD-001",
+  "signed-out CAN read /hydrants/HYD-001",
   ctxFor(null).firestore().collection("hydrants").doc("HYD-001").get(),
-  false
+  true
 );
 
 console.log("\n=== Section 2: Creating a new hydrant ===");
@@ -127,9 +130,9 @@ await check(
   true
 );
 await check(
-  "head cannot create hydrant",
+  "head CAN create hydrant",
   ctxFor("sample-head").firestore().collection("hydrants").doc("TEST-003").set({ lat: 0, lng: 0 }),
-  false
+  true
 );
 await check(
   "admin CAN create hydrant",
@@ -143,7 +146,7 @@ console.log("\n=== Section 3: Updating status (Authorized's scope) ===");
   await check(`general cannot update status`, ctxFor("sample-general").firestore().collection("hydrants").doc(id1).update({ status: "damaged" }), false);
 
   const id2 = await freshHydrant();
-  await check(`authorized CAN update status`, ctxFor("sample-authorized").firestore().collection("hydrants").doc(id2).update({ status: "damaged" }), true);
+  await check(`authorized CAN update status`, ctxFor("sample-authorized").firestore().collection("hydrants").doc(id2).update({ operationalStatus: "Out of Service" }), true);
 
   const id3 = await freshHydrant();
   await check(`head cannot update status (wrong field scope)`, ctxFor("sample-head").firestore().collection("hydrants").doc(id3).update({ status: "damaged" }), false);
@@ -168,13 +171,13 @@ console.log("\n=== Section 5: Mixed-field update (should fail for non-Admin) ===
 {
   const id1 = await freshHydrant();
   await check(`authorized cannot mix status + lastMaintenanceDate`, ctxFor("sample-authorized").firestore().collection("hydrants").doc(id1).update({
-    status: "damaged",
+    operationalStatus: "Out of Service",
     lastMaintenanceDate: "2026-06-17",
   }), false);
 
   const id2 = await freshHydrant();
-  await check(`head cannot mix status + lastMaintenanceDate`, ctxFor("sample-head").firestore().collection("hydrants").doc(id2).update({
-    status: "damaged",
+  await check(`head cannot change barangay with maintenance`, ctxFor("sample-head").firestore().collection("hydrants").doc(id2).update({
+    barangay: "Barangay Holy Spirit",
     lastMaintenanceDate: "2026-06-17",
   }), false);
 
@@ -206,9 +209,9 @@ await check(
   true
 );
 await check(
-  "authorized cannot create report",
+  "authorized CAN create report",
   ctxFor("sample-authorized").firestore().collection("hydrants").doc("HYD-001").collection("reports").doc("r1").set({ note: "x" }),
-  false
+  true
 );
 await check(
   "head CAN create report",

@@ -44,13 +44,11 @@ service cloud.firestore {
     // into its own AOR as part of an update.
     function hydrantIsInUserAor() {
       return isSignedIn()
-        && resource.data.barangay is string
-        && get(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.aorBarangays is list
-        && resource.data.barangay in get(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.aorBarangays;
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && resource.data.get('barangay', null) is string
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('aorBarangays', []) is list
+        && resource.data.get('barangay', null)
+           in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('aorBarangays', []);
     }
 
     // ---------- users ----------
@@ -191,6 +189,22 @@ service cloud.firestore {
               'updatedBy',
               'updatedAt'
             ]))
+        || (isSubAdmin()
+            && hydrantIsInUserAor()
+            && onlyChangedFields([
+              'operationalStatus',
+              'pressureStatus',
+              'waterCleanliness',
+              'hazards',
+              'photos',
+              'notes',
+              'fieldNotes',
+              'register',
+              'lastMaintenanceDate',
+              'nextMaintenanceDate',
+              'updatedBy',
+              'updatedAt'
+            ]))
         || (isAuthorized()
             && hydrantIsInUserAor()
             && onlyChangedFields(['operationalStatus']));
@@ -200,8 +214,20 @@ service cloud.firestore {
       match /reports/{reportId} {
         // Direct-path access (read a hydrant's own reports, file new ones).
         allow read: if true;
-        allow create: if isAuthorized() || isHead() || isAdmin();
-        allow update, delete: if isHead() || isAdmin();
+        allow create: if isAuthorized() || isHead() || isAdmin()
+          || (isSubAdmin()
+              && exists(/databases/$(database)/documents/hydrants/$(hydrantId))
+              && get(/databases/$(database)/documents/hydrants/$(hydrantId)).data.barangay is string
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.aorBarangays is list
+              && get(/databases/$(database)/documents/hydrants/$(hydrantId)).data.barangay
+                 in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.aorBarangays);
+        allow update, delete: if isHead() || isAdmin()
+          || (isSubAdmin()
+              && exists(/databases/$(database)/documents/hydrants/$(hydrantId))
+              && get(/databases/$(database)/documents/hydrants/$(hydrantId)).data.barangay is string
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.aorBarangays is list
+              && get(/databases/$(database)/documents/hydrants/$(hydrantId)).data.barangay
+                 in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.aorBarangays);
       }
     }
 
