@@ -26,6 +26,26 @@ feature. A production build requires the Git checkout or
 record freezes. The first entry is created when an admin selects
 **Record frozen build**; no historical freeze date is assumed.
 
+### How to record a frozen build
+
+1. Finish the changes your team wants to include. If this is a new release,
+   run `npm.cmd version patch --no-git-tag-version` to increase the version
+   (for example, `0.1.1` to `0.1.2`). This updates both package files.
+2. Commit and push the changes, including `package.json` and
+   `package-lock.json` if the version changed. Wait for the production
+   deployment to finish.
+3. Open the deployed app, sign in as an **Admin**, and open
+   **Admin Dashboard > Build Version Log**. Check the running version and commit.
+4. Review the deployment link (use the permanent URL for that deployment when
+   available), enter a release summary, and optionally add freeze notes.
+5. Click **Record frozen build**. Wait for the success message and confirm
+   the entry appears in the history table with its freeze date and time.
+
+Each build can be recorded once. Records are permanent and visible to all
+admins. Keep the recorded deployment available and use it for the relevant
+evaluation sessions. Recording a freeze does not create an app or database
+backup. The button is disabled when running `npm run dev`.
+
 First, run the development server:
 
 ```bash
