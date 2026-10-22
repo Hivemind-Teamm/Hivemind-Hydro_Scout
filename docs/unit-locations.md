@@ -96,7 +96,11 @@ separate cleanup of the old collections. The additive migration was run against
 verified; the root `responseLocations` collection contained no documents. After
 explicit confirmation, both root `unitLocations` reports were deleted in a
 transaction after verifying their nested copies. The root `unitLocations`
-collection is now empty. The updated app and rules have not been deployed.
+collection is now empty. The updated Firestore rules were deployed to
+`hydro-scout` on 2026-10-23. The application source was pushed to `main`, but
+the web app has not been deployed: this repository has no configured hosting
+target or CI workflow, and Firebase App Hosting requires the project to be on
+the Blaze plan.
 
 ## Configuration and validation
 
@@ -116,8 +120,8 @@ npx.cmd eslint app/src/components/StationResponseControl.tsx lib/auth-context.ts
 
 The emulator suite covers station membership signup and approval, response
 start/end batches, cross-station map visibility, and responder-name privacy. The
-Firestore rules and application changes are local until explicitly deployed.
-Do not deploy the rules or application without deployment approval.
+Firestore rules are deployed. The application changes require a configured web
+hosting provider before they can be deployed.
 
 There is no fixed station-coordinate pin, responder clustering, or shared
 incident record in this implementation. Browser background location is
