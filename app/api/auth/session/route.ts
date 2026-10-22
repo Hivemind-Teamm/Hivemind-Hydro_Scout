@@ -7,20 +7,6 @@ const SESSION_COOKIE = "session";
 const SESSION_META_COOKIE = "session_meta";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-// Decode JWT payload without verification — used as a fallback when
-// firebase-admin is unavailable. Real authorization is enforced by Firestore
-// security rules; this cookie is only a fast proxy-redirect hint.
-function decodeJwtPayload(token: string): Record<string, unknown> {
-  try {
-    const part = token.split('.')[1];
-    if (!part) return {};
-    const json = Buffer.from(part, 'base64url').toString('utf8');
-    return JSON.parse(json);
-  } catch {
-    return {};
-  }
-}
-
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
 
@@ -56,14 +42,12 @@ export async function POST(req: NextRequest) {
     const auth = getAuth(app);
     const decoded = await auth.verifyIdToken(idToken);
 
-    try {
-      const sessionCookie = await auth.createSessionCookie(idToken, {
-        expiresIn: SESSION_MAX_AGE * 1000,
-      });
-      cookieStore.set(SESSION_COOKIE, sessionCookie, cookieOptions);
-    } catch (err) {
-      console.warn('[session] createSessionCookie failed:', err);
-    }
+    // A verified ID token alone is not sufficient.
+    // Never report success unless the session cookie is created.
+    const sessionCookie = await auth.createSessionCookie(idToken, {
+      expiresIn: SESSION_MAX_AGE * 1000,
+    });
+    cookieStore.set(SESSION_COOKIE, sessionCookie, cookieOptions);
 
     const userDoc = await getFirestore(app)
       .collection('users')
@@ -79,25 +63,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, role });
   } catch (adminErr) {
-    console.error('[session] firebase-admin path failed:', adminErr);
+    console.error('[session] Firebase Admin verification failed:', adminErr);
 
-    // Fallback: decode the JWT without verification so the proxy cookie is
-    // still set. Firestore rules remain the real authorization gate.
-    try {
-      const claims = decodeJwtPayload(idToken);
-      const uid = (claims.uid ?? claims.sub ?? claims.user_id) as string | undefined;
-      if (!uid) throw new Error('no uid in token');
+    // Never derive an authenticated session from unverified JWT claims.
+    // Clear stale cookies rather than retaining misleading session state.
+    try { cookieStore.delete(SESSION_COOKIE); } catch {}
+    try { cookieStore.delete(SESSION_META_COOKIE); } catch {}
 
-      cookieStore.set(
-        SESSION_META_COOKIE,
-        JSON.stringify({ uid, role: null }),
-        cookieOptions,
-      );
-      console.warn('[session] used fallback JWT decode — role will be null');
-      return NextResponse.json({ ok: true, role: null, fallback: true });
-    } catch (fallbackErr) {
-      console.error('[session] fallback also failed:', fallbackErr);
-      return NextResponse.json({ ok: false }, { status: 401 });
-    }
+    return NextResponse.json(
+      { ok: false, error: 'Session verification failed.' },
+      { status: 401 },
+    );
   }
 }

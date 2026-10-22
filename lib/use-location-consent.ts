@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
-import { stationIdForLocation } from './unit-location';
+import { stationIdForLocation } from './station-location-identity';
 import { consentKey, readLocationConsent, LOCATION_NOTICE_VERSION, type LocationConsentDecision, type LocationConsentRecord } from './location-consent';
 
 export function useLocationConsent(uid: string | undefined) {

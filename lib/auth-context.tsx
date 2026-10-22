@@ -18,12 +18,14 @@ import {
   updateProfile,
   User,
 } from "firebase/auth";
-import { doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import { auth, db } from "./firebase";
-import { startStationLocationReporting, stationIdForLocation } from "./unit-location";
+import { getExistingIncidentDeviceId } from "./incident-device-id";
+import { deleteIncidentDeviceLocation } from "./incident-device-location-cleanup";
+import { incidentLocationCleanupRegistry } from "./incident-location-cleanup-registry.mjs";
+import { cleanupIncidentLocationBeforeLogout } from "./incident-logout-cleanup.mjs";
 import { useLocationConsent } from './use-location-consent';
-import { readLocationConsent } from './location-consent';
 import LocationConsentNotice from '@/app/src/components/LocationConsentNotice';
 
 function friendlyAuthError(err: unknown): never {
@@ -48,12 +50,14 @@ function friendlyAuthError(err: unknown): never {
   throw err;
 }
 
-export type Role = "general" | "authorized" | "head" | "admin" | null;
+export type Role = "general" | "authorized" | "head" | "admin" | "sub_admin" | null;
 
 interface AuthContextValue {
   canUseDeviceLocation: boolean;
   user: User | null;
   role: Role;
+  stationId: string | null;
+  trustedStationId: string | null;
   aorBarangays: string[];
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -64,17 +68,45 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-async function syncSessionCookie(idToken: string | null) {
-  await fetch("/api/auth/session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken }),
+let sessionCookieSyncQueue: Promise<void> = Promise.resolve();
+
+function syncSessionCookie(idToken: string | null): Promise<void> {
+  // Serialize cookie-changing requests from this browser page.
+  // An older response must not finish after a newer request.
+  const operation = sessionCookieSyncQueue.then(async () => {
+    const response = await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+
+    if (!response.ok) {
+      throw new Error('session-verification-failed');
+    }
+
+    const result: unknown = await response.json();
+
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !('ok' in result) ||
+      result.ok !== true
+    ) {
+      throw new Error('session-verification-failed');
+    }
   });
+
+  // A failed request must not permanently block later logout/login.
+  sessionCookieSyncQueue = operation.catch(() => {});
+
+  // The caller still receives the original failure.
+  return operation;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>(null);
+  const [trustedStationId, setTrustedStationId] = useState<string | null>(null);
   const [aorBarangays, setAorBarangays] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const sessionGeneration = useRef(0);
@@ -83,12 +115,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const authGeneration = ++sessionGeneration.current;
+
+      // Revoke trusted location eligibility during every auth transition.
+      setRole(null);
+      setTrustedStationId(null);
+
       if (firebaseUser) {
         try {
           const [snap, idToken] = await Promise.all([
             getDoc(doc(db, "users", firebaseUser.uid)),
             firebaseUser.getIdToken(),
           ]);
+          // Ignore results from an older authentication event.
+          if (
+            authGeneration !== sessionGeneration.current ||
+            auth.currentUser?.uid !== firebaseUser.uid
+          ) return;
+
           const data = snap.exists() ? snap.data() : null;
 
           // The person's real name is stored on the Firestore user doc at signup;
@@ -102,68 +146,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try { await updateProfile(firebaseUser, { displayName: fsName }); } catch { /* non-fatal */ }
           }
 
+          // Do not authorize a station before the server verifies the session.
+          await syncSessionCookie(idToken);
+
+          // A completed session request must still belong to this event.
+          if (
+            authGeneration !== sessionGeneration.current ||
+            auth.currentUser?.uid !== firebaseUser.uid
+          ) return;
+
           setUser(firebaseUser);
           setRole((data?.role ?? null) as Role);
+
+          // Independent of legacy location consent. This identity comes
+          // only from the authenticated user's Firestore profile.
+          const trustedStation =
+            data?.role === "sub_admin" &&
+            data?.accountType === "station" &&
+            typeof data?.stationId === "string" &&
+            /^[A-Za-z0-9_-]{1,128}$/.test(data.stationId)
+              ? data.stationId
+              : null;
+
+          setTrustedStationId(trustedStation);
           setAorBarangays(Array.isArray(data?.aorBarangays) ? data.aorBarangays.filter((value): value is string => typeof value === "string") : []);
-          // Re-issue the session cookie on every auth state change (including
-          // page reload) so server routes like /api/upload can always verify the user.
-          await syncSessionCookie(idToken);
+          // The server session was verified before role/station state was set.
         } catch (err) {
+          // A stale failure must not clear a newer user's permissions.
+          if (authGeneration !== sessionGeneration.current) return;
+
           console.error("Failed to load user role:", err);
           setUser(firebaseUser);
           setRole(null);
+          setTrustedStationId(null);
           setAorBarangays([]);
         }
       } else {
         setUser(null);
         setRole(null);
+        setTrustedStationId(null);
         setAorBarangays([]);
-        await syncSessionCookie(null);
+        try {
+          await syncSessionCookie(null);
+        } catch (err) {
+          // Auth and trusted station state have already been revoked.
+          console.error('Failed to clear server session:', err);
+        }
       }
-      setLoading(false);
+      if (authGeneration === sessionGeneration.current) {
+        setLoading(false);
+      }
     });
 
     return unsubscribe;
   }, []);
 
-  useEffect(() => {
-      const firebaseUser = user;
-      if (!firebaseUser || !stationId || !locationGranted) return;
-      const generation = sessionGeneration.current;
-      const reporting = startStationLocationReporting(firebaseUser.uid, {
-        readProfile: async () => {
-          const snapshot = await getDocFromServer(doc(db, "users", firebaseUser.uid));
-          const profile = snapshot.exists() ? snapshot.data() : undefined;
-          // Reassignment requires a new, station-specific consent decision.
-          return stationIdForLocation(profile) === stationId ? profile : undefined;
-        },
-        geolocation: typeof navigator !== "undefined" ? navigator.geolocation : undefined,
-        isCurrentSession: () => sessionGeneration.current === generation && auth.currentUser === firebaseUser
-          && readLocationConsent(firebaseUser.uid, stationId)?.decision === 'granted',
-        isActive: () => navigator.onLine,
-        writePosition: async (position) => {
-          await setDoc(doc(db, "unitLocations", position.stationId), {
-            ...position,
-            updatedAt: serverTimestamp(),
-          });
-        },
-        onResult: (result) => {
-          if (result === "unavailable" || result === "failed") {
-            console.warn(`Station location was not saved (${result}). Will retry while the app is active.`);
-          }
-        },
-      });
-      const resume = () => { void reporting.refresh(); };
-      document.addEventListener("visibilitychange", resume);
-      window.addEventListener("focus", resume);
-      window.addEventListener("online", resume);
-      return () => {
-        reporting.stop();
-        document.removeEventListener("visibilitychange", resume);
-        window.removeEventListener("focus", resume);
-        window.removeEventListener("online", resume);
-      };
-  }, [user, stationId, locationGranted]);
 
   async function login(email: string, password: string) {
     let cred;
@@ -220,6 +257,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
+    const currentUser = auth.currentUser;
+
+    // Always check for an existing incident location before sign-out.
+    // Do not rely on React role state, which may still be loading.
+    // Users without an existing device ID or active tracking session
+    // require no location deletion.
+    if (currentUser) {
+      await cleanupIncidentLocationBeforeLogout({
+        uid: currentUser.uid,
+        registry: incidentLocationCleanupRegistry,
+        getExistingDeviceId: getExistingIncidentDeviceId,
+        deleteDeviceLocation: async (uid: string) => {
+          await deleteIncidentDeviceLocation({
+            db,
+            uid,
+            getCurrentUid: () => auth.currentUser?.uid ?? null,
+          });
+        },
+      });
+    }
+
+    // Do not sign out if incident cleanup failed.
     ++sessionGeneration.current;
     await firebaseSignOut(auth);
     await syncSessionCookie(null);
@@ -228,12 +287,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function refreshSession() {
     const currentUser = auth.currentUser;
     if (!currentUser) return;
-    const idToken = await currentUser.getIdToken(true);
-    await syncSessionCookie(idToken);
+    try {
+      const idToken = await currentUser.getIdToken(true);
+      await syncSessionCookie(idToken);
+    } catch (err) {
+      // A failed refresh must not leave incident GPS eligibility active.
+      setRole(null);
+      setTrustedStationId(null);
+      throw err;
+    }
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, aorBarangays, loading, login, logout, signup, refreshSession, canUseDeviceLocation: locationConsent.canUseDeviceLocation }}>
+    <AuthContext.Provider value={{ user, role, stationId, trustedStationId, aorBarangays, loading, login, logout, signup, refreshSession, canUseDeviceLocation: locationConsent.canUseDeviceLocation }}>
       {children}
       {stationId && (
         <button type="button" onClick={locationConsent.openNotice} className="fixed right-3 top-20 z-[5000] rounded-lg bg-white px-3 py-2 text-xs font-semibold text-neutral-700 shadow dark:bg-neutral-800 dark:text-white">

@@ -1,7 +1,7 @@
 import Supercluster from 'supercluster';
 
 type MapPoint = { id: string; lat: number; lng: number };
-type StationPoint = { stationId: string; lat: number; lng: number };
+type StationPoint = { id?: string; stationId: string; lat: number; lng: number };
 type PointProperties = { kind: 'hydrant' | 'station'; id: string };
 
 export interface ClusterMarker {
@@ -27,7 +27,7 @@ export function createMapClusterIndex(hydrants: MapPoint[], stations: StationPoi
       properties: { kind: 'hydrant' as const, id: point.id },
       geometry: { type: 'Point' as const, coordinates: [point.lng, point.lat] } })),
     ...stations.map(point => ({ type: 'Feature' as const,
-      properties: { kind: 'station' as const, id: point.stationId },
+      properties: { kind: 'station' as const, id: point.id ?? point.stationId },
       geometry: { type: 'Point' as const, coordinates: [point.lng, point.lat] } })),
   ];
   index.load(points);
