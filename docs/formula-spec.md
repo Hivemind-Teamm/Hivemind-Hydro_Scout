@@ -1,12 +1,14 @@
 # F3 fire-response formula spec
 
-**Version:** 1.0 · **Status:** Draft, frozen once Mark signs off ·
-**Drafted:** October 12, 2026 · **Owner:** Mark Luis Barican
+**Version:** 1.1 · **Status:** Draft, frozen once Mark signs off ·
+**Drafted:** October 12, 2026 · **Revised:** October 22, 2026 ·
+**Owner:** Mark Luis Barican
 
 This document defines how Hydro-Scout turns a pinned fire into a hose length
 and a fire-truck count, and the exact result object the fire panel receives.
 The formula is implemented by `estimateSupplyLine` in `lib/supply-line.ts`,
-the route lookup by `fetchHoseRoute` in `lib/route-distance.ts`, and the
+the route lookup by `fetchHoseRoute` in `lib/route-distance.ts` (with the
+street-network path from `fetchStreetPath` in `lib/hose-network.ts`), and the
 result is shown by `app/src/components/FireResponsePanel.tsx`.
 
 ## What the result means
@@ -48,17 +50,29 @@ One truck therefore carries 10 × 30.48 m + 10 × 15.24 m = **457.2 m**
 `L` is the distance the hose must cover from the hydrant to the fire, in whole
 metres. The app tries three sources in order and records which one it used.
 
-1. **Mapbox Directions, walking profile.** Hose is not bound by one-way
-   streets and can run through alleys, so the walking route is used.
-2. **OSRM**, if Mapbox has no token, returns an error, times out, or finds no
-   route. The public OSRM server answers every profile with its driving
-   route (checked October 12, 2026), so this distance can be longer than the
-   walking route.
-3. **Straight line × `layoutFactor`**, if both routing services fail.
+1. **Street network** (`streets`). The shortest path along the mapped
+   streets and paths, found by the app itself from OpenStreetMap data (the
+   OpenFreeMap vector tiles the map already uses). A hose is not traffic, so
+   every street is open in both directions, and residents-only streets and
+   gates are passed through. Motorways, rail lines, ferries, cable cars, race
+   tracks and indoor paths are left out. Streets that meet are joined where
+   the map joins them, where one ends within 2.5 m of another, and where two
+   ground-level streets cross; a bridge or tunnel joins only at its ends.
+2. **Mapbox Directions, walking profile** (`mapbox`), if the street network
+   cannot be loaded, times out, or has no connected path. It is requested at
+   the same time as source 1. Walking directions ignore one-way streets but
+   avoid gates and residents-only streets, so this distance can be longer.
+3. **Straight line × `layoutFactor`**, if both fail.
 
-For sources 1 and 2, routing services start and end the route on the nearest
-mapped path. The straight-line gap from the hydrant to the start of the route,
-and from the end of the route to the fire, is added to the route distance.
+Routing services do not offer a way to pass gates: Mapbox walking, OSRM and
+Valhalla (with its `ignore_access` and `ignore_oneways` options) all routed
+around the gated part of Malumanay Street, Teachers Village, in a check on
+October 22, 2026 (HYD-017 to 14.64539, 121.05491: 461 m around the block
+against 338 m down the street). That is why source 1 exists.
+
+For sources 1 and 2, the route starts and ends on the nearest mapped path.
+The straight-line gap from the hydrant to the start of the route, and from
+the end of the route to the fire, is added to the route distance.
 
 `L` = the resulting distance, rounded to the nearest metre.
 
@@ -141,7 +155,7 @@ type SupplyLineEstimate =
       };
       stageLengthM: number;
       distance: {
-        source: 'mapbox' | 'osrm' | 'straight-line';
+        source: 'streets' | 'mapbox' | 'straight-line';
         straightLineM: number;
       };
       configVersion: string;
@@ -181,8 +195,10 @@ estimate.
 - Hydrant pressure and flow are not modelled. A hydrant that is not
   operational still produces a result; the panel warns about its status.
 - Elevation between the hydrant and the fire is ignored.
-- The walking route is the best available stand-in for the real hose path. It
-  can include paths a hose cannot follow, such as stairs or footbridges.
+- The street-network path is the best available stand-in for the real hose
+  path. It can include paths a hose cannot follow, such as stairs or
+  footbridges, and gates that are locked. It cannot cut across lots or
+  through buildings that have no mapped path.
 - One supply line from one hydrant. Several lines or several hydrants feeding
   the same fire are not modelled.
 
@@ -210,10 +226,18 @@ These can change without a new spec version:
    against 319 m in a straight line, a factor of 2.1. With 1.3 the fallback
    gave 414 m and 2 trucks where the route gave 3.
 
+## Changes
+
+- **1.1, October 22, 2026.** Step 1: the street-network path (`streets`)
+  replaces Mapbox walking as the first source, Mapbox walking moves to second,
+  and OSRM is removed because its public server only routes by car and obeys
+  one-way streets. `distance.source` becomes
+  `'streets' | 'mapbox' | 'straight-line'`. Needs Mark's sign-off.
+
 ## Automated checks
 
 ```powershell
-node --test test/supply-line.test.mjs test/route-distance.test.mjs
+node --test test/supply-line.test.mjs test/route-distance.test.mjs test/hose-network.test.mjs
 npx.cmd tsc --noEmit --incremental false
 ```
 

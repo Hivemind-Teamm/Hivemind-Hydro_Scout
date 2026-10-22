@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FIRE_RESPONSE_CONFIG } from './fire-response.config';
 import type { FireHydrantCandidate } from './fire-response';
 import { haversineM } from './haversine';
+import { fetchStreetPath } from './hose-network';
 import { fetchHoseRoute, type HoseRoute } from './route-distance';
 import { estimateSupplyLine, type SupplyLineEstimate } from './supply-line';
 
@@ -50,6 +51,7 @@ export function useSupplyLine(
     const controller = new AbortController();
     void fetchHoseRoute({ lat: hydrantLat, lng: hydrantLng }, { lat: fireLat, lng: fireLng }, {
       fetch: (url, init) => fetch(url, init),
+      streetPath: (from, to, signal) => fetchStreetPath(from, to, { fetch: (url, init) => fetch(url, init), signal }),
       mapboxToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
       distanceM: haversineM,
       signal: controller.signal,
