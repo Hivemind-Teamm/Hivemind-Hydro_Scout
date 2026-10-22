@@ -17,7 +17,6 @@ import { createPortal } from 'react-dom';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { createMapClusterIndex, mapClusterLayout, type ClusterMarker, type ClusterLayout, type HydrantPlacement } from '@/lib/map-clusters';
-import StationClusterBadge from './StationClusterBadge';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER, OWN_AOR_PIN_FILTER, OTHER_AOR_PIN_FILTER } from './hydrantIcon';
 import {
@@ -409,7 +408,6 @@ const HydrantMarkers = memo(function HydrantMarkers({
             }}
           >
             {cluster.count}
-            <StationClusterBadge stationIds={cluster.stationIds} />
           </div>
         </MapMarker>
       ))}
@@ -473,8 +471,8 @@ export default function MapLibreMap({
   const supercluster = useMemo(() => {
     // Fire-zone hydrants stay individually visible, as before.
     const clusterable = fireZoneIds ? hydrants.filter(h => !fireZoneIds.has(h.id)) : hydrants;
-    return createMapClusterIndex(clusterable, unitLocations);
-  }, [hydrants, fireZoneIds, unitLocations]);
+    return createMapClusterIndex(clusterable);
+  }, [hydrants, fireZoneIds]);
 
   const layout = useMemo<ClusterLayout>(
     () => mapClusterLayout(supercluster, clusterZoom),
@@ -1011,10 +1009,10 @@ export default function MapLibreMap({
         </MapMarker>
       )}
 
-      {map && unitLocations.filter(location => !layout.clusteredStationIds.has(location.stationId)).map(location => (
-        <MapMarker key={location.stationId} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
-          <StationUnitIcon location={location} selected={selectedStationId === location.stationId}
-            onSelect={() => onSelectStation(location.stationId)} crosshair={crosshair} />
+      {map && unitLocations.map(location => (
+        <MapMarker key={location.id} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.id ? 10 : 1 }}>
+          <StationUnitIcon location={location} selected={selectedStationId === location.id}
+            onSelect={() => onSelectStation(location.id)} crosshair={crosshair} />
         </MapMarker>
       ))}
       {map && userLocation && (

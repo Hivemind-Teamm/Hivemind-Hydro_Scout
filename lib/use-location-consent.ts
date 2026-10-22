@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
-import { stationIdForLocation } from './unit-location';
+import { assignedStationIdForResponse } from './unit-location';
 import { consentKey, readLocationConsent, LOCATION_NOTICE_VERSION, type LocationConsentDecision, type LocationConsentRecord } from './location-consent';
 
 export function useLocationConsent(uid: string | undefined) {
@@ -17,7 +17,7 @@ export function useLocationConsent(uid: string | undefined) {
     const recordFor = (id: string) => unsavedDecline.current?.uid === uid && unsavedDecline.current.stationId === id
       ? unsavedDecline.current : readLocationConsent(uid, id);
     const stop = onSnapshot(doc(db, 'users', uid), snapshot => {
-      stationId = stationIdForLocation(snapshot.data());
+      stationId = assignedStationIdForResponse(snapshot.data());
       setState({ uid, ready: true, stationId, record: stationId ? recordFor(stationId) : null });
     }, error => {
       console.warn('Could not load location privacy profile', error);

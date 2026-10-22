@@ -1,5 +1,5 @@
 rules_version = '2';
-// unitLocations/{stationId}: stationId, updatedBy, lat, lng, accuracy, updatedAt.
+// unitLocations/{uid_deviceId}: stationId, deviceId, updatedBy, lat, lng, accuracy, updatedAt.
 // Temporary F1 contract: station accounts have accountType == 'station' and stationId.
 //
 // F1 Station Accounts + AOR:
@@ -31,6 +31,90 @@ service cloud.firestore {
       return isGeneral() || isAuthorized() || isHead() || isAdmin();
     }
 
+    function currentUserData() {
+      return isSignedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : {};
+    }
+
+    function isHeadForStation(stationId) {
+      return isSignedIn() && userRole() == 'head'
+        && currentUserData().stationId == stationId;
+    }
+
+    function canManageStation(stationId) {
+      return isSignedIn() && (isAdmin() || isHeadForStation(stationId)
+        || (currentUserData().stationAccessIds is list
+          && stationId in currentUserData().stationAccessIds));
+    }
+
+    function isApprovedStationMember(stationId) {
+      return isSignedIn()
+        && currentUserData().accountType == 'person'
+        && currentUserData().stationMembershipStatus == 'approved'
+        && currentUserData().stationId == stationId;
+    }
+
+    function validResponsePointerUpdate(uid) {
+      let before = resource.data;
+      let after = request.resource.data;
+      return (after.activeResponseId is string
+          && (!('activeResponseId' in before) || before.activeResponseId == null)
+          && getAfter(/databases/$(database)/documents/stationResponses/$(after.activeResponseId)).data.uid == uid
+          && getAfter(/databases/$(database)/documents/stationResponses/$(after.activeResponseId)).data.responseId == after.activeResponseId
+          && getAfter(/databases/$(database)/documents/stationResponses/$(after.activeResponseId)).data.status == 'active')
+        || (after.activeResponseId == null
+          && before.activeResponseId is string
+          && getAfter(/databases/$(database)/documents/stationResponses/$(before.activeResponseId)).data.uid == uid
+          && getAfter(/databases/$(database)/documents/stationResponses/$(before.activeResponseId)).data.status == 'ended');
+    }
+
+    function isValidStationNotification(stationId, notificationId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['type', 'uid', 'displayName', 'responseId', 'message', 'createdAt'])
+        && data.type is string
+        && data.uid is string && data.uid.size() <= 128
+        && data.displayName is string && data.displayName.size() <= 120
+        && data.message is string && data.message.size() <= 240
+        && data.createdAt == request.time
+        && ((data.type == 'station-join-request'
+              && data.uid == request.auth.uid
+              && notificationId == 'join-' + request.auth.uid
+              && data.displayName == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
+              && getAfter(/databases/$(database)/documents/stationJoinRequests/$(request.auth.uid)).data.stationId == stationId)
+          || (data.type in ['response-started', 'response-ended']
+              && data.uid == request.auth.uid
+              && data.displayName == currentUserData().displayName
+              && data.responseId is string
+              && notificationId == data.responseId + (data.type == 'response-started' ? '_start' : '_end')
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.stationId == stationId
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.uid == request.auth.uid
+              && ((data.type == 'response-started'
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.startedAt == request.time
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.status == 'active')
+                || (data.type == 'response-ended'
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.endedAt == request.time
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.status == 'ended'
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.endedByUid == request.auth.uid)))
+          || (data.type == 'station-response-closed'
+              && canManageStation(stationId)
+              && notificationId == data.responseId + '_closed'
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.stationId == stationId
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.status == 'ended'
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.endedByUid == request.auth.uid
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.endReason == 'station-head')
+          || (data.type == 'station-accessed'
+              && data.uid == request.auth.uid
+              && data.displayName == currentUserData().displayName
+              && canManageStation(stationId))
+          || (data.type in ['membership-approved', 'membership-rejected']
+              && canManageStation(stationId)
+              && notificationId == 'join-review-' + data.uid + (data.type == 'membership-approved' ? '-approved' : '-rejected')
+              && getAfter(/databases/$(database)/documents/stationJoinRequests/$(data.uid)).data.stationId == stationId
+              && getAfter(/databases/$(database)/documents/stationJoinRequests/$(data.uid)).data.status == (data.type == 'membership-approved' ? 'approved' : 'rejected')
+              && getAfter(/databases/$(database)/documents/users/$(data.uid)).data.stationMembershipStatus == (data.type == 'membership-approved' ? 'approved' : 'rejected')));
+    }
+
     function onlyChangedFields(allowed) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
@@ -55,67 +139,339 @@ service cloud.firestore {
     // ---------- users ----------
 
     match /users/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin()
+        || canManageStation(resource.data.stationId));
 
       allow update: if isAdmin()
         || (isSignedIn() && request.auth.uid == uid
-            && onlyChangedFields(['lastLoginAt']));
+            && onlyChangedFields(['lastLoginAt', 'activeResponseId'])
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeResponseId'])
+              || validResponsePointerUpdate(uid)))
+        || (isSignedIn() && resource.data.requestedStationId is string
+            && canManageStation(resource.data.requestedStationId)
+            && onlyChangedFields(['stationId', 'station', 'stationMembershipStatus', 'requestedStationId'])
+            && request.resource.data.stationMembershipStatus in ['approved', 'rejected']
+            && ((request.resource.data.stationMembershipStatus == 'approved'
+                && request.resource.data.stationId == resource.data.requestedStationId
+                && request.resource.data.station is string && request.resource.data.station.size() <= 120)
+              || (request.resource.data.stationMembershipStatus == 'rejected'
+                && request.resource.data.stationId == null))
+            && request.resource.data.requestedStationId == null)
+        || (isSignedIn() && resource.data.stationId is string
+            && (isHeadForStation(resource.data.stationId) || isAdmin())
+            && onlyChangedFields(['stationAccessIds'])
+            && request.resource.data.stationAccessIds is list
+            && request.resource.data.stationAccessIds.size() <= 10
+            && request.resource.data.stationAccessIds.hasOnly([resource.data.stationId]))
+        || ((isHeadForStation(resource.data.stationId) || isAdmin())
+            && resource.data.activeResponseId is string
+            && onlyChangedFields(['activeResponseId'])
+            && request.resource.data.activeResponseId == null
+            && getAfter(/databases/$(database)/documents/stationResponses/$(resource.data.activeResponseId)).data.uid == uid
+            && getAfter(/databases/$(database)/documents/stationResponses/$(resource.data.activeResponseId)).data.status == 'ended'
+            && getAfter(/databases/$(database)/documents/stationResponses/$(resource.data.activeResponseId)).data.endReason == 'station-head');
 
       // New users can create their own document (signup flow).
       // Only admins can create documents for other users or delete any.
       // Self-signup cannot grant a role or station assignment used by location rules.
       allow create: if isAdmin() || (isSignedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
-          'email', 'displayName', 'role', 'createdAt', 'lastLoginAt'
+          'email', 'displayName', 'role', 'accountType', 'stationMembershipStatus',
+          'requestedStationId', 'createdAt', 'lastLoginAt'
         ])
-        && request.resource.data.role == 'general');
+        && request.resource.data.role == 'general'
+        && request.resource.data.accountType == 'person'
+        && request.resource.data.stationMembershipStatus in ['none', 'pending']
+        && request.resource.data.email is string && request.resource.data.email.size() <= 254
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 120
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.lastLoginAt is timestamp
+        && ((!('requestedStationId' in request.resource.data)
+              && request.resource.data.stationMembershipStatus == 'none')
+          || (request.resource.data.requestedStationId is string
+              && request.resource.data.requestedStationId.size() <= 128
+              && request.resource.data.requestedStationId.matches('^[A-Za-z0-9_-]+$')
+              && request.resource.data.stationMembershipStatus == 'pending'
+              && get(/databases/$(database)/documents/stations/$(request.resource.data.requestedStationId)).data.active == true)));
 
       allow delete: if isAdmin();
     }
 
-    // ---------- latest station positions ----------
-
-    function isAssignedStation(stationId) {
-      return isSignedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountType == 'station'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == stationId;
+    match /stationJoinRequests/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || canManageStation(resource.data.stationId));
+      allow create: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'email', 'stationId', 'status', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 120
+        && request.resource.data.email is string && request.resource.data.email.size() <= 254
+        && request.resource.data.stationId is string && request.resource.data.stationId.size() <= 128
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is timestamp
+        && getAfter(/databases/$(database)/documents/users/$(uid)).data.requestedStationId == request.resource.data.stationId
+        && get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.active == true
+        && getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/notifications/$(('join-' + uid))).data.type == 'station-join-request';
+      allow update: if (isHeadForStation(resource.data.stationId) || isAdmin())
+        && resource.data.status == 'pending'
+        && onlyChangedFields(['status', 'reviewedAt', 'reviewedBy'])
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && getAfter(/databases/$(database)/documents/users/$(uid)).data.stationMembershipStatus == request.resource.data.status
+        && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/notifications/$(('join-review-' + uid + (request.resource.data.status == 'approved' ? '-approved' : '-rejected')))).data.uid == uid;
+      allow delete: if isAdmin();
     }
 
-    function isValidUnitLocation(stationId) {
+    // Active station directory fields are public to signed-out signup pages.
+    match /stations/{stationId} {
+      allow read: if true;
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'active', 'createdAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.active == true
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'active', 'createdAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.active is bool;
+      allow delete: if isAdmin();
+
+      match /notifications/{notificationId} {
+        allow read: if canManageStation(stationId);
+        allow create: if isSignedIn() && isValidStationNotification(stationId, notificationId);
+        allow update, delete: if false;
+      }
+
+      match /accessLogs/{logId} {
+        allow read: if isHeadForStation(stationId) || isAdmin();
+        allow create: if canManageStation(stationId)
+          && request.resource.data.keys().hasOnly(['uid', 'displayName', 'createdAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.displayName == currentUserData().displayName
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------- station response records and public map locations ----------
+
+    match /stationResponses/{responseId} {
+      allow read: if isSignedIn()
+        && (resource.data.uid == request.auth.uid || canManageStation(resource.data.stationId));
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'responseId', 'uid', 'displayName', 'stationId', 'stationName', 'status', 'startedAt',
+          'endedAt', 'lastLocationAt'
+        ])
+        && request.resource.data.responseId == responseId
+        && responseId.matches('^[a-f0-9-]{36}$')
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName == currentUserData().displayName
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 120
+        && request.resource.data.stationId is string
+        && isApprovedStationMember(request.resource.data.stationId)
+        && request.resource.data.stationName == get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.name
+        && request.resource.data.status == 'active'
+        && request.resource.data.startedAt == request.time
+        && request.resource.data.endedAt == null
+        && request.resource.data.lastLocationAt == request.time
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.activeResponseId == responseId
+        && (getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/unitLocations/$(responseId)).data.responseId == responseId
+          || getAfter(/databases/$(database)/documents/responseLocations/$(responseId)).data.responseId == responseId)
+        && getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/notifications/$(responseId + '_start')).data.responseId == responseId;
+      allow update: if (isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && resource.data.status == 'active'
+        && isApprovedStationMember(resource.data.stationId)
+        && onlyChangedFields(['lastLocationAt'])
+        && request.resource.data.lastLocationAt == request.time)
+        || (isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && resource.data.status == 'active'
+        && request.resource.data.status == 'ended'
+        && onlyChangedFields(['status', 'endedAt', 'endedByUid', 'endedByName', 'endReason'])
+        && request.resource.data.endedAt == request.time
+        && request.resource.data.endedByUid == request.auth.uid
+        && request.resource.data.endedByName == currentUserData().displayName
+        && request.resource.data.endReason == 'member'
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.activeResponseId == null
+        && !existsAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/unitLocations/$(responseId))
+        && !existsAfter(/databases/$(database)/documents/responseLocations/$(responseId))
+        && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/notifications/$(responseId + '_end')).data.responseId == responseId)
+        || ((isHeadForStation(resource.data.stationId) || isAdmin())
+          && resource.data.status == 'active'
+          && onlyChangedFields(['status', 'endedAt', 'endedByUid', 'endedByName', 'endReason'])
+          && request.resource.data.status == 'ended'
+          && request.resource.data.endedAt == request.time
+          && request.resource.data.endedByUid == request.auth.uid
+          && request.resource.data.endedByName == currentUserData().displayName
+          && request.resource.data.endReason == 'station-head'
+          && getAfter(/databases/$(database)/documents/users/$(resource.data.uid)).data.activeResponseId == null
+          && !existsAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/unitLocations/$(responseId))
+          && !existsAfter(/databases/$(database)/documents/responseLocations/$(responseId))
+          && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/notifications/$(responseId + '_closed')).data.responseId == responseId);
+      allow delete: if false;
+    }
+
+    function isLegacyAssignedStation(stationId) {
+      return isSignedIn() && (isAuthorized() || isHead() || isAdmin())
+        && currentUserData().accountType == 'station'
+        && currentUserData().stationId == stationId;
+    }
+
+    function isLegacyStationAccount() {
+      return isSignedIn() && (isAuthorized() || isHead())
+        && currentUserData().accountType == 'station'
+        && currentUserData().stationId is string
+        && currentUserData().stationId.size() > 0
+        && currentUserData().stationId.size() <= 128
+        && currentUserData().stationId.matches('^[A-Za-z0-9_-]+$');
+    }
+
+    function isValidLegacyUnitLocation(reportId) {
       let data = request.resource.data;
-      return data.keys().hasAll([
-          'stationId',
-          'updatedBy',
-          'lat',
-          'lng',
-          'accuracy',
-          'updatedAt'
-        ])
-        && data.keys().hasOnly([
-          'stationId',
-          'updatedBy',
-          'lat',
-          'lng',
-          'accuracy',
-          'updatedAt'
-        ])
-        && data.stationId is string && data.stationId.size() <= 128
-        && data.stationId.matches('^[A-Za-z0-9_-]+$')
-        && data.stationId == stationId
-        && data.updatedBy is string && data.updatedBy.size() <= 128
-        && data.updatedBy == request.auth.uid
+      return data.keys().hasAll(['stationId', 'deviceId', 'updatedBy', 'lat', 'lng', 'accuracy', 'updatedAt'])
+        && data.keys().hasOnly(['stationId', 'deviceId', 'updatedBy', 'lat', 'lng', 'accuracy', 'updatedAt'])
+        && data.stationId is string && data.stationId.size() <= 128 && data.stationId.matches('^[A-Za-z0-9_-]+$')
+        && data.deviceId is string && data.deviceId.size() == 36 && data.deviceId.matches('^[a-f0-9-]{36}$')
+        && reportId == request.auth.uid + '_' + data.deviceId
+        && data.updatedBy is string && data.updatedBy == request.auth.uid
         && data.lat is number && data.lat >= -90 && data.lat <= 90
         && data.lng is number && data.lng >= -180 && data.lng <= 180
         && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
         && data.updatedAt is timestamp && data.updatedAt == request.time;
     }
 
-    match /unitLocations/{stationId} {
-      // All signed-in map roles can view the latest station reports.
-      allow read: if isAnyRole();
-      allow create, update: if isAssignedStation(stationId)
-        && isValidUnitLocation(stationId);
+    function isValidUnitLocation(responseId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'responseId',
+          'stationId',
+          'stationName',
+          'lat',
+          'lng',
+          'accuracy',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'responseId',
+          'stationId',
+          'stationName',
+          'lat',
+          'lng',
+          'accuracy',
+          'updatedAt'
+        ])
+        && data.responseId is string && data.responseId == responseId
+        && data.stationId is string && data.stationId.size() <= 128
+        && data.stationId.matches('^[A-Za-z0-9_-]+$')
+        && data.stationName is string && data.stationName.size() > 0 && data.stationName.size() <= 120
+        && data.stationName == getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.stationName
+        && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.status == 'active'
+        && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.stationId == data.stationId
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidStationUnitLocation(stationId, responseId) {
+      let data = request.resource.data;
+      let response = getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data;
+      return data.keys().hasAll([
+          'responseId',
+          'stationId',
+          'stationName',
+          'public',
+          'lat',
+          'lng',
+          'accuracy',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'responseId',
+          'stationId',
+          'stationName',
+          'public',
+          'lat',
+          'lng',
+          'accuracy',
+          'updatedAt'
+        ])
+        && data.responseId is string && data.responseId == responseId
+        && data.stationId is string && data.stationId == stationId
+        && data.stationId.size() <= 128 && data.stationId.matches('^[A-Za-z0-9_-]+$')
+        && data.stationName is string && data.stationName.size() > 0 && data.stationName.size() <= 120
+        && data.stationName == response.stationName
+        && data.public == true
+        && response.uid == request.auth.uid
+        && response.status == 'active'
+        && response.stationId == stationId
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    match /responseLocations/{responseId} {
+      allow read: if isSignedIn();
+      allow create, update: if isApprovedStationMember(request.resource.data.stationId)
+        && isValidUnitLocation(responseId);
+      allow delete: if isSignedIn() && (
+        isAdmin()
+        || (get(/databases/$(database)/documents/stationResponses/$(responseId)).data.uid == request.auth.uid
+          && get(/databases/$(database)/documents/stationResponses/$(responseId)).data.status == 'active')
+        || (canManageStation(resource.data.stationId)
+          && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.status == 'ended'));
+    }
+
+    // Legacy station-account locations retain their original private audience.
+    // New response locations are kept in responseLocations, which omits the
+    // responder UID from map-readable documents.
+    match /unitLocations/{reportId} {
+      allow read: if isAdmin() || isLegacyStationAccount();
+      allow create, update: if isLegacyAssignedStation(request.resource.data.stationId)
+        && isValidLegacyUnitLocation(reportId);
       allow delete: if isAdmin();
+    }
+
+    match /stations/{stationId}/unitLocations/{reportId} {
+      allow read: if isSignedIn() && (
+        resource.data.public == true
+        || resource.data.updatedBy == request.auth.uid
+        || isLegacyAssignedStation(stationId)
+        || canManageStation(stationId)
+      );
+      allow create, update: if (
+        isApprovedStationMember(stationId)
+        && isValidStationUnitLocation(stationId, reportId)
+      ) || (
+        isLegacyAssignedStation(stationId)
+        && isValidLegacyUnitLocation(reportId)
+        && request.resource.data.stationId == stationId
+      );
+      allow delete: if isSignedIn() && (
+        isAdmin()
+        || (get(/databases/$(database)/documents/stationResponses/$(reportId)).data.uid == request.auth.uid
+          && get(/databases/$(database)/documents/stationResponses/$(reportId)).data.stationId == stationId
+          && get(/databases/$(database)/documents/stationResponses/$(reportId)).data.status == 'active')
+        || (canManageStation(stationId)
+          && getAfter(/databases/$(database)/documents/stationResponses/$(reportId)).data.status == 'ended')
+      );
+    }
+
+    // A collection-group query is used for the public, identity-free map pins.
+    // Private station-account reports remain visible only to their owner/managers.
+    match /{path=**}/unitLocations/{reportId} {
+      allow read: if isSignedIn() && (
+        resource.data.public == true
+        || resource.data.updatedBy == request.auth.uid
+        || canManageStation(resource.data.stationId)
+      );
     }
 
     // ---------- hydrants ----------

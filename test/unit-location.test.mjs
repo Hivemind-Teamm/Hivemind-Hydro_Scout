@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { stationIdForLocation, writeLoginLocation } from '../lib/unit-location.ts';
+import { assignedStationIdForResponse, stationIdForLocation, writeLoginLocation } from '../lib/unit-location.ts';
 
 const fix = { coords: { latitude: 14.65, longitude: 121.06, accuracy: 8 } };
 function setup(overrides = {}) {
@@ -89,4 +89,22 @@ test('profile and Firestore failures are contained', async () => {
     const ctx = setup({ [key]: async () => { throw new Error('permission-denied'); } });
     assert.equal(await writeLoginLocation('uid-1', ctx.dependencies), 'failed');
   }
+});
+
+test('station metadata never permits a general or unknown role to publish', () => {
+  for (const role of ['general', 'volunteer', undefined]) {
+    assert.equal(stationIdForLocation({ role, accountType: 'station', stationId: 'station-1' }), null);
+  }
+});
+
+test('only approved personal station members qualify to start a response', () => {
+  assert.equal(assignedStationIdForResponse({
+    accountType: 'person', stationMembershipStatus: 'approved', stationId: 'station-1',
+  }), 'station-1');
+  for (const profile of [
+    { accountType: 'station', stationMembershipStatus: 'approved', stationId: 'station-1' },
+    { accountType: 'person', stationMembershipStatus: 'pending', stationId: 'station-1' },
+    { accountType: 'person', stationMembershipStatus: 'rejected', stationId: 'station-1' },
+    { accountType: 'person', stationMembershipStatus: 'approved', stationId: 'bad/id' },
+  ]) assert.equal(assignedStationIdForResponse(profile), null);
 });

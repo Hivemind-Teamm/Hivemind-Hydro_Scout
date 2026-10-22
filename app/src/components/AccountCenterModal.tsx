@@ -29,7 +29,7 @@ interface AccountCenterModalProps {
 }
 
 export default function AccountCenterModal({ onClose }: AccountCenterModalProps) {
-  const { user, role } = useAuth();
+  const { user, role, stationId, stationMembershipStatus } = useAuth();
   const router = useRouter();
 
   const [changingPassword, setChangingPassword]         = useState(false);
@@ -212,8 +212,8 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
               <div className="grid grid-cols-2 gap-3">
                 <ReadonlyField label="Member Since"      value={user?.metadata?.creationTime  ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'} />
                 <ReadonlyField label="Last Login"        value={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleDateString() : '—'} />
-                <ReadonlyField label="Home Station Area" value="QC Diliman" />
-                <ReadonlyField label="Account Status"   value="Active" />
+                <ReadonlyField label="Station ID" value={stationId ?? (stationMembershipStatus === 'pending' ? 'Pending approval' : 'Not assigned')} />
+                <ReadonlyField label="Account Status" value="Active" />
               </div>
             </section>
 

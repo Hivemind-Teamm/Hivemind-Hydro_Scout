@@ -15,7 +15,7 @@ import { useAuth } from '@/lib/auth-context';
 import AvatarPlaceholder from './AvatarPlaceholder';
 import {
   useUsers,
-  updateUserRole,
+  updateUserAccount,
   deleteUserAccount,
   createUserAccount,
   ROLE_META,
@@ -27,6 +27,7 @@ import { useHydrants, createHydrant } from '../data/store';
 import { type HydrantStatus } from '../data/hydrants';
 import PillBadge from './PillBadge';
 import BuildVersionLog from './BuildVersionLog';
+import { createStation, useStations } from '../data/stations';
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
@@ -92,6 +93,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
       {/* ── Body — grows naturally, window scrolls ── */}
       <div className="flex flex-col gap-4 p-3 md:gap-5 md:p-6">
         <BuildVersionLog adminNames={Object.fromEntries(users.map(account => [account.uid, account.displayName]))} />
+        <StationsCard />
         <ManageUsersCard
           users={users}
           loading={loading}
@@ -101,6 +103,54 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
         <BulkImportCard adminName={adminName} />
       </div>
     </div>
+  );
+}
+
+function StationsCard() {
+  const { stations, loading, error } = useStations();
+  const [name, setName] = useState('');
+  const [id, setId] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    setMessage(null);
+    setSubmitting(true);
+    try {
+      await createStation(id, name);
+      setName('');
+      setId('');
+      setMessage('Station added to the sign-up list.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Could not add the station.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 md:p-6">
+      <h2 className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Station Directory</h2>
+      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Active stations appear on the sign-up form. Station IDs cannot be changed after creation.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+        <input value={name} onChange={event => setName(event.target.value)} placeholder="Station name" className="admin-input" maxLength={120} />
+        <input value={id} onChange={event => setId(event.target.value)} placeholder="Station ID (e.g. DILIMAN-01)" className="admin-input" maxLength={128} />
+        <button type="button" disabled={submitting} onClick={() => void submit()} className="rounded-lg bg-[#e0353b] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+          {submitting ? 'Adding…' : 'Add station'}
+        </button>
+      </div>
+      {message && <p role="status" className="mt-2 text-xs text-neutral-600 dark:text-neutral-300">{message}</p>}
+      {error && <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>}
+      <div className="mt-4 divide-y divide-neutral-100 dark:divide-neutral-800">
+        {loading ? <p className="py-3 text-sm text-neutral-400">Loading stations…</p> : stations.map(station => (
+          <div key={station.id} className="flex justify-between gap-3 py-2 text-sm">
+            <span className="font-semibold text-neutral-700 dark:text-neutral-200">{station.name}</span>
+            <code className="text-xs text-neutral-400">{station.id}</code>
+          </div>
+        ))}
+        {!loading && stations.length === 0 && <p className="py-3 text-sm text-neutral-400">No active stations yet.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -266,7 +316,12 @@ function UserRow({
         <RoleBadge role={user.role} />
       </td>
       {/* Station */}
-      <td className="px-3 py-3 text-sm text-neutral-600 dark:text-neutral-300">{user.station}</td>
+      <td className="px-3 py-3 text-sm text-neutral-600 dark:text-neutral-300">
+        <span>{user.station}</span>
+        <span className="mt-0.5 block text-[10px] text-neutral-400 dark:text-neutral-500">
+          {user.accountType === 'station' ? 'Station account' : 'Personal account'}
+        </span>
+      </td>
       {/* Status — text color matches the status (green = active, gray = invited). */}
       <td className="px-3 py-3">
         <span
@@ -337,6 +392,7 @@ function SkeletonRows() {
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Create account modal �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 function CreateAccountModal({ onClose }: { onClose: () => void }) {
+  const { stations } = useStations();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -344,6 +400,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
   const [stationId, setStationId] = useState('');
   const [aorBarangaysText, setAorBarangaysText] = useState('');
   const [role, setRole] = useState<UserRole>('general');
+  const [accountType, setAccountType] = useState<'person' | 'station'>('person');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -351,6 +408,14 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
     setError(null);
     if (!email.trim() || !password) { setError('Email and a temporary password are required.'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (accountType === 'station' && role === 'general') {
+      setError('Station accounts need the Authorized, Head, or Admin role.');
+      return;
+    }
+    if (stationId.trim() && !/^[A-Za-z0-9_-]{1,128}$/.test(stationId.trim())) {
+      setError('Choose a valid Station ID from the station directory.');
+      return;
+    }
     const aorBarangays = aorBarangaysText
       .split(',')
       .map((barangay) => barangay.trim())
@@ -363,6 +428,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
         email,
         password,
         role,
+        accountType,
         station,
         stationId,
         aorBarangays,
@@ -401,33 +467,54 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
             className="admin-input"
           />
         </Field>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Temporary Password">
-            <input
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="min. 6 characters"
-              className="admin-input"
-            />
-          </Field>
-          <Field label="Station (optional)">
-            <input
-              value={station}
-              onChange={(e) => setStation(e.target.value)}
-              placeholder="Laging Handa Sub-Station"
-              className="admin-input"
-            />
-          </Field>
-        </div>
-
-        <Field label="Station ID">
+        <Field label="Temporary Password">
           <input
-            value={stationId}
-            onChange={(e) => setStationId(e.target.value)}
-            placeholder="e.g. QCFD-STATION-01"
+            type="text"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="min. 6 characters"
             className="admin-input"
           />
+        </Field>
+
+        <Field label="Account type">
+          <div className="grid grid-cols-2 gap-2">
+            {(['person', 'station'] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                aria-pressed={accountType === type}
+                onClick={() => setAccountType(type)}
+                className={`rounded-lg border px-3 py-2 text-xs font-bold transition-all ${
+                  accountType === type
+                    ? 'border-[#e0353b] bg-[#e0353b] text-white'
+                    : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:text-neutral-400'
+                }`}
+              >
+                {type === 'station' ? 'Station / Substation' : 'Personal'}
+              </button>
+            ))}
+          </div>
+          {accountType === 'station' && (
+            <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+              Station accounts manage station activity. Responders share location through their own approved personal accounts.
+            </span>
+          )}
+        </Field>
+
+        <Field label="Station ID">
+          <select
+            value={stationId}
+            onChange={(e) => {
+              setStationId(e.target.value);
+              setStation(stations.find(item => item.id === e.target.value)?.name ?? '');
+            }}
+            aria-required={accountType === 'station'}
+            className="admin-input"
+          >
+            <option value="">No station assignment</option>
+            {stations.map(item => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
+          </select>
         </Field>
 
         <Field label="AOR Barangays">
@@ -480,17 +567,32 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Edit user modal �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }) {
+  const { stations } = useStations();
   const [role, setRole] = useState<UserRole>(user.role);
+  const [accountType, setAccountType] = useState<'person' | 'station'>(user.accountType ?? 'person');
+  const [stationId, setStationId] = useState(user.stationId ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dirty = role !== user.role;
+  const dirty = role !== user.role || accountType !== user.accountType || stationId.trim() !== (user.stationId ?? '');
 
   async function handleSave() {
     if (!dirty) { onClose(); return; }
+    if (accountType === 'station' && role === 'general') {
+      setError('Station accounts need the Authorized, Head, or Admin role.');
+      return;
+    }
+    if (accountType === 'station' && !stationId.trim()) {
+      setError('Station accounts need a valid Station ID (letters, numbers, underscores, or hyphens).');
+      return;
+    }
+    if (stationId.trim() && !/^[A-Za-z0-9_-]{1,128}$/.test(stationId.trim())) {
+      setError('Choose a valid Station ID from the station directory.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await updateUserRole(user.uid, role);
+      await updateUserAccount(user.uid, role, accountType, stationId);
       onClose();
     } catch (e) {
       setError((e as Error)?.message ?? 'Could not update the role.');
@@ -510,6 +612,43 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
             <p className="text-xs text-neutral-400 dark:text-neutral-500">{user.station}</p>
           </div>
         </div>
+
+        <Field label="Account type">
+          <div className="grid grid-cols-2 gap-2">
+            {(['person', 'station'] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                aria-pressed={accountType === type}
+                onClick={() => setAccountType(type)}
+                className={`rounded-lg border px-3 py-2 text-xs font-bold transition-all ${
+                  accountType === type
+                    ? 'border-[#e0353b] bg-[#e0353b] text-white'
+                    : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:text-neutral-400'
+                }`}
+              >
+                {type === 'station' ? 'Station / Substation' : 'Personal'}
+              </button>
+            ))}
+          </div>
+          {accountType === 'station' && (
+            <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+              Station accounts manage station activity. Responders share location through their own approved personal accounts.
+            </span>
+          )}
+        </Field>
+
+        <Field label="Station assignment">
+          <select
+            value={stationId}
+            onChange={(e) => setStationId(e.target.value)}
+            className="admin-input"
+          >
+            <option value="">No station assignment</option>
+            {!stations.some(item => item.id === stationId) && stationId && <option value={stationId}>{user.station} ({stationId}) · existing</option>}
+            {stations.map(item => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
+          </select>
+        </Field>
 
         <Field label="Role">
           <div className="grid grid-cols-2 gap-2">

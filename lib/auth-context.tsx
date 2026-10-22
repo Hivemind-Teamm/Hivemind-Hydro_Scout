@@ -18,12 +18,10 @@ import {
   updateProfile,
   User,
 } from "firebase/auth";
-import { doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, updateDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import { auth, db } from "./firebase";
-import { startStationLocationReporting, stationIdForLocation } from "./unit-location";
 import { useLocationConsent } from './use-location-consent';
-import { readLocationConsent } from './location-consent';
 import LocationConsentNotice from '@/app/src/components/LocationConsentNotice';
 
 function friendlyAuthError(err: unknown): never {
@@ -49,16 +47,22 @@ function friendlyAuthError(err: unknown): never {
 }
 
 export type Role = "general" | "authorized" | "head" | "admin" | null;
+export type AccountType = "person" | "station" | null;
 
 interface AuthContextValue {
   canUseDeviceLocation: boolean;
   user: User | null;
   role: Role;
+  accountType: AccountType;
+  stationId: string | null;
   aorBarangays: string[];
+  stationMembershipStatus: 'none' | 'pending' | 'approved' | 'rejected';
+  stationAccessIds: string[];
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  signup: (email: string, password: string, displayName: string, requestedStationId?: string | null) => Promise<void>;
+  openLocationConsent: () => void;
   refreshSession: () => Promise<void>;
 }
 
@@ -75,6 +79,10 @@ async function syncSessionCookie(idToken: string | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>(null);
+  const [accountType, setAccountType] = useState<AccountType>(null);
+  const [assignedStationId, setAssignedStationId] = useState<string | null>(null);
+  const [stationMembershipStatus, setStationMembershipStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
+  const [stationAccessIds, setStationAccessIds] = useState<string[]>([]);
   const [aorBarangays, setAorBarangays] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const sessionGeneration = useRef(0);
@@ -104,6 +112,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           setUser(firebaseUser);
           setRole((data?.role ?? null) as Role);
+          setAccountType(data?.accountType === "station" || data?.accountType === "person" ? data.accountType : null);
+          setAssignedStationId(typeof data?.stationId === "string" ? data.stationId : null);
+          setStationMembershipStatus(
+            data?.stationMembershipStatus === 'approved' || data?.stationMembershipStatus === 'pending'
+              || data?.stationMembershipStatus === 'rejected' ? data.stationMembershipStatus : 'none',
+          );
+          setStationAccessIds(Array.isArray(data?.stationAccessIds)
+            ? data.stationAccessIds.filter((value): value is string => typeof value === 'string') : []);
           setAorBarangays(Array.isArray(data?.aorBarangays) ? data.aorBarangays.filter((value): value is string => typeof value === "string") : []);
           // Re-issue the session cookie on every auth state change (including
           // page reload) so server routes like /api/upload can always verify the user.
@@ -112,11 +128,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("Failed to load user role:", err);
           setUser(firebaseUser);
           setRole(null);
+          setAccountType(null);
+          setAssignedStationId(null);
+          setStationMembershipStatus('none');
+          setStationAccessIds([]);
           setAorBarangays([]);
         }
       } else {
         setUser(null);
         setRole(null);
+        setAccountType(null);
+        setAssignedStationId(null);
+        setStationMembershipStatus('none');
+        setStationAccessIds([]);
         setAorBarangays([]);
         await syncSessionCookie(null);
       }
@@ -127,43 +151,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-      const firebaseUser = user;
-      if (!firebaseUser || !stationId || !locationGranted) return;
-      const generation = sessionGeneration.current;
-      const reporting = startStationLocationReporting(firebaseUser.uid, {
-        readProfile: async () => {
-          const snapshot = await getDocFromServer(doc(db, "users", firebaseUser.uid));
-          const profile = snapshot.exists() ? snapshot.data() : undefined;
-          // Reassignment requires a new, station-specific consent decision.
-          return stationIdForLocation(profile) === stationId ? profile : undefined;
-        },
-        geolocation: typeof navigator !== "undefined" ? navigator.geolocation : undefined,
-        isCurrentSession: () => sessionGeneration.current === generation && auth.currentUser === firebaseUser
-          && readLocationConsent(firebaseUser.uid, stationId)?.decision === 'granted',
-        isActive: () => navigator.onLine,
-        writePosition: async (position) => {
-          await setDoc(doc(db, "unitLocations", position.stationId), {
-            ...position,
-            updatedAt: serverTimestamp(),
-          });
-        },
-        onResult: (result) => {
-          if (result === "unavailable" || result === "failed") {
-            console.warn(`Station location was not saved (${result}). Will retry while the app is active.`);
-          }
-        },
-      });
-      const resume = () => { void reporting.refresh(); };
-      document.addEventListener("visibilitychange", resume);
-      window.addEventListener("focus", resume);
-      window.addEventListener("online", resume);
-      return () => {
-        reporting.stop();
-        document.removeEventListener("visibilitychange", resume);
-        window.removeEventListener("focus", resume);
-        window.removeEventListener("online", resume);
-      };
-  }, [user, stationId, locationGranted]);
+    if (!user) return;
+    return onSnapshot(doc(db, 'users', user.uid), snapshot => {
+      const data = snapshot.exists() ? snapshot.data() : null;
+      setRole((data?.role ?? null) as Role);
+      setAccountType(data?.accountType === 'station' || data?.accountType === 'person' ? data.accountType : null);
+      setAssignedStationId(typeof data?.stationId === 'string' ? data.stationId : null);
+      setStationMembershipStatus(
+        data?.stationMembershipStatus === 'approved' || data?.stationMembershipStatus === 'pending'
+          || data?.stationMembershipStatus === 'rejected' ? data.stationMembershipStatus : 'none',
+      );
+      setStationAccessIds(Array.isArray(data?.stationAccessIds)
+        ? data.stationAccessIds.filter((value): value is string => typeof value === 'string') : []);
+      setAorBarangays(Array.isArray(data?.aorBarangays)
+        ? data.aorBarangays.filter((value): value is string => typeof value === 'string') : []);
+    }, err => console.error('Failed to watch user profile updates:', err));
+  }, [user]);
 
   async function login(email: string, password: string) {
     let cred;
@@ -190,7 +193,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // syncSessionCookie — no need to call it again here.
   }
 
-  async function signup(email: string, password: string, displayName: string) {
+  async function signup(email: string, password: string, displayName: string, requestedStationId: string | null = null) {
+    const stationId = requestedStationId?.trim() || null;
+    if (stationId) {
+      const station = await getDoc(doc(db, 'stations', stationId));
+      if (!station.exists() || station.data().active !== true) throw new Error('That station is not available for sign-up.');
+    }
     let cred;
     try {
       cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -198,16 +206,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       friendlyAuthError(err);
     }
 
-    // createUserWithEmailAndPassword always produces a brand-new UID, so no
-    // Firestore document for this UID can exist yet — write without merge so
-    // the document is created cleanly with role: "general".
-    await setDoc(doc(db, "users", cred.user.uid), {
+    const batch = writeBatch(db);
+    batch.set(doc(db, "users", cred.user.uid), {
       email,
       displayName,
       role: "general",
+      accountType: "person",
+      stationMembershipStatus: stationId ? 'pending' : 'none',
+      ...(stationId ? { requestedStationId: stationId } : {}),
       createdAt: serverTimestamp(),
       lastLoginAt: serverTimestamp(),
     });
+    if (stationId) {
+      batch.set(doc(db, 'stationJoinRequests', cred.user.uid), {
+        uid: cred.user.uid,
+        displayName,
+        email,
+        stationId,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      batch.set(doc(collection(db, 'stations', stationId, 'notifications'), `join-${cred.user.uid}`), {
+        type: 'station-join-request',
+        uid: cred.user.uid,
+        displayName,
+        message: `${displayName} requested to join ${stationId}.`,
+        createdAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
 
     // Also stamp the personal name onto the Firebase Auth profile so
     // `user.displayName` is populated immediately (the app reads it for the top
@@ -233,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, aorBarangays, loading, login, logout, signup, refreshSession, canUseDeviceLocation: locationConsent.canUseDeviceLocation }}>
+    <AuthContext.Provider value={{ user, role, accountType, stationId: assignedStationId, aorBarangays, stationMembershipStatus, stationAccessIds, loading, login, logout, signup, refreshSession, openLocationConsent: locationConsent.openNotice, canUseDeviceLocation: locationConsent.canUseDeviceLocation }}>
       {children}
       {stationId && (
         <button type="button" onClick={locationConsent.openNotice} className="fixed right-3 top-20 z-[5000] rounded-lg bg-white px-3 py-2 text-xs font-semibold text-neutral-700 shadow dark:bg-neutral-800 dark:text-white">

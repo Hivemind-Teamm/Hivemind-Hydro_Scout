@@ -23,7 +23,7 @@ test('no consent prevents GPS; withdrawal cancels an in-flight report', async t 
   let writes = 0;
   let complete;
   const reporter = startStationLocationReporting('uid', {
-    readProfile: async () => ({ accountType: 'station', stationId: 'station-1' }),
+    readProfile: async () => ({ role: 'authorized', accountType: 'station', stationId: 'station-1' }),
     isCurrentSession: () => allowed,
     isActive: () => true,
     geolocation: { getCurrentPosition: success => { requests++; complete = success; } },
@@ -46,7 +46,7 @@ test('background sync eligibility does not depend on document focus or visibilit
   t.mock.timers.enable({ apis: ['Date', 'setInterval', 'setTimeout'], now: 1000 });
   let writes = 0;
   const reporter = startStationLocationReporting('uid', {
-    readProfile: async () => ({ accountType: 'station', stationId: 'station-1' }),
+    readProfile: async () => ({ role: 'authorized', accountType: 'station', stationId: 'station-1' }),
     isCurrentSession: () => true,
     isActive: () => true,
     geolocation: { getCurrentPosition: success => success({ coords: { latitude: 14.65, longitude: 121.06, accuracy: 8 } }) },

@@ -9,7 +9,7 @@ function setup(t, overrides = {}) {
   let active = true;
   let current = true;
   const dependencies = {
-    readProfile: async () => ({ accountType: 'station', stationId: 'station-1' }),
+    readProfile: async () => ({ role: 'authorized', accountType: 'station', stationId: 'station-1' }),
     geolocation: { getCurrentPosition: success => success({ coords: { latitude: 14.65, longitude: 121.06, accuracy: 8 } }) },
     isActive: () => active,
     isCurrentSession: () => current,
@@ -76,7 +76,7 @@ test('individual accounts never request GPS and failed reports can retry', async
   let requests = 0;
   let station = false;
   const state = setup(t, {
-    readProfile: async () => station ? { accountType: 'station', stationId: 'station-1' } : {},
+    readProfile: async () => station ? { role: 'authorized', accountType: 'station', stationId: 'station-1' } : {},
     geolocation: { getCurrentPosition: (success, failure) => {
       requests++;
       if (requests === 1) failure();

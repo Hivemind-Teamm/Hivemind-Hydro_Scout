@@ -6,15 +6,18 @@ import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useIsMobile, useIsShort } from "@/lib/use-media-query";
 import AuthShell, { AccentTicks, BRAND } from "../src/components/AuthShell";
+import { useStations } from "../src/data/stations";
 
 export default function SignUpPage() {
   const { signup, user, loading } = useAuth();
+  const { stations, loading: stationsLoading, error: stationsError } = useStations();
   const { isDark } = useTheme();
   const isMobile = useIsMobile();
   const isShort = useIsShort();
   const router = useRouter();
 
   const [displayName, setDisplayName] = useState("");
+  const [requestedStationId, setRequestedStationId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -40,7 +43,7 @@ export default function SignUpPage() {
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
     setSubmitting(true);
     try {
-      await signup(email, password, displayName.trim() || email.split("@")[0]);
+      await signup(email, password, displayName.trim() || email.split("@")[0], requestedStationId || null);
       router.push("/");
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? "";
@@ -111,6 +114,16 @@ export default function SignUpPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
           <label style={labelStyle}>Display Name</label>
           <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" placeholder="e.g. Juan dela Cruz" className="auth-input" style={inputStyle} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          <label htmlFor="signup-station" style={labelStyle}>Station (optional)</label>
+          <select id="signup-station" value={requestedStationId} onChange={e => setRequestedStationId(e.target.value)}
+            disabled={stationsLoading} className="auth-input" style={inputStyle}>
+            <option value="">Not affiliated with a station</option>
+            {stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}
+          </select>
+          {stationsError && <p role="alert" style={{ color: BRAND.red, fontSize: 12, margin: 0 }}>{stationsError}</p>}
+          {requestedStationId && <p style={{ color: mutedColor, fontSize: 12, margin: 0 }}>The station head must approve your membership before you can start sharing a response location.</p>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
           <label style={labelStyle}>Email</label>

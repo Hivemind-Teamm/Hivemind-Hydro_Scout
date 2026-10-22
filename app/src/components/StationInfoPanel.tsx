@@ -12,7 +12,7 @@ export default function StationInfoPanel({ location, onClose, onLocate }: {
   const isMobile = useIsMobile();
   const reported = location.updatedAt === null ? 'Unavailable' : new Date(location.updatedAt).toLocaleString();
   return (
-    <section aria-label="Station details"
+    <section aria-label="Responder location details"
       onClick={event => event.stopPropagation()}
       onPointerDown={event => event.stopPropagation()}
       className={isMobile
@@ -24,11 +24,11 @@ export default function StationInfoPanel({ location, onClose, onLocate }: {
       </div>
       <div className="flex shrink-0 items-start justify-between bg-neutral-50 px-5 pb-4 dark:bg-neutral-700">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Fire station</p>
-          <button type="button" onClick={onLocate} title="Zoom to station location"
+          <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Responding station</p>
+          <button type="button" onClick={onLocate} title="Zoom to latest GPS location"
             className="flex items-center gap-1 text-left text-base font-bold text-neutral-800 hover:underline dark:text-neutral-100">
             <FiMapPin className="h-4 w-4 shrink-0" />
-            <span className="break-all">{location.stationId}</span>
+            <span className="break-all">{location.stationName ?? location.stationId}</span>
           </button>
         </div>
         <button type="button" onClick={onClose} aria-label="Close station details"
@@ -38,29 +38,19 @@ export default function StationInfoPanel({ location, onClose, onLocate }: {
       </div>
       <div className="min-h-0 overflow-y-auto overscroll-contain">
         <div className="flex h-32 items-center justify-center bg-red-50 dark:bg-red-950/20" aria-hidden="true">
-          <svg width="80" height="80" viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="16" fill="#dc2626" />
-            <path d="M9 15.5L18 9l9 6.5V26H9zM13 26v-7h10v7M15 18.5v-4h6v4M16 26v-3h4v3" fill="none" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
-          </svg>
+          <FiMapPin className="h-16 w-16 text-red-600" fill="white" strokeWidth={2} />
         </div>
         <div className="space-y-3 p-5">
-          <dl className="divide-y divide-neutral-100 rounded-lg bg-neutral-50 px-3 dark:divide-neutral-700 dark:bg-neutral-900/40">
-            {[
-              ['Last reported', reported],
-              ['GPS accuracy', `${Math.round(location.accuracy)} m`],
-              ['Latitude', location.lat.toFixed(5)],
-              ['Longitude', location.lng.toFixed(5)],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-start justify-between gap-3 py-2.5">
-                <dt className="text-[10px] font-bold uppercase text-neutral-400">{label}</dt>
-                <dd className="text-right text-xs font-semibold text-neutral-700 dark:text-neutral-200">{value}</dd>
-              </div>
-            ))}
+          <dl className="rounded-lg bg-neutral-50 px-3 py-2.5 dark:bg-neutral-900/40">
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-[10px] font-bold uppercase text-neutral-400">Last GPS update</dt>
+              <dd className="text-right text-xs font-semibold text-neutral-700 dark:text-neutral-200">{reported}</dd>
+            </div>
           </dl>
           <button type="button" onClick={onLocate} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#e0353b] py-2 text-xs font-bold text-white hover:bg-red-700">
             <FiMapPin className="h-4 w-4" /> View on map
           </button>
-          <p className="text-center text-[11px] text-neutral-400">Latest reported device position</p>
+          <p className="text-center text-[11px] text-neutral-400">Current location reported by a linked responder during an active response</p>
         </div>
       </div>
     </section>

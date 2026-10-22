@@ -1,7 +1,9 @@
 /** Temporary contract until F1 lands: station accounts are explicitly marked. */
 export interface StationProfile {
+  role?: unknown;
   accountType?: unknown;
   stationId?: unknown;
+  stationMembershipStatus?: unknown;
 }
 
 export interface UnitPosition {
@@ -22,11 +24,17 @@ interface LocationDependencies {
 }
 
 export function stationIdForLocation(profile: StationProfile | undefined): string | null {
-  if (profile?.accountType !== "station") return null;
+  if (profile?.accountType !== "station" || !["authorized", "head", "admin"].includes(String(profile.role))) return null;
   const id = profile.stationId;
   // Never substitute the legacy station display name or the user's UID.
   return typeof id === "string" && id.length <= 128 && /^[A-Za-z0-9_-]+$/.test(id)
     ? id : null;
+}
+
+export function assignedStationIdForResponse(profile: StationProfile | undefined): string | null {
+  if (profile?.accountType !== 'person' || profile.stationMembershipStatus !== 'approved') return null;
+  const id = profile.stationId;
+  return typeof id === 'string' && id.length <= 128 && /^[A-Za-z0-9_-]+$/.test(id) ? id : null;
 }
 
 /** Capture one fresh position; failure must not interrupt the signed-in session. */
@@ -101,4 +109,16 @@ export function startStationLocationReporting(
   const timer = setInterval(() => { void refresh(); }, intervalMs);
   void refresh();
   return { refresh, stop() { stopped = true; clearInterval(timer); } };
+}
+
+/** Stable per browser installation; separate devices never overwrite one another. */
+export function locationDeviceId(): string {
+  const key = "hydroscout-location-device";
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved && /^[a-f0-9-]{36}$/.test(saved)) return saved;
+  } catch { /* Fall back to a session-only identity. */ }
+  const id = crypto.randomUUID();
+  try { localStorage.setItem(key, id); } catch { /* Keep reporting available. */ }
+  return id;
 }

@@ -23,6 +23,7 @@ import {
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   updateDoc,
   deleteDoc,
@@ -31,8 +32,10 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import { db, firebaseConfig } from '@/lib/firebase';
+import { stationIdForLocation } from '@/lib/unit-location';
 
 export type UserRole = 'general' | 'authorized' | 'head' | 'admin';
+export type AccountType = 'person' | 'station';
 
 export const ROLE_ORDER: UserRole[] = [
   'general',
@@ -80,6 +83,7 @@ export interface AppUser {
   displayName: string;
   email: string;
   role: UserRole;
+  accountType: AccountType | null;
 
   // Existing human-readable station name.
   station: string;
@@ -212,6 +216,9 @@ export function userFromDoc(
         : '—',
 
     role: toRole(d.role),
+    accountType: d.accountType === 'station' || d.accountType === 'person'
+      ? d.accountType
+      : null,
 
     station:
       (typeof d.station === 'string' &&
@@ -292,13 +299,35 @@ export function useUsers(): UsersState {
  * Promote / demote a user.
  * Admin-only according to Firestore rules.
  */
-export async function updateUserRole(
+export async function updateUserAccount(
   uid: string,
   role: UserRole,
+  accountType: AccountType,
+  stationId: string,
 ): Promise<void> {
+  const assignedStationId = stationId.trim() || null;
+  if (assignedStationId && !/^[A-Za-z0-9_-]{1,128}$/.test(assignedStationId)) {
+    throw new Error('Choose a valid Station ID from the station directory.');
+  }
+  if (accountType === 'station'
+    && !stationIdForLocation({ role, accountType, stationId: assignedStationId })) {
+    throw new Error('Station accounts need an authorized, head, or admin role and a valid Station ID.');
+  }
+  const stationSnapshot = assignedStationId ? await getDoc(doc(db, 'stations', assignedStationId)) : null;
+  if (assignedStationId && (!stationSnapshot?.exists() || stationSnapshot.data().active !== true)) {
+    throw new Error('Choose an active station from the station directory.');
+  }
   await updateDoc(
     doc(db, 'users', uid),
-    { role },
+    {
+      role,
+      accountType,
+      stationId: assignedStationId,
+      station: stationSnapshot?.exists() ? String(stationSnapshot.data().name ?? 'Unassigned') : 'Unassigned',
+      ...(accountType === 'person'
+        ? { stationMembershipStatus: assignedStationId ? 'approved' : 'none' }
+        : {}),
+    },
   );
 }
 
@@ -321,6 +350,7 @@ export interface CreateAccountInput {
   email: string;
   password: string;
   role: UserRole;
+  accountType: AccountType;
 
   // Existing display name.
   station: string;
@@ -340,6 +370,22 @@ export interface CreateAccountInput {
 export async function createUserAccount(
   input: CreateAccountInput,
 ): Promise<void> {
+  const stationId =
+    typeof input.stationId === 'string' && input.stationId.trim()
+      ? input.stationId.trim()
+      : null;
+  if (stationId && !/^[A-Za-z0-9_-]{1,128}$/.test(stationId)) {
+    throw new Error('Choose a valid Station ID from the station directory.');
+  }
+  if (input.accountType === 'station'
+    && !stationIdForLocation({ role: input.role, accountType: input.accountType, stationId })) {
+    throw new Error('Station accounts need an authorized, head, or admin role and a valid Station ID.');
+  }
+  const stationSnapshot = stationId ? await getDoc(doc(db, 'stations', stationId)) : null;
+  if (stationId && (!stationSnapshot?.exists() || stationSnapshot.data().active !== true)) {
+    throw new Error('Choose an active station from the station directory.');
+  }
+
   const secondary = initializeApp(
     firebaseConfig,
     `admin-create-${Date.now()}`,
@@ -366,12 +412,6 @@ export async function createUserAccount(
       );
     }
 
-    const stationId =
-      typeof input.stationId === 'string' &&
-      input.stationId.trim()
-        ? input.stationId.trim()
-        : null;
-
     const aorBarangays =
       readAorBarangays(
         input.aorBarangays,
@@ -391,12 +431,16 @@ export async function createUserAccount(
         role:
           input.role,
 
+        accountType: input.accountType,
+
         station:
-          input.station.trim() ||
-          'Unassigned',
+          (stationSnapshot?.exists() ? String(stationSnapshot.data().name ?? '') : '') || input.station.trim() || 'Unassigned',
 
         // F1 Station Accounts + AOR.
         stationId,
+        ...(input.accountType === 'person'
+          ? { stationMembershipStatus: stationId ? 'approved' : 'none' }
+          : {}),
         aorBarangays,
 
         createdAt:
