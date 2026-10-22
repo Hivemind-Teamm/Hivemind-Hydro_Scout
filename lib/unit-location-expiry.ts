@@ -1,6 +1,8 @@
 import type { MapUnitLocation } from './map-unit-location';
 
-export const DEFAULT_UNIT_LOCATION_TIMEOUT_MS = 15 * 60_000;
+import { INCIDENT_LOCATION_CONFIG } from './incident-location-settings.mjs';
+
+export const DEFAULT_UNIT_LOCATION_TIMEOUT_MS = INCIDENT_LOCATION_CONFIG.staleTimeoutMs;
 
 export function locationTimeoutMs(minutes: string | undefined): number {
   const value = Number(minutes);

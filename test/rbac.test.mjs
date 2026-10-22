@@ -14,6 +14,7 @@
 // pass/fail for every row of the permission matrix, then shuts down.
 
 import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import {
   initializeTestEnvironment,
@@ -21,7 +22,7 @@ import {
   assertFails,
 } from "@firebase/rules-unit-testing";
 
-const PROJECT_ID = "hydro-scout-rbac-test";
+const PROJECT_ID = `hydro-rbac-${randomUUID().slice(0, 8)}`;
 
 const testEnv = await initializeTestEnvironment({
   projectId: PROJECT_ID,

@@ -1,5 +1,5 @@
 rules_version = '2';
-// unitLocations/{uid}_{incidentId}: stationId, updatedBy, incidentId, location (GeoPoint), accuracy, updatedAt.
+// unitLocations/{uid}_{deviceUUID}: stationId, updatedBy, incidentId, location (GeoPoint), accuracy, updatedAt.
 // Temporary F1 contract: station accounts have accountType == 'station' and stationId.
 //
 // F1 Station Accounts + AOR:
@@ -86,7 +86,7 @@ service cloud.firestore {
 
     function isLocationOwner(locationId) {
       return isSignedIn()
-        && locationId.matches('^' + request.auth.uid + '_[A-Za-z0-9_-]+$');
+        && locationId.matches('^' + request.auth.uid + '_[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$');
     }
 
     function incidentIdIsValid(incidentId) {
@@ -102,10 +102,18 @@ service cloud.firestore {
 
     function incidentIsActiveAndNearby(incidentId, location) {
       let incidentPath = /databases/$(database)/documents/incidents/$(incidentId);
+      let stationId = get(/databases/$(database)/documents/users/$(request.auth.uid))
+        .data.get('stationId', null);
+
       return exists(incidentPath)
         && get(incidentPath).data.get('status', null) == 'active'
         && get(incidentPath).data.get('location', null) is latlng
-        && location.distance(get(incidentPath).data.location) <= 550;
+        && location.distance(get(incidentPath).data.location) <= 500
+        // Proximity alone cannot authorize station tracking.
+        // Only trusted server processes may manage incident assignments.
+        && get(incidentPath).data.get('assignedStationIds', null) is list
+        && stationId is string
+        && stationId in get(incidentPath).data.assignedStationIds;
     }
 
     function validUnitLocation(locationId) {
@@ -128,11 +136,11 @@ service cloud.firestore {
         && data.stationId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('stationId', null)
         && data.updatedBy == request.auth.uid
         && data.incidentId is string
-        && locationId == request.auth.uid + '_' + data.incidentId
+
         && data.location is latlng
         && data.accuracy is number
         && data.accuracy >= 0
-        && data.accuracy <= 40075000
+        && data.accuracy <= 50
         && data.updatedAt is timestamp
         && data.updatedAt == request.time
         && validIncidentLocation();
@@ -144,14 +152,13 @@ service cloud.firestore {
     }
 
     match /unitLocations/{locationId} {
-      allow read: if isStationAccount() || isAdmin();
+      allow read: if isAdmin() || (isSubAdmin() && isStationAccount());
 
       allow create: if validUnitLocation(locationId);
 
       allow update: if validUnitLocation(locationId)
         && resource.data.updatedBy == request.auth.uid
-        && resource.data.stationId == request.resource.data.stationId
-        && resource.data.incidentId == request.resource.data.incidentId;
+        && resource.data.stationId == request.resource.data.stationId;
 
       allow delete: if isAdmin()
         || (isLocationOwner(locationId)

@@ -1,7 +1,7 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, GeoPoint } from "firebase-admin/firestore";
 
 const PROJECT = "demo-hydro-scout-api";
 
@@ -23,8 +23,13 @@ export async function createIncidentFixtures() {
   const auth = getAuth(app);
   const db = getFirestore(app);
   const created = [];
+  const incidentIds = [];
 
   async function cleanup() {
+    for (const incidentId of incidentIds.reverse()) {
+      await db.collection("incidents").doc(incidentId).delete();
+    }
+
     for (const uid of created.reverse()) {
       await db.collection("users").doc(uid).delete();
       await auth.deleteUser(uid);
@@ -59,7 +64,60 @@ export async function createIncidentFixtures() {
       accounts[role] = { uid, email, password };
     }
 
-    return { accounts, cleanup };
+    const incidentId = `incident-fixture-${randomUUID()}`;
+    const otherIncidentId = `incident-fixture-${randomUUID()}`;
+    const resolvedIncidentId = `incident-fixture-${randomUUID()}`;
+    const invalidIncidentId = `incident-fixture-${randomUUID()}`;
+
+    const fixtures = [
+      {
+        id: incidentId,
+        data: {
+          status: "active",
+          location: new GeoPoint(14.65, 121.06),
+          assignedStationIds: ["TEST-STATION-001"],
+        },
+      },
+      {
+        id: otherIncidentId,
+        data: {
+          status: "active",
+          location: new GeoPoint(14.66, 121.07),
+          assignedStationIds: ["OTHER-STATION"],
+        },
+      },
+      {
+        id: resolvedIncidentId,
+        data: {
+          status: "resolved",
+          location: new GeoPoint(14.67, 121.08),
+          assignedStationIds: ["TEST-STATION-001"],
+        },
+      },
+      {
+        id: invalidIncidentId,
+        data: {
+          status: "active",
+          location: "invalid-coordinates",
+          assignedStationIds: ["TEST-STATION-001"],
+        },
+      },
+    ];
+
+    for (const fixture of fixtures) {
+      await db.collection("incidents").doc(fixture.id).set(fixture.data);
+      incidentIds.push(fixture.id);
+    }
+
+    return {
+      accounts,
+      cleanup,
+      db,
+      incidentId,
+      otherIncidentId,
+      resolvedIncidentId,
+      invalidIncidentId,
+    };
   } catch (error) {
     try {
       await cleanup();

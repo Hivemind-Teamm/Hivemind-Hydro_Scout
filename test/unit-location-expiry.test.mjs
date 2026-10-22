@@ -6,8 +6,8 @@ import {
 
 const position = (stationId, updatedAt) => ({ stationId, updatedAt, lat: 14.65, lng: 121.06, accuracy: 8 });
 
-test('uses a configurable timeout with a 15-minute default', () => {
-  assert.equal(DEFAULT_UNIT_LOCATION_TIMEOUT_MS, 900_000);
+test('uses a configurable timeout with a 90-second default', () => {
+  assert.equal(DEFAULT_UNIT_LOCATION_TIMEOUT_MS, 90_000);
   assert.equal(locationTimeoutMs('5'), 300_000);
   for (const value of [undefined, '', 'bad', '0', '-5', 'Infinity', '1441']) {
     assert.equal(locationTimeoutMs(value), DEFAULT_UNIT_LOCATION_TIMEOUT_MS);

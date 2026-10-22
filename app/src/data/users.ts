@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   getAuth,
+  connectAuthEmulator,
   createUserWithEmailAndPassword,
   updateProfile,
   signOut as secondarySignOut,
@@ -32,11 +33,12 @@ import {
 } from 'firebase/firestore';
 import { db, firebaseConfig } from '@/lib/firebase';
 
-export type UserRole = 'general' | 'authorized' | 'head' | 'admin';
+export type UserRole = 'general' | 'authorized' | 'sub_admin' | 'head' | 'admin';
 
 export const ROLE_ORDER: UserRole[] = [
   'general',
   'authorized',
+  'sub_admin',
   'head',
   'admin',
 ];
@@ -60,6 +62,12 @@ export const ROLE_META: Record<UserRole, RoleMeta> = {
     badgeBg: '#fff4e0',
     badgeText: '#b45309',
     dot: '#f59e0b',
+  },
+  sub_admin: {
+    label: 'Sub Admin',
+    badgeBg: '#e0f2fe',
+    badgeText: '#0369a1',
+    dot: '#0284c7',
   },
   head: {
     label: 'Head',
@@ -349,6 +357,20 @@ export async function createUserAccount(
     const secondaryAuth =
       getAuth(secondary);
 
+    // A secondary Firebase app has its own Auth instance.
+    // Connecting the main app does not connect this instance.
+    if (process.env.NODE_ENV === 'development') {
+      if (secondary.options.projectId !== 'demo-hydro-scout-api') {
+        throw new Error('Secondary Firebase development isolation failed');
+      }
+
+      connectAuthEmulator(
+        secondaryAuth,
+        'http://127.0.0.1:9099',
+        { disableWarnings: true },
+      );
+    }
+
     const cred =
       await createUserWithEmailAndPassword(
         secondaryAuth,
@@ -390,6 +412,10 @@ export async function createUserAccount(
 
         role:
           input.role,
+
+        ...(input.role === 'sub_admin'
+          ? { accountType: 'station' }
+          : {}),
 
         station:
           input.station.trim() ||

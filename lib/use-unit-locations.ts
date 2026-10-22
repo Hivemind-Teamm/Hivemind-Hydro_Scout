@@ -5,15 +5,16 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from './auth-context';
 import { db } from './firebase';
 import { mapUnitLocation, type MapUnitLocation } from './map-unit-location';
-import { locationTimeoutMs, watchUnitLocationExpiry } from './unit-location-expiry';
+import { watchUnitLocationExpiry } from './unit-location-expiry';
+import { INCIDENT_LOCATION_CONFIG } from './incident-location-config';
 
-const TIMEOUT_MS = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES);
+const TIMEOUT_MS = INCIDENT_LOCATION_CONFIG.staleTimeoutMs;
 
 export function useUnitLocations() {
-  const { user, role, loading } = useAuth();
+  const { user, role, stationId, loading } = useAuth();
   const uid = user?.uid;
-  const hasMapRole = role === 'admin' || role === 'authorized' || role === 'general' || role === 'head';
-  const scope = !loading && uid && hasMapRole ? `${uid}:${role}` : null;
+  const canReadLocations = role === 'admin' || (role === 'sub_admin' && !!stationId);
+  const scope = !loading && uid && canReadLocations ? `${uid}:${role}:${stationId ?? ''}` : null;
   const [state, setState] = useState<{
     scope: string | null; locations: MapUnitLocation[]; error: boolean;
   }>({ scope: null, locations: [], error: false });

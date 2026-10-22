@@ -46,3 +46,24 @@ test('a new location or deletion removes station membership from its previous cl
     assert.deepEqual(layout.clusters[0].stationIds, []);
   }
 });
+
+test('devices from the same station require separate marker identities', () => {
+  const devices = [
+    { id: 'device-1', stationId: 'station-1', lat: 14.6502, lng: 121.0602 },
+    { id: 'device-2', stationId: 'station-1', lat: 14.6503, lng: 121.0603 },
+  ];
+
+  const index = createMapClusterIndex(hydrants, devices);
+  const layout = mapClusterLayout(index, 12);
+
+  assert.equal(layout.clusters.length, 1);
+
+  // Both phones must retain distinct identities even though
+  // they belong to the same station.
+  assert.deepEqual(
+    new Set(layout.clusters[0].stationIds).size,
+    2,
+  );
+
+  assert.equal(layout.clusters[0].count, 2);
+});

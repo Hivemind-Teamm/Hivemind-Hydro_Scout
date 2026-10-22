@@ -365,8 +365,8 @@ export default function DilimanMap({
   const supercluster = useMemo(() => {
     // Fire-zone hydrants stay individually visible, as before.
     const clusterable = fireZoneIds ? hydrants.filter(h => !fireZoneIds.has(h.id)) : hydrants;
-    return createMapClusterIndex(clusterable, unitLocations);
-  }, [hydrants, fireZoneIds, unitLocations]);
+    return createMapClusterIndex(clusterable, []);
+  }, [hydrants, fireZoneIds]);
 
   const layout = useMemo<ClusterLayout>(
     () => mapClusterLayout(supercluster, clusterZoom),
@@ -861,8 +861,8 @@ export default function DilimanMap({
           </Marker>
         )}
 
-        {unitLocations.filter(location => !layout.clusteredStationIds.has(location.stationId)).map(location => (
-          <Marker key={location.stationId} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
+        {unitLocations.map(location => (
+          <Marker key={location.id} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
             <StationUnitIcon location={location} selected={selectedStationId === location.stationId}
               onSelect={() => onSelectStation(location.stationId)} crosshair={crosshair} />
           </Marker>
