@@ -18,9 +18,10 @@ import {
   updateProfile,
   User,
 } from "firebase/auth";
-import { collection, doc, getDoc, onSnapshot, updateDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, getDoc, updateDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import { auth, db } from "./firebase";
+import { getUserProfile, watchUserProfile } from "./user-profile";
 import { useLocationConsent } from './use-location-consent';
 import LocationConsentNotice from '@/app/src/components/LocationConsentNotice';
 
@@ -49,12 +50,22 @@ function friendlyAuthError(err: unknown): never {
 export type Role = "general" | "authorized" | "head" | "admin" | null;
 export type AccountType = "person" | "station" | null;
 
+function roleForProfile(data: { role?: unknown; accountType?: unknown } | null | undefined): Role {
+  // Station accounts use the app's station-operations gates, but never store or show a personal role.
+  if (data?.accountType === "station") return "head";
+  return typeof data?.role === "string"
+    && ["general", "authorized", "head", "admin"].includes(data.role)
+    ? data.role as Role
+    : null;
+}
+
 interface AuthContextValue {
   canUseDeviceLocation: boolean;
   user: User | null;
   role: Role;
   accountType: AccountType;
   stationId: string | null;
+  stationName: string | null;
   aorBarangays: string[];
   stationMembershipStatus: 'none' | 'pending' | 'approved' | 'rejected';
   stationAccessIds: string[];
@@ -81,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role>(null);
   const [accountType, setAccountType] = useState<AccountType>(null);
   const [assignedStationId, setAssignedStationId] = useState<string | null>(null);
+  const [stationName, setStationName] = useState<string | null>(null);
   const [stationMembershipStatus, setStationMembershipStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
   const [stationAccessIds, setStationAccessIds] = useState<string[]>([]);
   const [aorBarangays, setAorBarangays] = useState<string[]>([]);
@@ -93,27 +105,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const [snap, idToken] = await Promise.all([
-            getDoc(doc(db, "users", firebaseUser.uid)),
+          const [profile, idToken] = await Promise.all([
+            getUserProfile(firebaseUser.uid),
             firebaseUser.getIdToken(),
           ]);
-          const data = snap.exists() ? snap.data() : null;
+          const data = profile.data ?? null;
 
-          // The person's real name is stored on the Firestore user doc at signup;
-          // the Firebase Auth profile starts blank. Backfill it here so
-          // `user.displayName` carries the personal name everywhere (top bar,
-          // account center) instead of an email-prefix guess. Runs at most once
-          // per account — skipped as soon as the Auth profile has a name — and
-          // fixes accounts created before this backfill existed, on next load.
-          const fsName = typeof data?.displayName === "string" ? data.displayName.trim() : "";
+          const profileName = data?.accountType === "station" ? data.station : data?.displayName;
+          const fsName = typeof profileName === "string" ? profileName.trim() : "";
           if (fsName && firebaseUser.displayName !== fsName) {
             try { await updateProfile(firebaseUser, { displayName: fsName }); } catch { /* non-fatal */ }
           }
 
           setUser(firebaseUser);
-          setRole((data?.role ?? null) as Role);
+          setRole(roleForProfile(data));
           setAccountType(data?.accountType === "station" || data?.accountType === "person" ? data.accountType : null);
           setAssignedStationId(typeof data?.stationId === "string" ? data.stationId : null);
+          setStationName(typeof data?.station === "string" && data.station.trim() ? data.station.trim() : null);
           setStationMembershipStatus(
             data?.stationMembershipStatus === 'approved' || data?.stationMembershipStatus === 'pending'
               || data?.stationMembershipStatus === 'rejected' ? data.stationMembershipStatus : 'none',
@@ -130,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole(null);
           setAccountType(null);
           setAssignedStationId(null);
+          setStationName(null);
           setStationMembershipStatus('none');
           setStationAccessIds([]);
           setAorBarangays([]);
@@ -139,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRole(null);
         setAccountType(null);
         setAssignedStationId(null);
+        setStationName(null);
         setStationMembershipStatus('none');
         setStationAccessIds([]);
         setAorBarangays([]);
@@ -152,11 +162,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(doc(db, 'users', user.uid), snapshot => {
-      const data = snapshot.exists() ? snapshot.data() : null;
-      setRole((data?.role ?? null) as Role);
+    return watchUserProfile(user.uid, data => {
+      setRole(roleForProfile(data));
       setAccountType(data?.accountType === 'station' || data?.accountType === 'person' ? data.accountType : null);
       setAssignedStationId(typeof data?.stationId === 'string' ? data.stationId : null);
+      setStationName(typeof data?.station === 'string' && data.station.trim() ? data.station.trim() : null);
       setStationMembershipStatus(
         data?.stationMembershipStatus === 'approved' || data?.stationMembershipStatus === 'pending'
           || data?.stationMembershipStatus === 'rejected' ? data.stationMembershipStatus : 'none',
@@ -165,7 +175,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? data.stationAccessIds.filter((value): value is string => typeof value === 'string') : []);
       setAorBarangays(Array.isArray(data?.aorBarangays)
         ? data.aorBarangays.filter((value): value is string => typeof value === 'string') : []);
-    }, err => console.error('Failed to watch user profile updates:', err));
+    }, err => {
+      console.error('Failed to watch user profile updates:', err);
+      setRole(null);
+      setAccountType(null);
+      setAssignedStationId(null);
+      setStationName(null);
+      setStationMembershipStatus('none');
+      setStationAccessIds([]);
+      setAorBarangays([]);
+    });
   }, [user]);
 
   async function login(email: string, password: string) {
@@ -180,7 +199,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // since a document created without a role field causes the user to appear
     // as "general" even if an admin later assigns a higher role in Firestore.
     try {
-      await updateDoc(doc(db, "users", cred.user.uid), { lastLoginAt: serverTimestamp() });
+      const profile = await getUserProfile(cred.user.uid);
+      await updateDoc(profile.ref, { lastLoginAt: serverTimestamp() });
     } catch (err: unknown) {
       // Document doesn't exist yet (admin-created account whose Firestore write
       // failed, or a manually imported Auth account).  Silently skip — the role
@@ -226,13 +246,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         status: 'pending',
         createdAt: serverTimestamp(),
       });
-      batch.set(doc(collection(db, 'stations', stationId, 'notifications'), `join-${cred.user.uid}`), {
-        type: 'station-join-request',
-        uid: cred.user.uid,
-        displayName,
-        message: `${displayName} requested to join ${stationId}.`,
-        createdAt: serverTimestamp(),
-      });
     }
     await batch.commit();
 
@@ -260,7 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, accountType, stationId: assignedStationId, aorBarangays, stationMembershipStatus, stationAccessIds, loading, login, logout, signup, refreshSession, openLocationConsent: locationConsent.openNotice, canUseDeviceLocation: locationConsent.canUseDeviceLocation }}>
+    <AuthContext.Provider value={{ user, role, accountType, stationId: assignedStationId, stationName, aorBarangays, stationMembershipStatus, stationAccessIds, loading, login, logout, signup, refreshSession, openLocationConsent: locationConsent.openNotice, canUseDeviceLocation: locationConsent.canUseDeviceLocation }}>
       {children}
       {stationId && (
         <button type="button" onClick={locationConsent.openNotice} className="fixed right-3 top-20 z-[5000] rounded-lg bg-white px-3 py-2 text-xs font-semibold text-neutral-700 shadow dark:bg-neutral-800 dark:text-white">

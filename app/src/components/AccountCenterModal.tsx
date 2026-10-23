@@ -29,7 +29,7 @@ interface AccountCenterModalProps {
 }
 
 export default function AccountCenterModal({ onClose }: AccountCenterModalProps) {
-  const { user, role, stationId, stationMembershipStatus } = useAuth();
+  const { user, role, accountType, stationId, stationName, stationMembershipStatus } = useAuth();
   const router = useRouter();
 
   const [changingPassword, setChangingPassword]         = useState(false);
@@ -40,11 +40,15 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
   const [showNoChangesConfirm, setShowNoChangesConfirm] = useState(false);
 
   const isSignedIn  = !!user;
-  const roleLabel   = role ? (ROLE_LABELS[role] ?? role) : 'General User';
+  const roleLabel   = accountType === 'station'
+    ? 'Station Account'
+    : role ? (ROLE_LABELS[role] ?? role) : 'General User';
   const access      = ROLE_ACCESS[role ?? 'general'];
   const email       = user?.email ?? '';
-  const displayName = user?.displayName
-    || (email ? email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
+  const displayName = accountType === 'station'
+    ? stationId ?? stationName ?? 'Station Account'
+    : user?.displayName
+      || (email ? email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
 
   function handleSignIn() { onClose(); router.push('/login');  }
   function handleSignUp() { onClose(); router.push('/signup'); }
@@ -159,7 +163,9 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             <p className="truncate text-xs text-red-200">{isSignedIn ? email : 'Not signed in'}</p>
           </div>
           <div className="shrink-0 text-right">
-            <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-red-300">Access Level</p>
+            <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-red-300">
+              {accountType === 'station' ? 'Account Type' : 'Access Level'}
+            </p>
             <span className="rounded-full bg-[#FED42E] px-3 py-1 text-xs font-bold text-neutral-800">
               {roleLabel}
             </span>
@@ -174,8 +180,8 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             <section>
               <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#e0353b]">Account Information</p>
               <div className="grid grid-cols-2 gap-3">
-                <ReadonlyField label="Your ID"       value={user?.uid?.slice(0, 10) ?? '—'} />
-                <ReadonlyField label="Personal Name" value={displayName} />
+                <ReadonlyField label={accountType === 'station' ? 'Station ID' : 'Your ID'} value={accountType === 'station' ? stationId ?? '—' : user?.uid?.slice(0, 10) ?? '—'} />
+                <ReadonlyField label={accountType === 'station' ? 'Station Name' : 'Personal Name'} value={accountType === 'station' ? stationName ?? '—' : displayName} />
                 <ReadonlyField label="Email Address" value={email} />
 
                 {changingPassword ? (
@@ -210,9 +216,11 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             <section>
               <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#e0353b]">Account Details</p>
               <div className="grid grid-cols-2 gap-3">
-                <ReadonlyField label="Member Since"      value={user?.metadata?.creationTime  ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'} />
+                <ReadonlyField label={accountType === 'station' ? 'Account Created' : 'Member Since'} value={user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'} />
                 <ReadonlyField label="Last Login"        value={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleDateString() : '—'} />
-                <ReadonlyField label="Station ID" value={stationId ?? (stationMembershipStatus === 'pending' ? 'Pending approval' : 'Not assigned')} />
+                {accountType !== 'station' && (
+                  <ReadonlyField label="Station ID" value={stationId ?? (stationMembershipStatus === 'pending' ? 'Pending approval' : 'Not assigned')} />
+                )}
                 <ReadonlyField label="Account Status" value="Active" />
               </div>
             </section>
@@ -224,7 +232,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
             <p className="text-xs font-bold uppercase tracking-wide text-[#e0353b]">Access &amp; Security</p>
 
             <div className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-700">
-              <AccessRow label="Current Role"      value={roleLabel}          highlight="badge" />
+              <AccessRow label={accountType === 'station' ? 'Account Type' : 'Current Role'} value={roleLabel} highlight="badge" />
               <AccessRow label="Map Access"        value={access.mapAccess}   highlight={green(access.mapAccess)   ? 'green' : 'gray'} />
               <AccessRow label="Routing &amp; OTW" value={access.routing}     highlight={green(access.routing)     ? 'green' : 'gray'} />
               <AccessRow label="Edit Hydrant Data" value={access.editHydrant} highlight={green(access.editHydrant) ? 'green' : 'gray'} />
