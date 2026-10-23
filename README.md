@@ -8,6 +8,11 @@ For live station reporting and stale-icon checks, see the
 For consent setup, withdrawal and browser background-reporting limits, see
 [location consent instructions](docs/location-consent.md).
 
+For the original BFP requirement, the current manual response workflow and
+unfinished features, see [location implementation status](docs/unit-locations.md#bfp-requirement-and-implementation-status).
+Notifications are in-app only. Activity and member approval lists retain their
+unread dots and per-account read receipts; see [notification behavior](docs/station-accounts.md).
+
 Admins can open **Admin Dashboard > Build Version Log** to view the
 running version and record a frozen production build with optional notes. Each
 record retains the build ID, source commit, source working-tree status, build

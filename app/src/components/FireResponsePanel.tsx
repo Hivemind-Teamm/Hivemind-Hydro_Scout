@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment } from 'react';
+import { Fragment, type Ref } from 'react';
 import { FiAlertTriangle, FiChevronDown, FiChevronRight, FiInfo, FiMove, FiX } from 'react-icons/fi';
 import { MdCenterFocusStrong, MdFireTruck, MdLocalFireDepartment, MdWaterDrop } from 'react-icons/md';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
@@ -36,13 +36,14 @@ interface FireResponsePanelProps {
   onRecenter: () => void;
   onMovePin: () => void;
   onClear: () => void;
+  responseActionRef?: Ref<HTMLDivElement>;
   /** Mobile only — collapses the panel to an edge tab. */
   onMinimize?: () => void;
 }
 
 export default function FireResponsePanel({
   lat, lng, address, radiusM, candidates, nearestOutside, supply, estimate, routing, loading, maxHeight,
-  onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize,
+  onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize, responseActionRef,
 }: FireResponsePanelProps) {
   const operationalCount = candidates.filter((c) => c.hydrant.status === 'operational').length;
   const radiusLabel = formatDistance(radiusM);
@@ -171,6 +172,7 @@ export default function FireResponsePanel({
         >
           <FiX className="h-3.5 w-3.5" strokeWidth={2.5} /> Clear fire
         </button>
+        <div ref={responseActionRef} className="contents" />
       </div>
     </div>
   );

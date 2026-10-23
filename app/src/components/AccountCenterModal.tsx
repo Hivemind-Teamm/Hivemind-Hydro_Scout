@@ -7,7 +7,6 @@ import { updatePassword } from 'firebase/auth';
 import { useAuth } from '@/lib/auth-context';
 import LogoutButton from './LogoutButton';
 import AvatarPlaceholder from './AvatarPlaceholder';
-import { DevicePushSettings } from './DevicePushProvider';
 
 const ROLE_LABELS: Record<string, string> = {
   general:    'General User',
@@ -240,7 +239,6 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
               <AccessRow label="File Reports"      value={access.fileReports} highlight={green(access.fileReports) ? 'green' : 'gray'} />
             </div>
 
-            <DevicePushSettings />
             <div className="mt-auto flex flex-col gap-2 pt-1">
               {isSignedIn ? (
                 <>

@@ -34,6 +34,7 @@ import {
 } from '../data/hydrants';
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
+import { notifyFirePin } from '@/lib/map-activity';
 import { useIsMobile } from '@/lib/use-media-query';
 import { useOnlineStatus } from '@/lib/use-online-status';
 import { haversineM, formatDistance, formatDuration, distToRouteM } from '@/lib/haversine';
@@ -122,6 +123,7 @@ export default function HydroScoutDashboard() {
   const [userOverride, setUserOverride] = useState(false);
   const [mapViewport, setMapViewport] = useState<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const [is3D, setIs3D] = useState(false);
+  const [responseActionContainer, setResponseActionContainer] = useState<HTMLDivElement | null>(null);
   const [activeStatus, setActiveStatus] = useState<HydrantStatus | null>(null);
   const [selectedHydrant, setSelectedHydrant] = useState<Hydrant | null>(null);
   const [showFullDetails, setShowFullDetails] = useState(false);
@@ -834,7 +836,11 @@ export default function HydroScoutDashboard() {
     setFireSupplyChoice(null);
     placeFire(lat, lng);
     fitFireRadius(lat, lng);
-  }, [placeFire, fitFireRadius]);
+    void notifyFirePin(lat, lng).catch((error) => {
+      console.error('Could not publish fire pin activity:', error);
+      showGeoError('Fire pinned, but station activity could not be saved.');
+    });
+  }, [placeFire, fitFireRadius, showGeoError]);
 
   // Fire marker dragged. Keeps the user's supply pick if it's still in range.
   const handleFireMove = useCallback((lat: number, lng: number) => {
@@ -1076,6 +1082,7 @@ export default function HydroScoutDashboard() {
         onRecenter={handleRecenterFire}
         onMovePin={handleToggleFirePinMode}
         onClear={handleClearFire}
+        responseActionRef={setResponseActionContainer}
         onMinimize={isMobile ? () => setFirePanelMinimized(true) : undefined}
       />
     );
@@ -1235,7 +1242,7 @@ export default function HydroScoutDashboard() {
         fireActive={!!fire}
         onToggleFirePin={handleToggleFirePinMode}
       />
-      <StationResponseControl hasFireIncident={!!fire} />
+      <StationResponseControl hasFireIncident={!!fire} actionContainer={responseActionContainer} />
 
       {/* Fire-pin mode hint. Bottom-center on desktop (clear of the search bar
           and the side panels); under the search row on phones, pushed below

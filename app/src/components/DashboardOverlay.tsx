@@ -87,7 +87,7 @@ function DashboardOverlay({
   fireActive = false,
   onToggleFirePin,
 }: DashboardOverlayProps) {
-  const { user, role, accountType, stationId, stationAccessIds } = useAuth();
+  const { user, role, accountType, stationId, stationAccessIds, locationPrivacyAvailable, locationPrivacyGranted, openLocationConsent } = useAuth();
   const { hasUnreadActivity, hasUnreadMembers } = useStationNotifications();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
@@ -325,6 +325,15 @@ function DashboardOverlay({
                   </div>
                 </div>
 
+                {locationPrivacyAvailable && (
+                  <MobileMenuRow
+                    label="Location privacy"
+                    value={locationPrivacyGranted ? 'On' : 'Off'}
+                    onClick={() => { setMobileMenuOpen(false); openLocationConsent(); }}
+                    icon={<GpsGlyph />}
+                  />
+                )}
+
                 <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
 
                 {/* Live status counts / Route hazards (swaps during OTW) */}
@@ -433,6 +442,21 @@ function DashboardOverlay({
               <span className="text-xs font-bold text-white">{syncedLabel}</span>
             </div>
           </div>
+
+          {locationPrivacyAvailable && (
+            <button
+              type="button"
+              onClick={openLocationConsent}
+              aria-label={`Location privacy: ${locationPrivacyGranted ? 'On' : 'Off'}. Manage location sharing`}
+              className="flex shrink-0 flex-col justify-center border-r border-white/15 px-5 text-left transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#FED42E]"
+            >
+              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">Location privacy</span>
+              <span className="mt-0.5 flex items-center gap-1.5 text-xs font-bold text-white">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${locationPrivacyGranted ? 'bg-[#2fbf4f]' : 'bg-neutral-400'}`} />
+                {locationPrivacyGranted ? 'On' : 'Off'}
+              </span>
+            </button>
+          )}
 
           {/* Right side — stable ml-auto group to prevent layout shift */}
           <div className="ml-auto flex items-stretch">

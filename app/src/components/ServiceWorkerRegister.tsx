@@ -13,6 +13,25 @@ import { useEffect } from 'react';
 export default function ServiceWorkerRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
+    // Retire registrations from the removed device-notification feature.
+    // Match only its exact scope; preserve the app's offline worker.
+    navigator.serviceWorker.getRegistrations().then(async registrations => {
+      for (const registration of registrations) {
+        if (registration.scope !== new URL('/push-notifications/', location.origin).href) continue;
+        try {
+          for (const notification of await registration.getNotifications()) notification.close();
+          await (await registration.pushManager?.getSubscription())?.unsubscribe();
+        }
+        finally { await registration.unregister(); }
+      }
+    }).catch(() => {});
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key === 'hydroscout-push-device' || key?.startsWith('hydroscout-push-enabled:')) localStorage.removeItem(key);
+      }
+      indexedDB.deleteDatabase('hydroscout-push');
+    } catch { /* Cleanup must not prevent the app from loading. */ }
     if (process.env.NODE_ENV !== 'production') {
       // A service worker left over from a previous local *prod* run (`next
       // start` on this same origin) keeps intercepting dev traffic and serves
@@ -22,7 +41,6 @@ export default function ServiceWorkerRegister() {
       // always runs fresh code.
       navigator.serviceWorker.getRegistrations().then((regs) => {
         for (const reg of regs) {
-          // The separate push worker must survive development reloads.
           if (reg.active?.scriptURL === new URL('/sw.js', location.origin).href) reg.unregister();
         }
       }).catch(() => {});

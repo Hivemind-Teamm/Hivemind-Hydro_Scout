@@ -24,6 +24,7 @@ import {
   GeoPoint,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { mapActivityActor } from '@/lib/map-activity';
 import {
   hydrantFromDoc,
   toOperationalStatus,
@@ -271,6 +272,9 @@ export interface CreateHydrantInput {
 
 export async function createHydrant(input: CreateHydrantInput): Promise<void> {
   const dateStr = new Date().toISOString().slice(0, 10);
+  const actor = await mapActivityActor();
+  // Allocate once so transaction retries cannot produce duplicate notices.
+  const notice = actor ? doc(collection(db, 'stations', actor.stationId, 'notifications')) : null;
 
   await runTransaction(db, async (tx) => {
     // Scan from HYD-001 upward and take the first unoccupied slot.
@@ -316,6 +320,11 @@ export async function createHydrant(input: CreateHydrantInput): Promise<void> {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       updatedBy: input.by,
+    });
+    if (actor && notice) tx.set(notice, {
+      type: 'hydrant-pinned', uid: actor.uid, displayName: actor.displayName,
+      hydrantId: hydrantRef.id, lat: input.lat, lng: input.lng,
+      message: `${actor.displayName} pinned hydrant ${hydrantRef.id}.`, createdAt: serverTimestamp(),
     });
   });
 }

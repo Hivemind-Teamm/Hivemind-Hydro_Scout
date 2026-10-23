@@ -1,5 +1,4 @@
 {
-  "functions": [{ "source": "functions", "codebase": "notifications", "ignore": ["node_modules", "*.log"] }],
   "firestore": {
     "rules": "firestore.rules"
   },

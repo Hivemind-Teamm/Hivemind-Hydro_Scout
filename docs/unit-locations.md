@@ -1,5 +1,44 @@
 # Station response locations
 
+Documentation reviewed against the checkout on October 24, 2026. Deployment
+statements below distinguish recorded past actions from unverified live status.
+
+## BFP requirement and implementation status
+
+The original interview clarification requires automatic sharing by **authorized
+BFP accounts associated with a station/substation** while logged in, including
+outside incident response, with continued background sharing. The initial audience
+is authorized QCFD station/substation users; volunteers are outside that scope.
+Locations represent the logged-in device, not a station building or check-in.
+They support unit coordination, deployment and selection of suitable hydrants.
+
+The current manual response workflow below does **not** fulfill that automatic
+logged-in-sharing requirement. Confirm the intended workflow with BFP before
+treating manual response-only tracking as the final requirement. Station logins
+and approved personal memberships are implemented account structures; their
+implementation does not establish interview approval of that final structure.
+
+| Feature | Current implementation and remaining work |
+| --- | --- |
+| Station directory, station accounts and membership approval | Implemented |
+| Station-labeled positions for active personal responses | Implemented; the responder starts and ends sharing manually |
+| Automatic location sharing for logged-in authorized accounts | Not implemented as originally specified |
+| Reliable background GPS | Not implemented; current web acquisition is best effort |
+| Shared incident creation and dispatch | Partial read/tracking infrastructure; incident-management POST returns `501` |
+| Incident-linked station-account tracking | Experimental, development-only; disabled in production |
+| Same-truck/unit grouped markers | Not implemented; proposed feature requiring BFP confirmation |
+| In-app activity and member approval notifications | Implemented, with per-account persistent read receipts; no alerts outside the app |
+
+**Proposed feature requiring confirmation:** Firefighters assigned to the same
+responding truck/unit may be represented by a grouped marker. Separate units
+must remain distinguishable even when they belong to the same station. No
+specific operational clustering rule was confirmed. The interview clarification
+does not establish station check-ins or 24/7 off-duty tracking requirements.
+
+Source: user-provided clarification of the BFP interview and discussion, referencing
+`C:\Users\Karl Manangan\Downloads\Interview Respondent\_ BFP (1).pdf`.
+The PDF was not independently reviewed for this documentation update.
+
 ## Current workflow
 
 Station locations are published by approved personal accounts only while the
@@ -10,9 +49,9 @@ a station account does not start location sharing.
    Directory entries provide a station ID and display name; create entries before
    users select them at sign-up.
 2. A person may select a station during sign-up. This creates a pending membership
-   request. A head for that station reviews and approves or rejects it in Station
-   Activity. Approval assigns the person's station ID; it does not start tracking.
-3. An approved responder accepts the location notice and presses **Start
+   request. A head for that station reviews and approves or rejects it in
+   **Member approvals**. Approval assigns the person's station ID; it does not start tracking.
+3. With a fire pinned in the current map UI, an approved responder accepts the location notice and presses **Start
    responding**. The app captures an initial location and publishes it with the
    station's label. Updates are attempted every three minutes while the app is
    active/resumed and location access is available.
@@ -20,9 +59,23 @@ a station account does not start location sharing.
    removed, while the station's private response history is retained.
 
 Location pins are individual and unclustered. They are labeled with the station
-name, not a responder's name. There is no first-responder anchor and there is no
-incident association yet; the current incident UI does not create a shared
-incident record.
+name, not a responder's name. There is no first-responder anchor or truck/unit
+grouping. This manual response workflow does not associate its response records
+with a shared incident; a local fire pin does not create a shared incident record.
+
+## Experimental incident tracking
+
+The checkout also contains a separate station-account incident feed and GPS
+controller. `IncidentTrackingStatus` enables it only in development when
+`NEXT_PUBLIC_ENABLE_INCIDENT_TRACKING=true`; production builds keep it disabled.
+It uses trusted incident assignments and proximity checks. The incident API can
+read assignments, but POST returns `501` because incident management is not enabled.
+
+This prototype is separate from the approved personal-account response flow.
+It writes incident-linked reports to root `unitLocations`; the normal public
+response map reads nested public `unitLocations` reports. Completing incident
+creation, map integration, consent verification and production readiness remains
+necessary before considering this an operational incident workflow.
 
 ## Privacy and audiences
 
@@ -36,9 +89,21 @@ incident record.
   responder identity and response times.
 - Station notifications are visible to the head and delegated station managers.
   Station access logs are restricted to heads and administrators.
-- Each station workspace opening writes an in-app notification and access-log
-  entry. Response and membership notifications are in-app only; push notifications
-  are not configured.
+- Activity and member approval lists use Reports Register-style cards, clickable
+  account profiles and unread dots on rows and their main icons. Opening a linked
+  profile marks that row read; opening the list alone does not. Read state is
+  saved per account/station in Firestore, so it survives logout and synchronizes
+  across devices once the updated read-receipt rules are deployed. Browser storage
+  remains an immediate fallback; existing local read choices are migrated.
+- Each response has one live notification card. It glows yellow while active,
+  changes its title from started to ended when the response finishes, and shows
+  station, start/end dates and times, and duration. Cards open details; profile
+  links and member approval controls remain separate actions. Immutable lifecycle
+  events remain stored as history and are combined by response ID in the feed.
+- Notifications are in-app only. Users must open Hydro-Scout to review activity
+  and member approval updates; the app does not send browser or device alerts.
+- Access-log paths and permissions exist, but the current UI does not write an
+  access log or notification merely because a station panel is opened.
 - Consent is remembered in the browser's local storage. Firestore rules validate
   account assignment and response transitions, but cannot verify the local consent
   record. Do not treat client-side consent storage as server-side consent evidence.
@@ -66,16 +131,18 @@ the live location. The response history remains.
 | `stationJoinRequests/{uid}` | Requested station and review status | Requesting user and station managers |
 | `stationResponses/{responseId}` | Private responder identity, station and start/end history | Responder, station head/delegates, administrators |
 | `stations/{stationId}/notifications/{id}` | Membership, response, and station-access notices | Station head/delegates, administrators |
+| `stations/{stationId}/notificationReads/{uid}/items/{id}` | Per-account event-version read receipts | Only that account, while it has station-management access |
 | `stations/{stationId}/accessLogs/{id}` | Who opened station activity and when | Station head and administrators |
+| `incidents/{incidentId}` | Trusted assignments for the experimental incident feed | Server-managed; exposed through the authenticated incident API |
 
 The nested `unitLocations` collection contains both location workflows. Legacy
 station-account reports retain `updatedBy` and any existing `deviceId` and remain private;
 active response reports use `public: true` and omit responder identity so the
 map can query them with a `unitLocations` collection-group query. The root
 `unitLocations` and `responseLocations` collections were migration sources;
-their existing documents have been copied or verified and the root collections
-are currently empty. Keep the legacy root rules until the updated rules are
-deployed and older app versions are no longer in use.
+their migration status is recorded below. Root `unitLocations` is also used by
+the experimental incident writer, so historical cleanup is not evidence that it
+is empty now. Keep rules compatible with every enabled location workflow.
 
 To move existing root documents, first inspect the proposed copy:
 
@@ -98,11 +165,12 @@ separate cleanup of the old collections. The additive migration was run against
 verified; the root `responseLocations` collection contained no documents. After
 explicit confirmation, both root `unitLocations` reports were deleted in a
 transaction after verifying their nested copies. The root `unitLocations`
-collection is now empty. The updated Firestore rules were deployed to
-`hydro-scout` on 2026-10-23. The application source was pushed to `main`, but
-the web app has not been deployed: this repository has no configured hosting
-target or CI workflow, and Firebase App Hosting requires the project to be on
-the Blaze plan.
+collection was empty at that verification. The recorded rules deployment to
+`hydro-scout` occurred on 2026-10-23; that historical deployment does not establish
+that later rule changes are deployed. Application changes have been pushed to
+`main`. The current Vercel release has not been verified in this documentation
+review. A local `.env` change does not update
+Vercel; its project owner must configure the deployment environment and redeploy.
 
 ## Configuration and validation
 
@@ -121,10 +189,11 @@ npx.cmd eslint app/src/components/StationResponseControl.tsx lib/auth-context.ts
 ```
 
 The emulator suite covers station membership signup and approval, response
-start/end batches, cross-station map visibility, and responder-name privacy. The
-Firestore rules are deployed. The application changes require a configured web
-hosting provider before they can be deployed.
+start/end batches, cross-station map visibility, and responder-name privacy.
+For notification read-state checks, see the
+[station testing guide](station-location-testing/README.md). These commands do not by themselves
+confirm the currently deployed application or rules.
 
 There is no fixed station-coordinate pin, responder clustering, or shared
-incident record in this implementation. Browser background location is
+incident creation workflow in this implementation. Browser background location is
 best-effort; guaranteed background location requires a native mobile component.

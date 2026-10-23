@@ -10,7 +10,6 @@ import { ThemeProvider } from "@/lib/theme-context";
 
 import ScrollBehavior from "./src/components/ScrollBehavior";
 import ServiceWorkerRegister from "./src/components/ServiceWorkerRegister";
-import DevicePushProvider from "./src/components/DevicePushProvider";
 
 // Runs before first paint to set the `.dark` class from the stored choice
 // or the OS/default preference, preventing a flash of the wrong theme.
@@ -63,9 +62,7 @@ export const metadata: Metadata = {
   description: "Hydro-Scout hydrant monitoring platform",
   icons: {
     icon: "/Hydro-Scout-nobg.svg",
-    apple: '/Hydro-Scout%20Logo.png',
   },
-  appleWebApp: { capable: true, title: 'Hydro-Scout', statusBarStyle: 'default' },
 };
 
 export default function RootLayout({
@@ -95,7 +92,7 @@ export default function RootLayout({
           <ServiceWorkerRegister />
 
           <AuthProvider>
-            <DevicePushProvider>{children}</DevicePushProvider>
+            {children}
           </AuthProvider>
         </ThemeProvider>
       </body>

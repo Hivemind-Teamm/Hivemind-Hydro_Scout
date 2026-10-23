@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   collection,
   deleteDoc,
@@ -39,7 +40,10 @@ function currentPosition(): Promise<GeolocationPosition> {
   }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 }));
 }
 
-export default function StationResponseControl({ hasFireIncident }: { hasFireIncident: boolean }) {
+export default function StationResponseControl({ hasFireIncident, actionContainer }: {
+  hasFireIncident: boolean;
+  actionContainer: HTMLDivElement | null;
+}) {
   const {
     user, role, accountType, stationId, stationMembershipStatus, stationAccessIds,
     canUseDeviceLocation, openLocationConsent,
@@ -84,21 +88,6 @@ export default function StationResponseControl({ hasFireIncident }: { hasFireInc
     window.addEventListener('hydroscout:toggle-station-activity', toggleActivity);
     return () => window.removeEventListener('hydroscout:toggle-station-activity', toggleActivity);
   }, [canManage]);
-
-  useEffect(() => {
-    if (!canManage) return;
-    const url = new URL(window.location.href);
-    const panel = url.searchParams.get('notifications');
-    if (panel !== 'activity' && panel !== 'members') return;
-    // Opening a push does not mark it read; the linked profile must be visited.
-    const timer = setTimeout(() => {
-      if (panel === 'members' && canApprove) setOpenMemberApprovals(true);
-      else setOpen(true);
-    }, 0);
-    url.searchParams.delete('notifications');
-    window.history.replaceState(window.history.state, '', url);
-    return () => clearTimeout(timer);
-  }, [canManage, canApprove]);
 
   useEffect(() => {
     if (!canApprove || !stationId) return;
@@ -318,18 +307,22 @@ export default function StationResponseControl({ hasFireIncident }: { hasFireInc
   const canShowResponseAction = canRespond && (activeResponses.length > 0 || hasFireIncident);
   if (!canShowResponseAction && !canManage && !hasPendingStationRequest) return null;
 
+  const responseAction = canShowResponseAction ? (
+    <button
+      disabled={busy}
+      onClick={() => void (activeResponses.length > 0 ? endResponse(activeResponses[0]) : startResponse())}
+      className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold text-white disabled:opacity-60 ${activeResponses.length > 0 ? 'bg-neutral-800 hover:bg-neutral-700 dark:bg-neutral-700 dark:hover:bg-neutral-600' : 'bg-[#e0353b] hover:bg-[#c92e34]'}`}
+    >
+      {activeResponses.length > 0 ? <FiLogOut className="h-3.5 w-3.5 shrink-0" /> : <FiActivity className="h-3.5 w-3.5 shrink-0" />}
+      <span>{busy ? (activeResponses.length > 0 ? 'Ending…' : 'Starting…') : (activeResponses.length > 0 ? 'End response' : 'Start response')}</span>
+    </button>
+  ) : null;
+
   return (
     <>
-      {(canShowResponseAction || hasPendingStationRequest || error) && <div className="pointer-events-auto absolute bottom-[calc(6.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[2500] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-xl bg-white/95 p-2 shadow-xl backdrop-blur dark:bg-neutral-900/95">
-        {canShowResponseAction && (activeResponses.length > 0 ? (
-          <button disabled={busy} onClick={() => void endResponse(activeResponses[0])} className="flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-            <FiLogOut /> End response
-          </button>
-        ) : (
-          <button disabled={busy} onClick={() => void startResponse()} className="flex items-center gap-2 rounded-lg bg-[#e0353b] px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-            <FiActivity /> {busy ? 'Starting…' : 'Start responding'}
-          </button>
-        ))}
+      {actionContainer && responseAction && createPortal(responseAction, actionContainer)}
+      {((canShowResponseAction && !actionContainer) || hasPendingStationRequest || error) && <div className="pointer-events-auto absolute bottom-[calc(6.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[2500] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-xl bg-white/95 p-2 shadow-xl backdrop-blur dark:bg-neutral-900/95">
+        {!actionContainer && responseAction}
         {hasPendingStationRequest && <span className="px-2 text-xs font-semibold text-amber-700">Station request pending approval</span>}
         {error && <span role="alert" className="max-w-56 text-xs text-red-600">{error}</span>}
       </div>}

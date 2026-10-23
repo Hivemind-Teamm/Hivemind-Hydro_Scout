@@ -22,7 +22,6 @@ import { auth, db } from "./firebase";
 import { getUserProfile, watchUserProfile } from "./user-profile";
 import { useLocationConsent } from "./use-location-consent";
 import LocationConsentNotice from "@/app/src/components/LocationConsentNotice";
-import { disableDevicePush } from "./browser-push";
 import { getExistingIncidentDeviceId } from "./incident-device-id";
 import { deleteIncidentDeviceLocation } from "./incident-device-location-cleanup";
 import { incidentLocationCleanupRegistry } from "./incident-location-cleanup-registry.mjs";
@@ -55,6 +54,8 @@ export type AccountType = "person" | "station" | null;
 type MembershipStatus = "none" | "pending" | "approved" | "rejected";
 
 interface AuthContextValue {
+  locationPrivacyAvailable: boolean;
+  locationPrivacyGranted: boolean;
   canUseDeviceLocation: boolean;
   user: User | null;
   role: Role;
@@ -291,7 +292,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         },
       });
-      await disableDevicePush(currentUser);
     }
 
     ++sessionGeneration.current;
@@ -314,17 +314,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login, logout, signup, refreshSession,
       openLocationConsent: locationConsent.openNotice,
       canUseDeviceLocation: locationConsent.canUseDeviceLocation,
+      locationPrivacyAvailable: !!consentStationId,
+      locationPrivacyGranted: locationGranted,
     }}>
       {children}
-      {consentStationId && (
-        <button
-          type="button"
-          onClick={locationConsent.openNotice}
-          className="fixed right-3 top-20 z-[5000] rounded-lg bg-white px-3 py-2 text-xs font-semibold text-neutral-700 shadow dark:bg-neutral-800 dark:text-white"
-        >
-          Location privacy · {locationGranted ? "On" : "Off"}
-        </button>
-      )}
       {locationConsent.noticeOpen && (
         <LocationConsentNotice
           granted={locationGranted}

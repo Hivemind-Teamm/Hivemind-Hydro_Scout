@@ -101,10 +101,10 @@ function HydrantUpdateCard({ item, onViewUser }: {
 }) {
   const { entry } = item;
   return (
-    <div className="px-4 py-3" style={{ borderLeft: `3px solid ${entry.statusColor}` }}>
+    <div className="px-4 py-3" style={{ borderLeft: '3px solid #2563eb' }}>
       <div className="mb-1 flex items-start justify-between gap-2">
         <span className="text-[10px] font-bold text-[#e0353b]">{item.hydrantId}</span>
-        <PillBadge dot={entry.statusColor} color={entry.statusColor} label="Hydrant update" />
+        <PillBadge dot="#2563eb" color="#2563eb" label="Hydrant update" />
       </div>
       <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">{entry.action}</p>
       <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">{item.location}</p>

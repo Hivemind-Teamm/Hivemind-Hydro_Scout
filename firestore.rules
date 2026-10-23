@@ -86,6 +86,32 @@ service cloud.firestore {
           && getAfter(/databases/$(database)/documents/stationResponses/$(before.activeResponseId)).data.status == 'ended');
     }
 
+    // Map activity is immutable, belongs to the actor's station, and discloses
+    // only pin coordinates. Hydrant pins must accompany a new hydrant write.
+    function isValidMapNotification(stationId) {
+      let data = request.resource.data;
+      return data.keys().hasAll(['type', 'uid', 'displayName', 'message', 'createdAt', 'lat', 'lng'])
+        && data.keys().hasOnly(['type', 'uid', 'displayName', 'message', 'createdAt', 'lat', 'lng', 'hydrantId'])
+        && (isAuthorized() || isHead() || isAdmin())
+        && currentUserData().stationId == stationId
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 120
+        && data.displayName == currentUserData().get('displayName', 'Responder')
+        && data.createdAt == request.time
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && ((data.type == 'fire-pinned'
+            && !('hydrantId' in data)
+            && data.message == data.displayName + ' pinned a fire incident.')
+          || (data.type == 'hydrant-pinned'
+            && data.hydrantId is string && data.hydrantId.matches('^HYD-[0-9]{3}$')
+            && !exists(/databases/$(database)/documents/hydrants/$(data.hydrantId))
+            && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.createdAt == request.time
+            && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.location.latitude() == data.lat
+            && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.location.longitude() == data.lng
+            && data.message == data.displayName + ' pinned hydrant ' + data.hydrantId + '.'));
+    }
+
     function isValidStationNotification(stationId, notificationId) {
       let data = request.resource.data;
       return data.keys().hasOnly([
@@ -316,8 +342,34 @@ service cloud.firestore {
 
       match /notifications/{notificationId} {
         allow read: if canManageStation(stationId);
-        allow create: if isSignedIn() && isValidStationNotification(stationId, notificationId);
+        allow create: if isSignedIn() && (isValidMapNotification(stationId) || isValidStationNotification(stationId, notificationId));
         allow update, delete: if false;
+      }
+
+      // Per-viewer read receipts; reading a panel alone never writes a receipt.
+      match /notificationReads/{viewerUid}/items/{receiptId} {
+        function ownsReadState() {
+          return isSignedIn() && request.auth.uid == viewerUid && canManageStation(stationId);
+        }
+        function validReadReceipt() {
+          let data = request.resource.data;
+          return data.keys().hasAll(['kind', 'notificationId', 'eventCreatedAt', 'readAt'])
+            && data.keys().hasOnly(['kind', 'notificationId', 'eventCreatedAt', 'readAt'])
+            && data.kind in ['activity', 'member']
+            && data.notificationId is string && data.notificationId.size() > 0 && data.notificationId.size() <= 256
+            && !data.notificationId.matches('.*[/].*')
+            && receiptId == data.kind + '_' + data.notificationId
+            && data.eventCreatedAt is timestamp
+            && data.readAt is timestamp && data.readAt == request.time
+            && ((data.kind == 'activity'
+                  && get(/databases/$(database)/documents/stations/$(stationId)/notifications/$(data.notificationId)).data.createdAt == data.eventCreatedAt)
+              || (data.kind == 'member'
+                  && get(/databases/$(database)/documents/stationJoinRequests/$(data.notificationId)).data.stationId == stationId
+                  && get(/databases/$(database)/documents/stationJoinRequests/$(data.notificationId)).data.createdAt == data.eventCreatedAt));
+        }
+        allow read: if ownsReadState();
+        allow create, update: if ownsReadState() && validReadReceipt();
+        allow delete: if false;
       }
 
       match /accessLogs/{logId} {

@@ -1,5 +1,10 @@
 # Location consent and active-response reporting
 
+This guide covers the manual personal-account response workflow. It does not
+claim completion of the original automatic logged-in-sharing requirement or the
+development-only incident-tracking prototype. See
+[workflow status and pending decisions](unit-locations.md#bfp-requirement-and-implementation-status).
+
 ## Configure the notice
 
 Set the responsible organization and privacy contact in `.env.local` or the
@@ -44,8 +49,10 @@ can read the active station-labeled map location for cross-station coordination.
 The map location does not include the responder's UID or name. The responder,
 station head, administrators, and delegated station managers can read the private
 response history, including responder identity and start/end times. Station heads
-and delegated managers receive in-app notifications; no push notification service
-is configured.
+and delegated managers can read the in-app notification history. Notifications
+are displayed only inside Hydro-Scout; browser/device alerts and notification
+permission prompts are not part of this workflow. Location consent remains
+separate from reading notifications and does not make background GPS reliable.
 
 Ending a response removes its map location and retains its private station
 history. After six minutes without a successful update (two missed three-minute
@@ -74,12 +81,13 @@ needed for that behavior.
 
 1. Configure the controller and privacy contact. Create an active station
    directory entry in the Admin Dashboard.
-2. Sign up with that station selected. Verify that Station Activity shows a
+2. Sign up with that station selected. Verify that **Member approvals** shows the
    pending request; approve it as that station's head.
 3. Sign in as the approved personal account. Decline the notice and verify that
    **Start responding** does not publish a location.
 4. Open **Location privacy**, consent, and allow browser location permission.
-   Start a response and verify that the map displays a station-labeled pin.
+   Pin a fire in the map to expose **Start responding**, start a response and
+   verify that the map displays a station-labeled pin.
 5. Observe from another signed-in account. Verify the pin is visible without the
    responder's name; verify the station head can see the private response history.
 6. Withdraw consent. Verify updates stop and the pin disappears. Consent again
