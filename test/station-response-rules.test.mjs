@@ -12,9 +12,11 @@ try {
   await env.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
     await db.doc('stations/DILIMAN-01').set({ name: 'Diliman Fire Station', active: true, createdAt: serverTimestamp() });
-    await db.doc('users/head-1').set({
-      role: 'head', accountType: 'station', stationId: 'DILIMAN-01', displayName: 'Station Head',
+    await db.doc('stations/DILIMAN-01/accounts/head-1').set({
+      uid: 'head-1', accountType: 'station', stationId: 'DILIMAN-01',
+      displayName: 'Diliman Fire Station',
     });
+    await db.doc('stationAccountIndex/head-1').set({ stationId: 'DILIMAN-01' });
     await db.doc('users/member-1').set({
       role: 'general', accountType: 'person', stationId: 'DILIMAN-01',
       stationMembershipStatus: 'approved', displayName: 'Responder One', activeResponseId: null,
@@ -27,6 +29,7 @@ try {
 
   const dbFor = uid => env.authenticatedContext(uid).firestore();
   const newMemberDb = dbFor('new-member');
+  const headDb = dbFor('head-1');
   const signup = newMemberDb.batch();
   signup.set(newMemberDb.doc('users/new-member'), {
     email: 'new-member@example.test',
@@ -46,16 +49,17 @@ try {
     status: 'pending',
     createdAt: serverTimestamp(),
   });
-  signup.set(newMemberDb.doc('stations/DILIMAN-01/notifications/join-new-member'), {
+  await assertSucceeds(signup.commit());
+  const pendingRequest = await headDb.doc('stationJoinRequests/new-member').get();
+  assert.equal(pendingRequest.data().status, 'pending');
+  await assertFails(newMemberDb.doc('stations/DILIMAN-01/notifications/join-new-member').set({
     type: 'station-join-request',
     uid: 'new-member',
     displayName: 'New Member',
     message: 'New Member requested to join DILIMAN-01.',
     createdAt: serverTimestamp(),
-  });
-  await assertSucceeds(signup.commit());
+  }));
 
-  const headDb = dbFor('head-1');
   const pendingRequests = await headDb.collection('stationJoinRequests')
     .where('stationId', '==', 'DILIMAN-01').where('status', '==', 'pending').get();
   assert.equal(pendingRequests.size, 1);

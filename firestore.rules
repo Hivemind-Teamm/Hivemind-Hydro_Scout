@@ -1,11 +1,11 @@
 rules_version = '2';
 // unitLocations/{uid_deviceId}: stationId, deviceId, updatedBy, lat, lng, accuracy, updatedAt.
-// Temporary F1 contract: station accounts have accountType == 'station' and stationId.
+// Station profiles live at stations/{stationId}/accounts/{uid}; their lookup
+// index at stationAccountIndex/{uid} contains only stationId.
 //
 // F1 Station Accounts + AOR:
-// users/{uid}.aorBarangays contains the barangays inside that user's
-// Area of Responsibility. A station/authorized user may update only a
-// hydrant's operationalStatus when that hydrant belongs to their AOR.
+// Profile aorBarangays contains the assigned Area of Responsibility. An
+// authorized account may update only operationalStatus within that AOR.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,29 +16,46 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userRole() {
-      return isSignedIn()
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-        : null;
+    function hasValidStationAccountIndex(uid) {
+      let indexPath = /databases/$(database)/documents/stationAccountIndex/$(uid);
+      return exists(indexPath)
+        && get(indexPath).data.keys().hasOnly(['stationId'])
+        && get(indexPath).data.stationId is string
+        && get(indexPath).data.stationId.size() > 0
+        && get(indexPath).data.stationId.size() <= 128
+        && get(indexPath).data.stationId.matches('^[A-Za-z0-9_-]+$')
+        && exists(/databases/$(database)/documents/stations/$(get(indexPath).data.stationId)/accounts/$(uid))
+        && get(/databases/$(database)/documents/stations/$(get(indexPath).data.stationId)/accounts/$(uid)).data.uid == uid
+        && get(/databases/$(database)/documents/stations/$(get(indexPath).data.stationId)/accounts/$(uid)).data.accountType == 'station'
+        && get(/databases/$(database)/documents/stations/$(get(indexPath).data.stationId)/accounts/$(uid)).data.stationId == get(indexPath).data.stationId;
     }
 
-    function isGeneral()    { return userRole() == 'general'; }
-    function isAuthorized() { return userRole() == 'authorized'; }
-    function isHead()       { return userRole() == 'head'; }
-    function isAdmin()      { return userRole() == 'admin'; }
+    function currentUserData() {
+      return isSignedIn()
+        ? (exists(/databases/$(database)/documents/stationAccountIndex/$(request.auth.uid))
+          ? (hasValidStationAccountIndex(request.auth.uid)
+            ? get(/databases/$(database)/documents/stations/$(get(/databases/$(database)/documents/stationAccountIndex/$(request.auth.uid)).data.stationId)/accounts/$(request.auth.uid)).data
+            : {})
+          : get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
+        : {};
+    }
+
+    function userRole() {
+      return isSignedIn() ? currentUserData().role : null;
+    }
+
+    function isStationAccount() { return currentUserData().accountType == 'station'; }
+    function isGeneral()    { return !isStationAccount() && userRole() == 'general'; }
+    function isAuthorized() { return isStationAccount() || userRole() == 'authorized'; }
+    function isHead()       { return isStationAccount() || userRole() == 'head'; }
+    function isAdmin()      { return !isStationAccount() && userRole() == 'admin'; }
 
     function isAnyRole() {
       return isGeneral() || isAuthorized() || isHead() || isAdmin();
     }
 
-    function currentUserData() {
-      return isSignedIn()
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
-        : {};
-    }
-
     function isHeadForStation(stationId) {
-      return isSignedIn() && userRole() == 'head'
+      return isSignedIn() && (isStationAccount() || userRole() == 'head')
         && currentUserData().stationId == stationId;
     }
 
@@ -77,12 +94,7 @@ service cloud.firestore {
         && data.displayName is string && data.displayName.size() <= 120
         && data.message is string && data.message.size() <= 240
         && data.createdAt == request.time
-        && ((data.type == 'station-join-request'
-              && data.uid == request.auth.uid
-              && notificationId == 'join-' + request.auth.uid
-              && data.displayName == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
-              && getAfter(/databases/$(database)/documents/stationJoinRequests/$(request.auth.uid)).data.stationId == stationId)
-          || (data.type in ['response-started', 'response-ended']
+        && ((data.type in ['response-started', 'response-ended']
               && data.uid == request.auth.uid
               && data.displayName == currentUserData().displayName
               && data.responseId is string
@@ -128,12 +140,35 @@ service cloud.firestore {
     function hydrantIsInUserAor() {
       return isSignedIn()
         && resource.data.barangay is string
-        && get(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.aorBarangays is list
-        && resource.data.barangay in get(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.aorBarangays;
+        && currentUserData().aorBarangays is list
+        && resource.data.barangay in currentUserData().aorBarangays;
+    }
+
+    function isValidStationAccount(stationId, uid, allowLegacyRole) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'uid', 'email', 'displayName', 'accountType', 'station',
+          'stationId', 'aorBarangays', 'createdAt', 'lastLoginAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'role', 'accountType', 'station',
+          'stationId', 'aorBarangays', 'stationAccessIds', 'createdAt',
+          'lastLoginAt', 'updatedAt'
+        ])
+        && data.uid == uid
+        && data.email is string && data.email.size() <= 254
+        && data.displayName is string && data.displayName.size() <= 120
+        && (!('role' in data)
+          || (allowLegacyRole && data.role in ['authorized', 'head', 'admin']))
+        && data.accountType == 'station'
+        && data.station is string && data.station.size() > 0 && data.station.size() <= 120
+        && data.stationId == stationId
+        && data.aorBarangays is list && data.aorBarangays.size() <= 100
+        && (!('stationAccessIds' in data)
+          || (data.stationAccessIds is list && data.stationAccessIds.size() <= 10))
+        && data.createdAt is timestamp
+        && (data.lastLoginAt == null || data.lastLoginAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
     // ---------- users ----------
@@ -210,8 +245,7 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt is timestamp
         && getAfter(/databases/$(database)/documents/users/$(uid)).data.requestedStationId == request.resource.data.stationId
-        && get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.active == true
-        && getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/notifications/$(('join-' + uid))).data.type == 'station-join-request';
+        && get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.active == true;
       allow update: if (isHeadForStation(resource.data.stationId) || isAdmin())
         && resource.data.status == 'pending'
         && onlyChangedFields(['status', 'reviewedAt', 'reviewedBy'])
@@ -239,6 +273,28 @@ service cloud.firestore {
         && request.resource.data.active is bool;
       allow delete: if isAdmin();
 
+      match /accounts/{uid} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == uid
+          || isAdmin()
+          || canManageStation(stationId)
+        );
+        allow create: if isAdmin()
+          && isValidStationAccount(stationId, uid, false)
+          && getAfter(/databases/$(database)/documents/stations/$(stationId)).data.active == true
+          && getAfter(/databases/$(database)/documents/stationAccountIndex/$(uid)).data.stationId == stationId;
+        allow update: if (isAdmin()
+            && isValidStationAccount(stationId, uid, false)
+            && getAfter(/databases/$(database)/documents/stationAccountIndex/$(uid)).data.stationId == stationId)
+          || (isSignedIn() && request.auth.uid == uid
+            && onlyChangedFields(['lastLoginAt'])
+            && isValidStationAccount(stationId, uid, true)
+            && hasValidStationAccountIndex(uid));
+        allow delete: if isAdmin()
+          && (!existsAfter(/databases/$(database)/documents/stationAccountIndex/$(uid))
+            || getAfter(/databases/$(database)/documents/stationAccountIndex/$(uid)).data.stationId != stationId);
+      }
+
       match /notifications/{notificationId} {
         allow read: if canManageStation(stationId);
         allow create: if isSignedIn() && isValidStationNotification(stationId, notificationId);
@@ -254,6 +310,24 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
       }
+    }
+
+    match /stationAccountIndex/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['stationId'])
+        && request.resource.data.stationId is string
+        && request.resource.data.stationId.size() > 0
+        && request.resource.data.stationId.size() <= 128
+        && request.resource.data.stationId.matches('^[A-Za-z0-9_-]+$')
+        && getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/accounts/$(uid)).data.uid == uid
+        && getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/accounts/$(uid)).data.accountType == 'station'
+        && getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/accounts/$(uid)).data.stationId == request.resource.data.stationId;
+      allow delete: if isAdmin();
+    }
+
+    match /{path=**}/accounts/{uid} {
+      allow read: if isAdmin();
     }
 
     // ---------- station response records and public map locations ----------

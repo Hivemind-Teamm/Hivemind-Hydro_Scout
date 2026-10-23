@@ -119,7 +119,7 @@ function HydrantUpdateCard({ item, onViewUser }: {
   );
 }
 function ReportCard({ report, onViewUser, canResolve }: { report: Report; onViewUser: (name: string, role: string) => void; canResolve: boolean }) {
-  const { user, role } = useAuth();
+  const { user, role, accountType } = useAuth();
   const sc = STATUS_COLORS[report.status];
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -139,7 +139,7 @@ function ReportCard({ report, onViewUser, canResolve }: { report: Report; onView
     try {
       await updateReportStatus(report.hydrantId, report.firestoreId, status, {
         by: resolverName,
-        role: roleLabel[role ?? ''] ?? 'Head Inspector',
+        role: accountType === 'station' ? 'Station Account' : roleLabel[role ?? ''] ?? 'Head Inspector',
         reportTitle: report.title,
       });
     } catch (e) {

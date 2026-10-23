@@ -86,7 +86,7 @@ function DashboardOverlay({
   fireActive = false,
   onToggleFirePin,
 }: DashboardOverlayProps) {
-  const { user, role, stationId, stationAccessIds } = useAuth();
+  const { user, role, accountType, stationId, stationAccessIds } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
@@ -106,7 +106,7 @@ function DashboardOverlay({
   const displayName = user?.displayName?.trim()
     || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
   const roleLabel: Record<string, string> = { admin: 'Admin', head: 'Head Inspector', authorized: 'Authorized', general: 'General' };
-  const displayRole = roleLabel[role ?? ''] ?? 'Guest';
+  const displayRole = accountType === 'station' ? 'Station Account' : roleLabel[role ?? ''] ?? 'Guest';
 
   const syncedLabel = loading
     ? 'Syncing…'

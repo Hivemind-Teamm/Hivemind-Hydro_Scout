@@ -34,24 +34,28 @@ const testEnv = await initializeTestEnvironment({
 await testEnv.withSecurityRulesDisabled(async (context) => {
   const db = context.firestore();
 
-  await db.collection("users").doc("station-a-user").set({
+  await db.doc("stations/STATION-A/accounts/station-a-user").set({
     uid: "station-a-user",
     role: "authorized",
+    accountType: "station",
     stationId: "STATION-A",
     aorBarangays: [
       "Barangay Bagong Pag-asa",
       "Barangay Bago Bantay",
     ],
   });
+  await db.doc("stationAccountIndex/station-a-user").set({ stationId: "STATION-A" });
 
-  await db.collection("users").doc("station-b-user").set({
+  await db.doc("stations/STATION-B/accounts/station-b-user").set({
     uid: "station-b-user",
     role: "authorized",
+    accountType: "station",
     stationId: "STATION-B",
     aorBarangays: [
       "Barangay Holy Spirit",
     ],
   });
+  await db.doc("stationAccountIndex/station-b-user").set({ stationId: "STATION-B" });
 
   await db.collection("users").doc("head-user").set({
     uid: "head-user",

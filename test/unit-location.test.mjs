@@ -21,10 +21,8 @@ function setup(overrides = {}) {
   return { dependencies, writes, requests: () => requests };
 }
 
-test('only explicitly marked station accounts with a valid stationId qualify', () => {
-  for (const role of ['authorized', 'head']) {
-    assert.equal(stationIdForLocation({ role, accountType: 'station', stationId: 'station-1' }), 'station-1');
-  }
+test('station accounts with a valid stationId qualify without a personal role', () => {
+  assert.equal(stationIdForLocation({ accountType: 'station', stationId: 'station-1' }), 'station-1');
   for (const accountType of ['person', 'firefighter', null, undefined]) {
     assert.equal(stationIdForLocation({ role: 'authorized', accountType, stationId: 'station-1' }), null);
   }
@@ -91,9 +89,9 @@ test('profile and Firestore failures are contained', async () => {
   }
 });
 
-test('station metadata never permits a general or unknown role to publish', () => {
+test('station account location eligibility is independent of personal roles', () => {
   for (const role of ['general', 'volunteer', undefined]) {
-    assert.equal(stationIdForLocation({ role, accountType: 'station', stationId: 'station-1' }), null);
+    assert.equal(stationIdForLocation({ role, accountType: 'station', stationId: 'station-1' }), 'station-1');
   }
 });
 

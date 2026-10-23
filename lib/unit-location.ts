@@ -1,6 +1,4 @@
-/** Temporary contract until F1 lands: station accounts are explicitly marked. */
 export interface StationProfile {
-  role?: unknown;
   accountType?: unknown;
   stationId?: unknown;
   stationMembershipStatus?: unknown;
@@ -24,7 +22,7 @@ interface LocationDependencies {
 }
 
 export function stationIdForLocation(profile: StationProfile | undefined): string | null {
-  if (profile?.accountType !== "station" || !["authorized", "head", "admin"].includes(String(profile.role))) return null;
+  if (profile?.accountType !== "station") return null;
   const id = profile.stationId;
   // Never substitute the legacy station display name or the user's UID.
   return typeof id === "string" && id.length <= 128 && /^[A-Za-z0-9_-]+$/.test(id)

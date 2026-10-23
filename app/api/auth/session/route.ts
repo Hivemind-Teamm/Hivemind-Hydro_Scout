@@ -65,11 +65,23 @@ export async function POST(req: NextRequest) {
       console.warn('[session] createSessionCookie failed:', err);
     }
 
-    const userDoc = await getFirestore(app)
-      .collection('users')
-      .doc(decoded.uid)
-      .get();
-    const role = userDoc.exists ? userDoc.data()?.role ?? null : null;
+    const firestore = getFirestore(app);
+    const indexDoc = await firestore.collection('stationAccountIndex').doc(decoded.uid).get();
+    let profileDoc;
+    if (indexDoc.exists) {
+      const stationId = indexDoc.data()?.stationId;
+      if (typeof stationId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(stationId)) {
+        throw new Error('Station account index contains an invalid station ID.');
+      }
+      profileDoc = await firestore.collection('stations')
+        .doc(stationId)
+        .collection('accounts')
+        .doc(decoded.uid)
+        .get();
+    } else {
+      profileDoc = await firestore.collection('users').doc(decoded.uid).get();
+    }
+    const role = profileDoc.exists ? profileDoc.data()?.role ?? null : null;
 
     cookieStore.set(
       SESSION_META_COOKIE,

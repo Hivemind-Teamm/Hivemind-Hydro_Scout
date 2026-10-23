@@ -39,7 +39,7 @@ interface DamageReportModalProps {
 }
 
 export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: DamageReportModalProps) {
-  const { user, role } = useAuth();
+  const { user, role, accountType } = useAuth();
   const isMobile = useIsMobile();
   const [damageType, setDamageType] = useState(DAMAGE_TYPES[0]);
   const [description, setDescription] = useState('');
@@ -52,7 +52,9 @@ export default function DamageReportModal({ hydrant, onClose, onOpenAccount }: D
 
   const meta = STATUS_META[hydrant.status];
   const displayName = user?.email ? user.email.replace('@', ' ').split(' ')[0] : 'Unknown';
-  const roleLabel = role ? (ROLE_LABELS[role] ?? role) : 'Authorized User';
+  const roleLabel = accountType === 'station'
+    ? 'Station Account'
+    : role ? (ROLE_LABELS[role] ?? role) : 'Authorized User';
   const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace(/\//g, '/');
   const lastInspection = hydrant.register[0]?.date.split(' ')[0] ?? '—';
 

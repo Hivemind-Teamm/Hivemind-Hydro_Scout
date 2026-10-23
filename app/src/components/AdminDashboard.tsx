@@ -27,7 +27,7 @@ import { useHydrants, createHydrant } from '../data/store';
 import { type HydrantStatus } from '../data/hydrants';
 import PillBadge from './PillBadge';
 import BuildVersionLog from './BuildVersionLog';
-import { createStation, useStations } from '../data/stations';
+import { useStations, type Station } from '../data/stations';
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
@@ -93,7 +93,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
       {/* ── Body — grows naturally, window scrolls ── */}
       <div className="flex flex-col gap-4 p-3 md:gap-5 md:p-6">
         <BuildVersionLog adminNames={Object.fromEntries(users.map(account => [account.uid, account.displayName]))} />
-        <StationsCard />
+        <StationsCard users={users} usersLoading={loading} usersError={error} />
         <ManageUsersCard
           users={users}
           loading={loading}
@@ -106,23 +106,56 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   );
 }
 
-function StationsCard() {
+function StationsCard({
+  users, usersLoading, usersError,
+}: { users: AppUser[]; usersLoading: boolean; usersError: string | null }) {
   const { stations, loading, error } = useStations();
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const stationAccounts = new Map(
+    users
+      .flatMap(account => account.accountType === 'station' && account.stationId
+        ? [[account.stationId, account] as const]
+        : []),
+  );
 
   async function submit() {
     setMessage(null);
+    setActionError(null);
+    if (!name.trim() || !loginEmail.trim() || loginPassword.length < 6) {
+      setMessage('Enter the station name, station account email, and a password of at least 6 characters.');
+      return;
+    }
     setSubmitting(true);
     try {
-      await createStation(id, name);
+      await createUserAccount({
+        displayName: name.trim(),
+        email: loginEmail,
+        password: loginPassword,
+        role: null,
+        accountType: 'station',
+        station: name,
+        stationId: id,
+        aorBarangays: [],
+        newStation: { id, name },
+      });
       setName('');
       setId('');
-      setMessage('Station added to the sign-up list.');
+      setLoginEmail('');
+      setLoginPassword('');
+      setMessage('Station and station login created. The station can sign in with the email and password you set.');
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Could not add the station.');
+      const code = typeof err === 'object' && err !== null && 'code' in err
+        ? String(err.code)
+        : '';
+      setActionError(code === 'permission-denied'
+        ? 'Firestore denied this request. Confirm your account has Admin access and that the updated Firestore rules are deployed.'
+        : err instanceof Error ? err.message : 'Could not add the station.');
     } finally {
       setSubmitting(false);
     }
@@ -131,21 +164,54 @@ function StationsCard() {
   return (
     <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 md:p-6">
       <h2 className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Station Directory</h2>
-      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Active stations appear on the sign-up form. Station IDs cannot be changed after creation.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-        <input value={name} onChange={event => setName(event.target.value)} placeholder="Station name" className="admin-input" maxLength={120} />
-        <input value={id} onChange={event => setId(event.target.value)} placeholder="Station ID (e.g. DILIMAN-01)" className="admin-input" maxLength={128} />
-        <button type="button" disabled={submitting} onClick={() => void submit()} className="rounded-lg bg-[#e0353b] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
-          {submitting ? 'Adding…' : 'Add station'}
-        </button>
+      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Add a station and create its sign-in account using the station email and password. Station IDs cannot be changed after creation.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+          Station name
+          <input value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Central Fire Station" className="admin-input" maxLength={120} />
+        </label>
+        <label className="flex flex-col gap-1 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+          Station ID
+          <input value={id} onChange={event => setId(event.target.value)} placeholder="e.g. DILIMAN-01" className="admin-input" maxLength={128} />
+        </label>
       </div>
+      <div className="mt-3 grid gap-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-700 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+          Station email address
+          <input type="email" value={loginEmail} onChange={event => setLoginEmail(event.target.value)} placeholder="station@example.com" className="admin-input" maxLength={254} />
+        </label>
+        <label className="flex flex-col gap-1 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+          Password
+          <input type="password" value={loginPassword} onChange={event => setLoginPassword(event.target.value)} placeholder="Minimum 6 characters" className="admin-input" autoComplete="new-password" />
+        </label>
+        <p className="text-[10px] text-neutral-400 dark:text-neutral-500 sm:col-span-2">Set the password this station will use to sign in. It can be changed later in Account Center.</p>
+      </div>
+      <button type="button" disabled={submitting} onClick={() => void submit()} className="mt-3 rounded-lg bg-[#e0353b] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+        {submitting ? 'Creating…' : 'Add station'}
+      </button>
       {message && <p role="status" className="mt-2 text-xs text-neutral-600 dark:text-neutral-300">{message}</p>}
+      {actionError && <p role="alert" className="mt-2 text-xs text-red-600">{actionError}</p>}
       {error && <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>}
       <div className="mt-4 divide-y divide-neutral-100 dark:divide-neutral-800">
         {loading ? <p className="py-3 text-sm text-neutral-400">Loading stations…</p> : stations.map(station => (
-          <div key={station.id} className="flex justify-between gap-3 py-2 text-sm">
-            <span className="font-semibold text-neutral-700 dark:text-neutral-200">{station.name}</span>
-            <code className="text-xs text-neutral-400">{station.id}</code>
+          <div key={station.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+            <div className="min-w-0">
+              <span className="font-semibold text-neutral-700 dark:text-neutral-200">{station.name}</span>
+              <code className="ml-2 text-xs text-neutral-400">{station.id}</code>
+            </div>
+            <span className="shrink-0 text-right text-xs text-neutral-500 dark:text-neutral-400">
+              {usersLoading
+                ? 'Loading account date…'
+                : usersError
+                  ? 'Account date unavailable'
+                  : stationAccounts.get(station.id)?.createdAt
+                    ? <>Account created {stationAccounts.get(station.id)?.createdAt?.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}</>
+                    : 'No station account'}
+            </span>
           </div>
         ))}
         {!loading && stations.length === 0 && <p className="py-3 text-sm text-neutral-400">No active stations yet.</p>}
@@ -165,7 +231,7 @@ function ManageUsersCard({
   currentUid: string | null;
 }) {
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'station' | UserRole>('all');
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
   const [removing, setRemoving] = useState<AppUser | null>(null);
@@ -173,14 +239,16 @@ function ManageUsersCard({
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return users.filter((u) => {
-      if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+      if (roleFilter === 'station' && u.accountType !== 'station') return false;
+      if (roleFilter !== 'all' && roleFilter !== 'station' && u.role !== roleFilter) return false;
       if (!q) return true;
       return u.displayName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
     });
   }, [users, search, roleFilter]);
 
-  const FILTERS: { key: 'all' | UserRole; label: string }[] = [
+  const FILTERS: { key: 'all' | 'station' | UserRole; label: string }[] = [
     { key: 'all', label: 'All' },
+    { key: 'station', label: 'Station' },
     ...ROLE_ORDER.map((r) => ({ key: r, label: ROLE_META[r].label })),
   ];
 
@@ -189,8 +257,8 @@ function ManageUsersCard({
       {/* Card header */}
       <div className="flex items-center justify-between gap-3 px-4 pt-4 md:gap-4 md:px-6 md:pt-5">
         <div className="flex min-w-0 items-baseline gap-3">
-          <h2 className="truncate text-base font-extrabold text-neutral-800 dark:text-neutral-100">Manage Users &amp; Roles</h2>
-          <p className="hidden text-xs text-neutral-400 sm:block dark:text-neutral-500">Create, promote, demote, or remove accounts</p>
+          <h2 className="truncate text-base font-extrabold text-neutral-800 dark:text-neutral-100">Manage Accounts</h2>
+          <p className="hidden text-xs text-neutral-400 sm:block dark:text-neutral-500">Create, update, or remove personal and station accounts</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -237,7 +305,7 @@ function ManageUsersCard({
           <thead>
             <tr className="border-y border-neutral-100 bg-neutral-50/60 text-left text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:border-neutral-800 dark:bg-neutral-800/40 dark:text-neutral-500">
               <th className="px-6 py-2.5 font-bold">User</th>
-              <th className="px-3 py-2.5 font-bold">Role</th>
+              <th className="px-3 py-2.5 font-bold">Account Type / Role</th>
               <th className="px-3 py-2.5 font-bold">Station</th>
               <th className="px-3 py-2.5 font-bold">Status</th>
               <th className="px-6 py-2.5 text-right font-bold">Account Actions</th>
@@ -313,7 +381,7 @@ function UserRow({
       </td>
       {/* Role */}
       <td className="px-3 py-3">
-        <RoleBadge role={user.role} />
+        <RoleBadge user={user} />
       </td>
       {/* Station */}
       <td className="px-3 py-3 text-sm text-neutral-600 dark:text-neutral-300">
@@ -360,8 +428,11 @@ function UserRow({
 
 // Role indicator: a colored status dot + uppercase label on a thin tinted,
 // fully-rounded chip. Shares its look with the report-status tags via PillBadge.
-function RoleBadge({ role }: { role: UserRole }) {
-  const meta = ROLE_META[role];
+function RoleBadge({ user }: { user: AppUser }) {
+  if (user.accountType === 'station') {
+    return <PillBadge dot="#e0353b" color="#e0353b" label="Station Account" />;
+  }
+  const meta = ROLE_META[user.role ?? 'general'];
   return <PillBadge dot={meta.dot} color={meta.badgeText} label={meta.label} />;
 }
 
@@ -391,25 +462,25 @@ function SkeletonRows() {
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Create account modal �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
-function CreateAccountModal({ onClose }: { onClose: () => void }) {
+function CreateAccountModal({ onClose, initialStation }: { onClose: () => void; initialStation?: Station }) {
   const { stations } = useStations();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [station, setStation] = useState('');
-  const [stationId, setStationId] = useState('');
+  const [station, setStation] = useState(initialStation?.name ?? '');
+  const [stationId, setStationId] = useState(initialStation?.id ?? '');
   const [aorBarangaysText, setAorBarangaysText] = useState('');
   const [role, setRole] = useState<UserRole>('general');
-  const [accountType, setAccountType] = useState<'person' | 'station'>('person');
+  const [accountType, setAccountType] = useState<'person' | 'station'>(initialStation ? 'station' : 'person');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
     setError(null);
-    if (!email.trim() || !password) { setError('Email and a temporary password are required.'); return; }
+    if (!email.trim() || !password) { setError('Email and password are required.'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    if (accountType === 'station' && role === 'general') {
-      setError('Station accounts need the Authorized, Head, or Admin role.');
+    if (accountType === 'station' && !stationId.trim()) {
+      setError('Choose the station this login belongs to.');
       return;
     }
     if (stationId.trim() && !/^[A-Za-z0-9_-]{1,128}$/.test(stationId.trim())) {
@@ -424,10 +495,10 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
     setSubmitting(true);
     try {
       await createUserAccount({
-        displayName,
+        displayName: accountType === 'station' ? station : displayName,
         email,
         password,
-        role,
+        role: accountType === 'station' ? null : role,
         accountType,
         station,
         stationId,
@@ -448,43 +519,22 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <ModalShell title="Create Account" subtitle="Provision a new Hydro-Scout login" onClose={onClose}>
+    <ModalShell
+      title={accountType === 'station' ? 'Create Station Login' : 'Create Account'}
+      subtitle={accountType === 'station' ? 'Create a sign-in for this station' : 'Provision a new personal Hydro-Scout login'}
+      onClose={onClose}
+    >
       <div className="flex flex-col gap-4 px-6 py-5">
-        <Field label="Full Name">
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Juan Dela Cruz"
-            className="admin-input"
-          />
-        </Field>
-        <Field label="Email Address">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@ciit.edu.ph"
-            className="admin-input"
-          />
-        </Field>
-        <Field label="Temporary Password">
-          <input
-            type="text"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="min. 6 characters"
-            className="admin-input"
-          />
-        </Field>
-
-        <Field label="Account type">
+        {!initialStation && <Field label="Account type">
           <div className="grid grid-cols-2 gap-2">
             {(['person', 'station'] as const).map((type) => (
               <button
                 key={type}
                 type="button"
                 aria-pressed={accountType === type}
-                onClick={() => setAccountType(type)}
+                onClick={() => {
+                  setAccountType(type);
+                }}
                 className={`rounded-lg border px-3 py-2 text-xs font-bold transition-all ${
                   accountType === type
                     ? 'border-[#e0353b] bg-[#e0353b] text-white'
@@ -500,24 +550,62 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
               Station accounts manage station activity. Responders share location through their own approved personal accounts.
             </span>
           )}
+        </Field>}
+
+        {accountType === 'station' && <Field label="Station Name">
+          {initialStation
+            ? <input value={initialStation.name} readOnly className="admin-input" />
+            : <select
+                value={stationId}
+                onChange={(e) => {
+                  setStationId(e.target.value);
+                  setStation(stations.find(item => item.id === e.target.value)?.name ?? '');
+                }}
+                aria-required
+                className="admin-input"
+              >
+                <option value="">Select a station</option>
+                {stations.map(item => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
+              </select>}
+        </Field>}
+
+        {accountType === 'person' && <Field label="Full Name">
+          <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Juan Dela Cruz" className="admin-input" />
+        </Field>}
+        <Field label="Email Address">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@ciit.edu.ph" className="admin-input" />
+        </Field>
+        <Field label="Password">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="min. 6 characters"
+            autoComplete="new-password"
+            className="admin-input"
+          />
+          {accountType === 'station' && (
+            <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+              Set the password this station will use to sign in. It can be changed later in Account Center.
+            </span>
+          )}
         </Field>
 
-        <Field label="Station ID">
+        {accountType === 'person' && <Field label="Station assignment">
           <select
             value={stationId}
             onChange={(e) => {
               setStationId(e.target.value);
               setStation(stations.find(item => item.id === e.target.value)?.name ?? '');
             }}
-            aria-required={accountType === 'station'}
             className="admin-input"
           >
             <option value="">No station assignment</option>
             {stations.map(item => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
           </select>
-        </Field>
+        </Field>}
 
-        <Field label="AOR Barangays">
+        {accountType === 'person' && <Field label="AOR Barangays">
           <input
             value={aorBarangaysText}
             onChange={(e) => setAorBarangaysText(e.target.value)}
@@ -527,9 +615,9 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
           <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
             Separate multiple barangays with commas.
           </span>
-        </Field>
+        </Field>}
 
-        <Field label="Role">
+        {accountType === 'person' && <Field label="Role">
           <div className="flex gap-1.5">
             {ROLE_ORDER.map((r) => {
               const active = role === r;
@@ -549,7 +637,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
               );
             })}
           </div>
-        </Field>
+        </Field>}
 
         {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#e0353b] dark:bg-red-950/40 dark:text-[#e0353b]">{error}</p>}
       </div>
@@ -557,7 +645,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
       <ModalFooter>
         <button onClick={onClose} className="admin-btn-ghost">Cancel</button>
         <button onClick={handleSubmit} disabled={submitting} className="admin-btn-primary">
-          {submitting ? 'Creating…' : 'Create Account'}
+          {submitting ? 'Creating…' : accountType === 'station' ? 'Create Station Login' : 'Create Account'}
         </button>
       </ModalFooter>
     </ModalShell>
@@ -568,19 +656,16 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
 
 function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }) {
   const { stations } = useStations();
-  const [role, setRole] = useState<UserRole>(user.role);
+  const [role, setRole] = useState<UserRole>(user.role ?? 'general');
   const [accountType, setAccountType] = useState<'person' | 'station'>(user.accountType ?? 'person');
   const [stationId, setStationId] = useState(user.stationId ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dirty = role !== user.role || accountType !== user.accountType || stationId.trim() !== (user.stationId ?? '');
+  const roleChanged = accountType === 'person' && role !== user.role;
+  const dirty = roleChanged || accountType !== user.accountType || stationId.trim() !== (user.stationId ?? '');
 
   async function handleSave() {
     if (!dirty) { onClose(); return; }
-    if (accountType === 'station' && role === 'general') {
-      setError('Station accounts need the Authorized, Head, or Admin role.');
-      return;
-    }
     if (accountType === 'station' && !stationId.trim()) {
       setError('Station accounts need a valid Station ID (letters, numbers, underscores, or hyphens).');
       return;
@@ -592,10 +677,10 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
     setSubmitting(true);
     setError(null);
     try {
-      await updateUserAccount(user.uid, role, accountType, stationId);
+      await updateUserAccount(user.uid, accountType === 'station' ? null : role, accountType, stationId);
       onClose();
     } catch (e) {
-      setError((e as Error)?.message ?? 'Could not update the role.');
+      setError((e as Error)?.message ?? 'Could not update the account.');
       setSubmitting(false);
     }
   }
@@ -638,19 +723,19 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
           )}
         </Field>
 
-        <Field label="Station assignment">
+        <Field label={accountType === 'station' ? 'Station name' : 'Station assignment'}>
           <select
             value={stationId}
             onChange={(e) => setStationId(e.target.value)}
             className="admin-input"
           >
-            <option value="">No station assignment</option>
+            <option value="">{accountType === 'station' ? 'Select a station' : 'No station assignment'}</option>
             {!stations.some(item => item.id === stationId) && stationId && <option value={stationId}>{user.station} ({stationId}) · existing</option>}
             {stations.map(item => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
           </select>
         </Field>
 
-        <Field label="Role">
+        {accountType === 'person' && <Field label="Role">
           <div className="grid grid-cols-2 gap-2">
             {ROLE_ORDER.map((r) => {
               const active = role === r;
@@ -671,9 +756,9 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
               );
             })}
           </div>
-        </Field>
+        </Field>}
 
-        {role !== user.role && (
+        {roleChanged && user.role && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
             Role will change from <b>{ROLE_META[user.role].label}</b> to <b>{ROLE_META[role].label}</b>.
           </p>

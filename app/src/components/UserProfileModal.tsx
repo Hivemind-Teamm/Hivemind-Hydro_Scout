@@ -13,6 +13,7 @@ const ROLE_COLORS: Record<string, string> = {
 export interface ViewingUser {
   name: string;
   role: string;
+  accountType?: 'person' | 'station';
 }
 
 interface UserProfileModalProps {
@@ -21,7 +22,7 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ user, onClose }: UserProfileModalProps) {
-  const badgeColor = ROLE_COLORS[user.role] ?? '#6b7280';
+  const badgeColor = user.accountType === 'station' ? '#e0353b' : ROLE_COLORS[user.role ?? 'general'] ?? '#6b7280';
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-[5100] flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -44,7 +45,7 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
             className="rounded-full px-3 py-0.5 text-[11px] font-bold text-white"
             style={{ background: badgeColor }}
           >
-            {user.role}
+            {user.accountType === 'station' ? 'Station Account' : user.role ?? 'general'}
           </span>
         </div>
 
