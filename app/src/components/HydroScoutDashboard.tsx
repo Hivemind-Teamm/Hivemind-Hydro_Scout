@@ -1,5 +1,7 @@
 'use client';
 
+import IncidentTrackingStatus from './IncidentTrackingStatus';
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import MapView, { type MapProvider, type MapController, type FireOverlay } from './MapView';
@@ -441,34 +443,9 @@ export default function HydroScoutDashboard() {
     controllerRef.current?.flyTo(userLocation.lat, userLocation.lng, 17);
   }, [mapReady, userLocation]);
 
-  const watchIdRef = useRef<number | null>(null);
+  // GPS is requested only by explicit map actions below.
+  // Incident-only continuous tracking uses its separate controller.
   const geoErrorRef = useRef<GeolocationPositionError | null>(null);
-  useEffect(() => {
-    if (!canUseDeviceLocation || !('geolocation' in navigator)) return;
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        if (!locationAllowedRef.current) return;
-        geoErrorRef.current = null;
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        // watchPosition streams a fix about once a second even when standing
-        // still, and every new object here re-renders the whole dashboard and
-        // both marker sets. Sub-2 m changes are GPS noise (well inside typical
-        // accuracy), not movement — keep the previous state for those.
-        setUserLocation((prev) =>
-          prev && haversineM(prev.lat, prev.lng, lat, lng) < 2 ? prev : { lat, lng },
-        );
-      },
-      (err) => {
-        geoErrorRef.current = err;
-        console.warn('[geolocation] watchPosition error', err.code, err.message);
-      },
-      { enableHighAccuracy: false, timeout: 30000, maximumAge: 30000 },
-    );
-    return () => {
-      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-    };
-  }, [canUseDeviceLocation]);
 
   const showGeoError = useCallback((msg: string) => {
     setGeoError(msg);
@@ -1648,6 +1625,7 @@ export default function HydroScoutDashboard() {
           </div>
         </>
       )}
+      <IncidentTrackingStatus />
     </div>
   );
 }

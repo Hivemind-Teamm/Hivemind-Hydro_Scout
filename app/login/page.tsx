@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, useEffect, Suspense } from "react";
+import { useState, useRef, FormEvent, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
@@ -81,14 +81,33 @@ function LoginContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const attemptedRedirectUid = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!loading && user) {
-      const next = searchParams.get("next") || "/dashboard";
-
-      // Refresh the session cookie in case it's missing/stale, then navigate.
-      refreshSession().finally(() => router.replace(next));
+    if (!user) {
+      attemptedRedirectUid.current = null;
+      return;
     }
+
+    if (loading || attemptedRedirectUid.current === user.uid) {
+      return;
+    }
+
+    // Avoid repeated verification requests when context renders.
+    attemptedRedirectUid.current = user.uid;
+    const next = searchParams.get("next") || "/dashboard";
+
+    void refreshSession()
+      .then(() => {
+        if (attemptedRedirectUid.current === user.uid) {
+          router.replace(next);
+        }
+      })
+      .catch((err) => {
+        if (attemptedRedirectUid.current !== user.uid) return;
+        console.error('Session verification failed:', err);
+        setError('Unable to verify your session. Please try again.');
+      });
   }, [user, loading, router, searchParams, refreshSession]);
 
   async function handleSubmit(e: FormEvent) {
@@ -100,18 +119,29 @@ function LoginContent() {
     try {
       await login(email, password);
 
+      // Firebase sign-in is not the same as server session verification.
+      // Do not navigate until the session cookie is confirmed.
+      await refreshSession();
+
       const next = searchParams.get("next") || "/dashboard";
 
       router.push(next);
     } catch (err) {
-      setError("Invalid email or password.");
+      setError(
+        err instanceof Error &&
+        err.message === 'session-verification-failed'
+          ? 'Unable to verify your session. Please try again.'
+          : 'Unable to sign in. Check your credentials and try again.'
+      );
       console.error(err);
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (loading || user) return null;
+  // Show the form and error when Firebase login succeeded
+  // but server session verification did not.
+  if (loading || (user && !error)) return null;
 
   const eyeOpen = (
     <svg

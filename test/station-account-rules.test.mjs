@@ -104,7 +104,7 @@ try {
   await assertSucceeds(legacyStationUser.doc('stations/STATION-1/accounts/legacy-station-user').update({
     lastLoginAt: serverTimestamp(),
   }));
-  await assertFails(legacyStationUser.doc('stations/STATION-1/accounts/legacy-station-user').update({ role: 'admin' }));
+  await assertFails(legacyStationUser.doc('stations/STATION-1/accounts/legacy-station-user').update({ role: 'head' }));
   await assertFails(legacyStationUser.doc('buildVersions/current').get());
 
   const otherUser = env.authenticatedContext('other-user').firestore();

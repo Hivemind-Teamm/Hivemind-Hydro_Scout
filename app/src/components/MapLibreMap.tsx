@@ -1010,9 +1010,9 @@ export default function MapLibreMap({
       )}
 
       {map && unitLocations.map(location => (
-        <MapMarker key={location.id} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.id ? 10 : 1 }}>
-          <StationUnitIcon location={location} selected={selectedStationId === location.id}
-            onSelect={() => onSelectStation(location.id)} crosshair={crosshair} />
+        <MapMarker key={location.id} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
+          <StationUnitIcon location={location} selected={selectedStationId === location.stationId}
+            onSelect={() => onSelectStation(location.stationId)} crosshair={crosshair} />
         </MapMarker>
       ))}
       {map && userLocation && (

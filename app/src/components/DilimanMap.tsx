@@ -860,9 +860,9 @@ export default function DilimanMap({
         )}
 
         {unitLocations.map(location => (
-          <Marker key={location.id} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.id ? 10 : 1 }}>
-            <StationUnitIcon location={location} selected={selectedStationId === location.id}
-              onSelect={() => onSelectStation(location.id)} crosshair={crosshair} />
+          <Marker key={location.id} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
+            <StationUnitIcon location={location} selected={selectedStationId === location.stationId}
+              onSelect={() => onSelectStation(location.stationId)} crosshair={crosshair} />
           </Marker>
         ))}
         {userLocation && (

@@ -41,10 +41,10 @@ service cloud.firestore {
     }
 
     function userRole() {
-      return isSignedIn() ? currentUserData().role : null;
+      return isSignedIn() ? currentUserData().get('role', null) : null;
     }
 
-    function isStationAccount() { return currentUserData().accountType == 'station'; }
+    function isStationAccount() { return currentUserData().get('accountType', null) == 'station'; }
     function isGeneral()    { return !isStationAccount() && userRole() == 'general'; }
     function isAuthorized() { return isStationAccount() || userRole() == 'authorized'; }
     function isHead()       { return isStationAccount() || userRole() == 'head'; }
@@ -61,14 +61,14 @@ service cloud.firestore {
 
     function canManageStation(stationId) {
       return isSignedIn() && (isAdmin() || isHeadForStation(stationId)
-        || (currentUserData().stationAccessIds is list
-          && stationId in currentUserData().stationAccessIds));
+        || (currentUserData().get('stationAccessIds', []) is list
+          && stationId in currentUserData().get('stationAccessIds', [])));
     }
 
     function isApprovedStationMember(stationId) {
       return isSignedIn()
-        && currentUserData().accountType == 'person'
-        && currentUserData().stationMembershipStatus == 'approved'
+        && currentUserData().get('accountType', null) == 'person'
+        && currentUserData().get('stationMembershipStatus', null) == 'approved'
         && currentUserData().stationId == stationId;
     }
 
@@ -158,8 +158,8 @@ service cloud.firestore {
     function hydrantIsInUserAor() {
       return isSignedIn()
         && resource.data.barangay is string
-        && currentUserData().aorBarangays is list
-        && resource.data.barangay in currentUserData().aorBarangays;
+        && currentUserData().get('aorBarangays', []) is list
+        && resource.data.barangay in currentUserData().get('aorBarangays', []);
     }
 
     function isValidStationAccount(stationId, uid, allowLegacyRole) {
@@ -306,6 +306,7 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/stationAccountIndex/$(uid)).data.stationId == stationId)
           || (isSignedIn() && request.auth.uid == uid
             && onlyChangedFields(['lastLoginAt'])
+            && request.resource.data.get('role', null) == resource.data.get('role', null)
             && isValidStationAccount(stationId, uid, true)
             && hasValidStationAccountIndex(uid));
         allow delete: if isAdmin()
@@ -410,13 +411,13 @@ service cloud.firestore {
 
     function isLegacyAssignedStation(stationId) {
       return isSignedIn() && (isAuthorized() || isHead() || isAdmin())
-        && currentUserData().accountType == 'station'
+        && currentUserData().get('accountType', null) == 'station'
         && currentUserData().stationId == stationId;
     }
 
     function isLegacyStationAccount() {
       return isSignedIn() && (isAuthorized() || isHead())
-        && currentUserData().accountType == 'station'
+        && currentUserData().get('accountType', null) == 'station'
         && currentUserData().stationId is string
         && currentUserData().stationId.size() > 0
         && currentUserData().stationId.size() <= 128
@@ -533,8 +534,8 @@ service cloud.firestore {
 
     match /stations/{stationId}/unitLocations/{reportId} {
       allow read: if isSignedIn() && (
-        resource.data.public == true
-        || resource.data.updatedBy == request.auth.uid
+        resource.data.get('public', false) == true
+        || resource.data.get('updatedBy', null) == request.auth.uid
         || isLegacyAssignedStation(stationId)
         || canManageStation(stationId)
       );
@@ -560,10 +561,73 @@ service cloud.firestore {
     // Private station-account reports remain visible only to their owner/managers.
     match /{path=**}/unitLocations/{reportId} {
       allow read: if isSignedIn() && (
-        resource.data.public == true
-        || resource.data.updatedBy == request.auth.uid
+        resource.data.get('public', false) == true
+        || resource.data.get('updatedBy', null) == request.auth.uid
         || canManageStation(resource.data.stationId)
       );
+    }
+
+    // ---------- incident-linked GPS positions ----------
+    // Separate from legacy unitLocations and station-response locations.
+    // Incidents are provisioned through trusted server code only.
+    function ownsIncidentLocation(locationId) {
+      return isSignedIn()
+        && locationId.matches('^' + request.auth.uid + '_[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$');
+    }
+
+    function incidentIsActiveAndAssignedNearby(incidentId, position) {
+      let incidentPath = /databases/$(database)/documents/incidents/$(incidentId);
+      return exists(incidentPath)
+        && get(incidentPath).data.get('status', null) == 'active'
+        && get(incidentPath).data.get('location', null) is latlng
+        && position.distance(get(incidentPath).data.location) <= 500
+        && get(incidentPath).data.get('assignedStationIds', []) is list
+        && currentUserData().stationId in get(incidentPath).data.assignedStationIds;
+    }
+
+    function validIncidentUnitLocation(locationId) {
+      let data = request.resource.data;
+      return isSignedIn()
+        && hasValidStationAccountIndex(request.auth.uid)
+        && isStationAccount()
+        && ownsIncidentLocation(locationId)
+        && data.keys().hasAll([
+          'stationId', 'updatedBy', 'incidentId', 'location', 'accuracy', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'stationId', 'updatedBy', 'incidentId', 'location', 'accuracy', 'updatedAt'
+        ])
+        && data.stationId == currentUserData().stationId
+        && data.updatedBy == request.auth.uid
+        && data.incidentId is string
+        && data.incidentId.matches('^[A-Za-z0-9_-]+$')
+        && data.location is latlng
+        && data.accuracy is number
+        && data.accuracy >= 0
+        && data.accuracy <= 50
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time
+        && incidentIsActiveAndAssignedNearby(data.incidentId, data.location);
+    }
+
+    match /incidents/{incidentId} {
+      allow read, write: if false;
+    }
+
+    match /incidentUnitLocations/{locationId} {
+      // A station may see its own GPS record; administrators may review records.
+      // No public or all-stations read access to incident coordinates.
+      allow read: if isAdmin()
+        || (ownsIncidentLocation(locationId)
+          && resource.data.get('updatedBy', null) == request.auth.uid);
+      allow create: if validIncidentUnitLocation(locationId);
+      allow update: if validIncidentUnitLocation(locationId)
+        && resource.data.get('updatedBy', null) == request.auth.uid
+        && resource.data.stationId == request.resource.data.stationId;
+      // Cleanup must remain possible when an incident ends or access is revoked.
+      allow delete: if isAdmin()
+        || (ownsIncidentLocation(locationId)
+          && resource.data.get('updatedBy', null) == request.auth.uid);
     }
 
     // ---------- hydrants ----------
