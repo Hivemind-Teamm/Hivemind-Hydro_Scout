@@ -282,14 +282,19 @@ function ManageUsersCard({
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map((f) => {
             const active = roleFilter === f.key;
+            const stationFilter = f.key === 'station';
             return (
               <button
                 key={f.key}
                 onClick={() => setRoleFilter(f.key)}
                 className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
                   active
-                    ? 'bg-[#e0353b] text-white shadow-sm'
-                    : 'border border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600 dark:border-neutral-700 dark:text-neutral-500 dark:hover:border-neutral-600 dark:hover:text-neutral-300'
+                    ? stationFilter
+                      ? 'bg-amber-400 text-amber-950 shadow-sm'
+                      : 'bg-[#e0353b] text-white shadow-sm'
+                    : stationFilter
+                      ? 'border border-amber-400/70 text-amber-700 hover:border-amber-500 hover:text-amber-800 dark:border-amber-500/50 dark:text-amber-400 dark:hover:border-amber-400 dark:hover:text-amber-300'
+                      : 'border border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600 dark:border-neutral-700 dark:text-neutral-500 dark:hover:border-neutral-600 dark:hover:text-neutral-300'
                 }`}
               >
                 {f.label}
@@ -430,7 +435,7 @@ function UserRow({
 // fully-rounded chip. Shares its look with the report-status tags via PillBadge.
 function RoleBadge({ user }: { user: AppUser }) {
   if (user.accountType === 'station') {
-    return <PillBadge dot="#e0353b" color="#e0353b" label="Station Account" />;
+    return <PillBadge dot="#d4a514" color="#9a7200" label="Station Account" />;
   }
   const meta = ROLE_META[user.role ?? 'general'];
   return <PillBadge dot={meta.dot} color={meta.badgeText} label={meta.label} />;
