@@ -49,11 +49,13 @@ device sleep, permission denial, or network loss can stop updates. This is
 best-effort web reporting, not guaranteed background or off-duty tracking. See
 [location consent and reporting limits](location-consent.md).
 
-The map hides a location after its last successful update becomes older than
+After six minutes without a successful update (two missed three-minute reports),
+the map marks the last known location stale with an amber warning. The marker
+remains visible until its last successful update becomes older than
 `NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES` (15 minutes by default). When a
-manager's station response listener observes a stale active response, it closes
-that response, clears the active-response pointer and removes the live location.
-The response history remains.
+manager's station response listener observes an active response past that
+timeout, it closes the response, clears the active-response pointer and removes
+the live location. The response history remains.
 
 ## Firestore collections
 

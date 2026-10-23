@@ -48,11 +48,12 @@ and delegated managers receive in-app notifications; no push notification servic
 is configured.
 
 Ending a response removes its map location and retains its private station
-history. A location that receives no successful update is hidden after the
-configured stale timeout (15 minutes by default); stale active responses are
-closed when observed by the station manager's response listener. Map/routing
-features may also send coordinates to Mapbox or the routing provider configured
-by the app.
+history. After six minutes without a successful update (two missed three-minute
+reports), the map marks the last known location stale. It is hidden after the
+configured timeout (15 minutes by default); stale active responses are closed
+when observed by the station manager's response listener. Map/routing features
+may also send coordinates to Mapbox or the routing provider configured by the
+app.
 
 The consent notice version is maintained in `lib/location-consent.ts`. Each
 browser/device must make its own choice. Use the persistent **Location privacy**

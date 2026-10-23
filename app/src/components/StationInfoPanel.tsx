@@ -42,6 +42,12 @@ export default function StationInfoPanel({ location, onClose, onLocate }: {
         </div>
         <div className="space-y-3 p-5">
           <dl className="rounded-lg bg-neutral-50 px-3 py-2.5 dark:bg-neutral-900/40">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <dt className="text-[10px] font-bold uppercase text-neutral-400">Location status</dt>
+              <dd className={`text-right text-xs font-semibold ${location.isStale ? 'text-amber-700 dark:text-amber-400' : 'text-green-700 dark:text-green-400'}`}>
+                {location.isStale ? 'Stale — updates paused' : 'Live'}
+              </dd>
+            </div>
             <div className="flex items-start justify-between gap-3">
               <dt className="text-[10px] font-bold uppercase text-neutral-400">Last GPS update</dt>
               <dd className="text-right text-xs font-semibold text-neutral-700 dark:text-neutral-200">{reported}</dd>
@@ -50,7 +56,11 @@ export default function StationInfoPanel({ location, onClose, onLocate }: {
           <button type="button" onClick={onLocate} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#e0353b] py-2 text-xs font-bold text-white hover:bg-red-700">
             <FiMapPin className="h-4 w-4" /> View on map
           </button>
-          <p className="text-center text-[11px] text-neutral-400">Current location reported by a linked responder during an active response</p>
+          <p className="text-center text-[11px] text-neutral-400">
+            {location.isStale
+              ? 'This is the last known location. The device has not sent an update recently.'
+              : 'Current location reported by a linked responder during an active response'}
+          </p>
         </div>
       </div>
     </section>

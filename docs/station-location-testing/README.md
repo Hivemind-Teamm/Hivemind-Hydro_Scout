@@ -42,20 +42,21 @@
 
 ## Stale-response test
 
-The default stale timeout is 15 minutes. For a faster local test, set this in
-`.env.local` before starting/rebuilding the app:
+The map marks a location stale after six minutes without updates and removes it
+after the default 15-minute timeout. For a faster local test that preserves the
+stale-warning window, set this in `.env.local` before starting/rebuilding the
+app:
 
 ```env
-NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES=1
+NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES=7
 ```
 
 Start a response, then close the responder tab or disconnect the device. Keep a
-head account signed in. After the last successful location update becomes stale,
-the response listener should close the active response, clear its active-response
-pointer, remove the map location, and write an in-app station notification.
-Restore the normal timeout after testing. The regular update interval is three
-minutes, so a one-minute timeout can expire a position between successful
-updates.
+head account signed in with the station activity panel open. After six minutes
+without a successful update, verify the map pin and details show a stale status.
+After seven minutes, verify the response listener closes the response, clears
+the active-response pointer, removes the map location and writes an in-app
+station notification. Restore the normal timeout after testing.
 
 ## Automated checks
 

@@ -7,6 +7,7 @@ export interface MapUnitLocation {
   lng: number;
   accuracy: number;
   updatedAt: number | null;
+  isStale?: boolean;
 }
 
 /** Reject malformed records before passing coordinates to a map provider. */
