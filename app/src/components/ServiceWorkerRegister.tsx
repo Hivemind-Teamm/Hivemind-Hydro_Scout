@@ -21,7 +21,10 @@ export default function ServiceWorkerRegister() {
       // appear to "revert". Actively unregister it and drop its caches so dev
       // always runs fresh code.
       navigator.serviceWorker.getRegistrations().then((regs) => {
-        for (const reg of regs) reg.unregister();
+        for (const reg of regs) {
+          // The separate push worker must survive development reloads.
+          if (reg.active?.scriptURL === new URL('/sw.js', location.origin).href) reg.unregister();
+        }
       }).catch(() => {});
       if ('caches' in window) {
         caches.keys().then((keys) => {

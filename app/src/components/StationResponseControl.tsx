@@ -86,6 +86,21 @@ export default function StationResponseControl({ hasFireIncident }: { hasFireInc
   }, [canManage]);
 
   useEffect(() => {
+    if (!canManage) return;
+    const url = new URL(window.location.href);
+    const panel = url.searchParams.get('notifications');
+    if (panel !== 'activity' && panel !== 'members') return;
+    // Opening a push does not mark it read; the linked profile must be visited.
+    const timer = setTimeout(() => {
+      if (panel === 'members' && canApprove) setOpenMemberApprovals(true);
+      else setOpen(true);
+    }, 0);
+    url.searchParams.delete('notifications');
+    window.history.replaceState(window.history.state, '', url);
+    return () => clearTimeout(timer);
+  }, [canManage, canApprove]);
+
+  useEffect(() => {
     if (!canApprove || !stationId) return;
     const toggleMemberApprovals = () => {
       setOpen(false);

@@ -6,6 +6,7 @@ import { useStationNotifications, type JoinRequest } from '@/lib/use-station-not
 import { getUserProfile } from '@/lib/user-profile';
 import UserProfileModal, { type ViewingUser } from './UserProfileModal';
 import PillBadge from './PillBadge';
+import { DevicePushSettings } from './DevicePushProvider';
 
 function time(value?: { toDate?: () => Date } | null) {
   return value?.toDate?.().toLocaleString() ?? 'Just now';
@@ -64,6 +65,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   return <>
     {(activityOpen || membersOpen) && <section aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}>
       {activityOpen ? header('Station activity', 'Account and response updates', closeActivity) : header('Member approvals', 'Pending membership requests', closeMembers)}
+      <DevicePushSettings compact />
       <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a linked account to mark its notification as read.</p>
       {(error || notificationError) && <p role="alert" className="px-4 py-2 text-xs text-red-600">{error || notificationError}</p>}
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}

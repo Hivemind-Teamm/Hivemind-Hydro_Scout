@@ -24,6 +24,7 @@ import { auth, db } from "./firebase";
 import { getUserProfile, watchUserProfile } from "./user-profile";
 import { useLocationConsent } from './use-location-consent';
 import LocationConsentNotice from '@/app/src/components/LocationConsentNotice';
+import { disableDevicePush } from './browser-push';
 
 function friendlyAuthError(err: unknown): never {
   if (err instanceof FirebaseError) {
@@ -260,6 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
+    if (auth.currentUser) await disableDevicePush(auth.currentUser);
     ++sessionGeneration.current;
     await firebaseSignOut(auth);
     await syncSessionCookie(null);
