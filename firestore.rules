@@ -88,13 +88,31 @@ service cloud.firestore {
 
     function isValidStationNotification(stationId, notificationId) {
       let data = request.resource.data;
-      return data.keys().hasOnly(['type', 'uid', 'displayName', 'responseId', 'message', 'createdAt'])
+      return data.keys().hasOnly([
+          'type', 'uid', 'displayName', 'responseId', 'message', 'createdAt',
+          'adminEmail', 'targetUid', 'targetName'
+        ])
         && data.type is string
         && data.uid is string && data.uid.size() <= 128
         && data.displayName is string && data.displayName.size() <= 120
-        && data.message is string && data.message.size() <= 240
+        && data.message is string && data.message.size() <= 600
         && data.createdAt == request.time
-        && ((data.type in ['response-started', 'response-ended']
+        && ((data.type == 'personal-station-assigned'
+              && isAdmin()
+              && data.uid == request.auth.uid
+              && data.adminEmail is string
+              && data.adminEmail == request.auth.token.email
+              && data.adminEmail.size() <= 254
+              && data.targetUid is string && data.targetUid.size() > 0 && data.targetUid.size() <= 128
+              && data.targetName is string && data.targetName.size() > 0 && data.targetName.size() <= 120
+              && notificationId.matches('^account-assignment-[a-f0-9-]{36}$')
+              && data.message == 'Admin account: ' + data.adminEmail + ' changed "' + data.targetName + '" station to ' + stationId + '.'
+              && get(/databases/$(database)/documents/users/$(data.targetUid)).data.accountType == 'person'
+              && get(/databases/$(database)/documents/users/$(data.targetUid)).data.stationId != stationId
+              && getAfter(/databases/$(database)/documents/users/$(data.targetUid)).data.accountType == 'person'
+              && getAfter(/databases/$(database)/documents/users/$(data.targetUid)).data.stationId == stationId
+              && getAfter(/databases/$(database)/documents/users/$(data.targetUid)).data.displayName == data.targetName)
+          || (data.type in ['response-started', 'response-ended']
               && data.uid == request.auth.uid
               && data.displayName == currentUserData().displayName
               && data.responseId is string

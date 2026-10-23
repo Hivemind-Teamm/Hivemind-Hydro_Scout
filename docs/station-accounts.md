@@ -13,6 +13,12 @@ Station logins receive fixed station-operations access, without system-admin
 access. Their password is set by the administrator and may be changed in
 Account Center.
 
+When an administrator assigns a personal account to a station or changes its
+station assignment, the destination station's activity feed receives an
+in-app notification with the admin email, account name, and destination station
+ID. Station heads for that station can see the notification; the assignment
+and notification are written together.
+
 To inspect existing station profiles before migrating:
 
 ```powershell

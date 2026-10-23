@@ -11,6 +11,9 @@ const env = await initializeTestEnvironment({
 try {
   await env.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
+    await db.doc('users/admin').set({
+      uid: 'admin', role: 'admin', accountType: 'person', displayName: 'Admin',
+    });
     await db.doc('stations/DILIMAN-01').set({ name: 'Diliman Fire Station', active: true, createdAt: serverTimestamp() });
     await db.doc('stations/DILIMAN-01/accounts/head-1').set({
       uid: 'head-1', accountType: 'station', stationId: 'DILIMAN-01',
@@ -25,11 +28,16 @@ try {
       role: 'general', accountType: 'person', stationId: 'DILIMAN-02',
       stationMembershipStatus: 'approved', displayName: 'Other Responder',
     });
+    await db.doc('users/assignment-target').set({
+      role: 'general', accountType: 'person', stationId: 'DILIMAN-02',
+      stationMembershipStatus: 'approved', displayName: 'Account Target',
+    });
   });
 
   const dbFor = uid => env.authenticatedContext(uid).firestore();
   const newMemberDb = dbFor('new-member');
   const headDb = dbFor('head-1');
+  const adminDb = env.authenticatedContext('admin', { email: 'admin@example.test' }).firestore();
   const signup = newMemberDb.batch();
   signup.set(newMemberDb.doc('users/new-member'), {
     email: 'new-member@example.test',
@@ -83,6 +91,41 @@ try {
   await assertSucceeds(approval.commit());
   const approvedProfile = await newMemberDb.doc('users/new-member').get();
   assert.equal(approvedProfile.data().stationMembershipStatus, 'approved');
+
+  const assignmentId = 'account-assignment-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const assignment = adminDb.batch();
+  assignment.update(adminDb.doc('users/assignment-target'), {
+    stationId: 'DILIMAN-01',
+    station: 'Diliman Fire Station',
+    stationMembershipStatus: 'approved',
+  });
+  assignment.set(adminDb.doc(`stations/DILIMAN-01/notifications/${assignmentId}`), {
+    type: 'personal-station-assigned',
+    uid: 'admin',
+    displayName: 'Admin',
+    adminEmail: 'admin@example.test',
+    targetUid: 'assignment-target',
+    targetName: 'Account Target',
+    message: 'Admin account: admin@example.test changed "Account Target" station to DILIMAN-01.',
+    createdAt: serverTimestamp(),
+  });
+  await assertSucceeds(assignment.commit());
+  const assignmentNotice = await headDb.doc(`stations/DILIMAN-01/notifications/${assignmentId}`).get();
+  assert.equal(assignmentNotice.data().message, 'Admin account: admin@example.test changed "Account Target" station to DILIMAN-01.');
+  await assertFails(dbFor('member-2').doc(`stations/DILIMAN-01/notifications/${assignmentId}`).get());
+
+  const forgedAssignment = adminDb.batch();
+  forgedAssignment.set(adminDb.doc('stations/DILIMAN-01/notifications/account-assignment-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'), {
+    type: 'personal-station-assigned',
+    uid: 'admin',
+    displayName: 'Admin',
+    adminEmail: 'spoofed@example.test',
+    targetUid: 'assignment-target',
+    targetName: 'Account Target',
+    message: 'Admin account: spoofed@example.test changed "Account Target" station to DILIMAN-01.',
+    createdAt: serverTimestamp(),
+  });
+  await assertFails(forgedAssignment.commit());
 
   const responseId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const responsePath = `stationResponses/${responseId}`;

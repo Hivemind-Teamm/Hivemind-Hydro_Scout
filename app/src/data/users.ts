@@ -366,6 +366,7 @@ export async function updateUserAccount(
   role: UserRole | null,
   accountType: AccountType,
   stationId: string,
+  admin: { uid: string; email: string; displayName: string },
 ): Promise<void> {
   const assignedStationId = stationId.trim() || null;
   if (assignedStationId && !/^[A-Za-z0-9_-]{1,128}$/.test(assignedStationId)) {
@@ -421,6 +422,8 @@ export async function updateUserAccount(
     }
 
     const profile = { ...sourceSnapshot.data() };
+    const previousAccountType = profile.accountType;
+    const previousAssignedStationId = profile.stationId;
     if (accountType === 'station' && typeof profile.activeResponseId === 'string') {
       throw new Error('End the active response before changing this account to a station account.');
     }
@@ -440,6 +443,9 @@ export async function updateUserAccount(
       delete profile.requestedStationId;
       delete profile.activeResponseId;
     } else {
+      if (typeof profile.displayName !== 'string' || !profile.displayName.trim()) {
+        profile.displayName = typeof profile.email === 'string' ? profile.email : '';
+      }
       profile.role = role;
       profile.stationMembershipStatus = assignedStationId ? 'approved' : 'none';
       delete profile.requestedStationId;
@@ -454,6 +460,29 @@ export async function updateUserAccount(
       transaction.set(indexRef, { stationId: assignedStationId });
     } else if (indexSnapshot.exists()) {
       transaction.delete(indexRef);
+    }
+
+    if (accountType === 'person'
+      && (previousAccountType === 'person' || (previousAccountType == null && !indexSnapshot.exists()))
+      && assignedStationId
+      && previousAssignedStationId !== assignedStationId) {
+      if (!admin.email.trim()) {
+        throw new Error('Your admin account needs an email address to notify the station head.');
+      }
+      const notificationRef = doc(collection(db, 'stations', assignedStationId, 'notifications'), `account-assignment-${crypto.randomUUID()}`);
+      const targetName = typeof profile.displayName === 'string' && profile.displayName.trim()
+        ? profile.displayName.trim()
+        : profile.email;
+      transaction.set(notificationRef, {
+        type: 'personal-station-assigned',
+        uid: admin.uid,
+        displayName: admin.displayName.trim() || admin.email,
+        adminEmail: admin.email,
+        targetUid: uid,
+        targetName,
+        message: `Admin account: ${admin.email} changed "${targetName}" station to ${assignedStationId}.`,
+        createdAt: serverTimestamp(),
+      });
     }
   });
 }

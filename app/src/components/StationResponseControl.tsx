@@ -349,6 +349,8 @@ export default function StationResponseControl({ hasFireIncident }: { hasFireInc
             {notifications.map(item => {
               const label = item.type.startsWith('membership-')
                 ? 'Membership update'
+                : item.type === 'personal-station-assigned'
+                  ? 'Account assignment'
                 : item.type.startsWith('response-') || item.type === 'station-response-closed'
                   ? 'Response activity'
                   : 'Station activity';

@@ -660,6 +660,7 @@ function CreateAccountModal({ onClose, initialStation }: { onClose: () => void; 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Edit user modal �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
 function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }) {
+  const { user: adminUser } = useAuth();
   const { stations } = useStations();
   const [role, setRole] = useState<UserRole>(user.role ?? 'general');
   const [accountType, setAccountType] = useState<'person' | 'station'>(user.accountType ?? 'person');
@@ -682,7 +683,12 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
     setSubmitting(true);
     setError(null);
     try {
-      await updateUserAccount(user.uid, accountType === 'station' ? null : role, accountType, stationId);
+      if (!adminUser) throw new Error('Your admin session could not be verified.');
+      await updateUserAccount(user.uid, accountType === 'station' ? null : role, accountType, stationId, {
+        uid: adminUser.uid,
+        email: adminUser.email ?? '',
+        displayName: adminUser.displayName ?? '',
+      });
       onClose();
     } catch (e) {
       setError((e as Error)?.message ?? 'Could not update the account.');
