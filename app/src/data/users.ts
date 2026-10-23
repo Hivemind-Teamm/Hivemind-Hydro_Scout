@@ -2,8 +2,8 @@
 
 // Admin user-directory data layer for Hydro-Scout.
 //
-// Reads the `users` collection live and exposes the mutations the
-// System Administration panel needs.
+// Reads personal and station-scoped profiles live and exposes the
+// mutations the System Administration panel needs.
 //
 // F1 Station Accounts + AOR:
 //   • stationId identifies the fire station an account belongs to.
@@ -16,29 +16,38 @@ import { useEffect, useState } from 'react';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   getAuth,
-  connectAuthEmulator,
   createUserWithEmailAndPassword,
+  deleteUser,
   updateProfile,
   signOut as secondarySignOut,
 } from 'firebase/auth';
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
-  updateDoc,
-  deleteDoc,
-  setDoc,
+  query,
+  runTransaction,
+  writeBatch,
+  where,
   serverTimestamp,
   type DocumentData,
+  type Unsubscribe,
 } from 'firebase/firestore';
 import { db, firebaseConfig } from '@/lib/firebase';
+import {
+  getUserProfile,
+  stationAccountIndexRef,
+  stationAccountRef,
+  userProfileRef,
+} from '@/lib/user-profile';
 
-export type UserRole = 'general' | 'authorized' | 'sub_admin' | 'head' | 'admin';
+export type UserRole = 'general' | 'authorized' | 'head' | 'admin';
+export type AccountType = 'person' | 'station';
 
 export const ROLE_ORDER: UserRole[] = [
   'general',
   'authorized',
-  'sub_admin',
   'head',
   'admin',
 ];
@@ -63,12 +72,6 @@ export const ROLE_META: Record<UserRole, RoleMeta> = {
     badgeText: '#b45309',
     dot: '#f59e0b',
   },
-  sub_admin: {
-    label: 'Sub Admin',
-    badgeBg: '#e0f2fe',
-    badgeText: '#0369a1',
-    dot: '#0284c7',
-  },
   head: {
     label: 'Head',
     badgeBg: '#ede9fe',
@@ -87,7 +90,9 @@ export interface AppUser {
   uid: string;
   displayName: string;
   email: string;
-  role: UserRole;
+  role: UserRole | null;
+  accountType: AccountType | null;
+  createdAt: Date | null;
 
   // Existing human-readable station name.
   station: string;
@@ -195,9 +200,12 @@ export function userFromDoc(
   id: string,
   d: DocumentData,
 ): AppUser {
+  const accountType = d.accountType === 'station' || d.accountType === 'person'
+    ? d.accountType
+    : null;
   const displayName: string =
-    (typeof d.displayName === 'string' &&
-      d.displayName.trim()) ||
+    (accountType === 'station' && typeof d.station === 'string' && d.station.trim()) ||
+    (typeof d.displayName === 'string' && d.displayName.trim()) ||
     (typeof d.email === 'string'
       ? d.email.split('@')[0]
       : 'Unknown User');
@@ -219,7 +227,9 @@ export function userFromDoc(
         ? d.email
         : '—',
 
-    role: toRole(d.role),
+    role: accountType === 'station' ? null : toRole(d.role),
+    accountType,
+    createdAt: toDate(d.createdAt),
 
     station:
       (typeof d.station === 'string' &&
@@ -257,36 +267,87 @@ export function useUsers(): UsersState {
     useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, 'users'),
+    let userDocs: AppUser[] = [];
+    let stationDocs: AppUser[] = [];
+    let usersLoaded = false;
+    let stationDirectoryLoaded = false;
+    let stationAccountLoads = new Set<string>();
+    let stationProfilesByStation = new Map<string, AppUser[]>();
+    let stationAccountStops: Unsubscribe[] = [];
+    let stationAccountGeneration = 0;
+    const publish = () => {
+      const profilesByUid = new Map(userDocs.map(user => [user.uid, user]));
+      for (const user of stationDocs) profilesByUid.set(user.uid, user);
+      const list = [...profilesByUid.values()];
+      list.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-      (snap) => {
-        const list = snap.docs.map((d) =>
-          userFromDoc(d.id, d.data()),
-        );
-
-        list.sort((a, b) =>
-          a.displayName.localeCompare(
-            b.displayName,
-          ),
-        );
-
-        setUsers(list);
+      setUsers(list);
+      if (usersLoaded && stationDirectoryLoaded
+        && stationAccountLoads.size === stationAccountStops.length) {
         setLoading(false);
-      },
+      }
+    };
 
-      (err) => {
+    const handleError = (err: Error) => {
         console.error(
-          'Failed to load users:',
+          'Failed to load account profiles:',
           err,
         );
 
         setError(err.message);
         setLoading(false);
+    };
+    const stopUsers = onSnapshot(
+      collection(db, 'users'),
+      snap => {
+        usersLoaded = true;
+        userDocs = snap.docs.map(d => userFromDoc(d.id, d.data()));
+        publish();
       },
+      handleError,
+    );
+    const stopStations = onSnapshot(
+      collection(db, 'stations'),
+      stationsSnapshot => {
+        const generation = ++stationAccountGeneration;
+        stationAccountStops.forEach(stop => stop());
+        stationAccountStops = [];
+        stationAccountLoads = new Set();
+        stationProfilesByStation = new Map();
+        stationDirectoryLoaded = true;
+        stationDocs = [];
+        setError(null);
+
+        const stationIds = stationsSnapshot.docs.map(station => station.id);
+        if (stationIds.length === 0) {
+          publish();
+          return;
+        }
+
+        stationAccountStops = stationIds.map(stationId => onSnapshot(
+          query(collection(db, 'stations', stationId, 'accounts'), where('accountType', '==', 'station')),
+          accountSnapshot => {
+            if (generation !== stationAccountGeneration) return;
+            stationAccountLoads.add(stationId);
+            stationProfilesByStation.set(
+              stationId,
+              accountSnapshot.docs.map(account => userFromDoc(account.id, account.data())),
+            );
+            stationDocs = [...stationProfilesByStation.values()].flat();
+            publish();
+          },
+          handleError,
+        ));
+      },
+      handleError,
     );
 
-    return unsub;
+    return () => {
+      stationAccountGeneration++;
+      stationAccountStops.forEach(stop => stop());
+      stopStations();
+      stopUsers();
+    };
   }, []);
 
   return {
@@ -300,14 +361,130 @@ export function useUsers(): UsersState {
  * Promote / demote a user.
  * Admin-only according to Firestore rules.
  */
-export async function updateUserRole(
+export async function updateUserAccount(
   uid: string,
-  role: UserRole,
+  role: UserRole | null,
+  accountType: AccountType,
+  stationId: string,
+  admin: { uid: string; email: string; displayName: string },
 ): Promise<void> {
-  await updateDoc(
-    doc(db, 'users', uid),
-    { role },
-  );
+  const assignedStationId = stationId.trim() || null;
+  if (assignedStationId && !/^[A-Za-z0-9_-]{1,128}$/.test(assignedStationId)) {
+    throw new Error('Choose a valid Station ID from the station directory.');
+  }
+  if (accountType === 'station' && !assignedStationId) {
+    throw new Error('Station accounts need a valid Station ID.');
+  }
+  if (accountType === 'person' && !role) {
+    throw new Error('Choose a role for the personal account.');
+  }
+  const stationSnapshot = assignedStationId ? await getDoc(doc(db, 'stations', assignedStationId)) : null;
+  if (assignedStationId && (!stationSnapshot?.exists() || stationSnapshot.data().active !== true)) {
+    throw new Error('Choose an active station from the station directory.');
+  }
+  const personalRef = userProfileRef(uid);
+  const indexRef = stationAccountIndexRef(uid);
+
+  await runTransaction(db, async transaction => {
+    const [indexSnapshot, personalSnapshot] = await Promise.all([
+      transaction.get(indexRef),
+      transaction.get(personalRef),
+    ]);
+    const previousStationId = indexSnapshot.exists()
+      ? indexSnapshot.data().stationId
+      : null;
+    if (previousStationId !== null
+      && (typeof previousStationId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(previousStationId))) {
+      throw new Error('The station account index contains an invalid station ID.');
+    }
+    const sourceRef = previousStationId
+      ? stationAccountRef(previousStationId, uid)
+      : personalRef;
+    const sourceSnapshot = sourceRef.path === personalRef.path
+      ? personalSnapshot
+      : await transaction.get(sourceRef);
+    if (!sourceSnapshot.exists()) {
+      throw new Error('The account profile could not be found.');
+    }
+
+    const targetRef = accountType === 'station' && assignedStationId
+      ? stationAccountRef(assignedStationId, uid)
+      : personalRef;
+    const targetSnapshot = targetRef.path === sourceRef.path
+      ? sourceSnapshot
+      : await transaction.get(targetRef);
+    const legacyStationProfile = accountType === 'person'
+      && targetRef.path === personalRef.path
+      && targetSnapshot.exists()
+      && targetSnapshot.data().accountType === 'station';
+    if (targetSnapshot.exists() && targetRef.path !== sourceRef.path && !legacyStationProfile) {
+      throw new Error('A profile already exists at the selected account location.');
+    }
+
+    const profile = { ...sourceSnapshot.data() };
+    const previousAccountType = profile.accountType;
+    const previousAssignedStationId = profile.stationId;
+    if (accountType === 'station' && typeof profile.activeResponseId === 'string') {
+      throw new Error('End the active response before changing this account to a station account.');
+    }
+
+    profile.uid = uid;
+    profile.accountType = accountType;
+    profile.stationId = assignedStationId;
+    profile.station = stationSnapshot?.exists()
+      ? String(stationSnapshot.data().name ?? 'Unassigned')
+      : 'Unassigned';
+
+    if (accountType === 'station') {
+      profile.displayName = profile.station;
+      profile.aorBarangays = [];
+      delete profile.role;
+      delete profile.stationMembershipStatus;
+      delete profile.requestedStationId;
+      delete profile.activeResponseId;
+    } else {
+      if (typeof profile.displayName !== 'string' || !profile.displayName.trim()) {
+        profile.displayName = typeof profile.email === 'string' ? profile.email : '';
+      }
+      profile.role = role;
+      profile.stationMembershipStatus = assignedStationId ? 'approved' : 'none';
+      delete profile.requestedStationId;
+    }
+
+    transaction.set(targetRef, profile);
+    if (targetRef.path !== sourceRef.path) {
+      transaction.delete(sourceRef);
+    }
+
+    if (accountType === 'station' && assignedStationId) {
+      transaction.set(indexRef, { stationId: assignedStationId });
+    } else if (indexSnapshot.exists()) {
+      transaction.delete(indexRef);
+    }
+
+    if (accountType === 'person'
+      && (previousAccountType === 'person' || (previousAccountType == null && !indexSnapshot.exists()))
+      && assignedStationId
+      && previousAssignedStationId !== assignedStationId) {
+      if (!admin.email.trim()) {
+        throw new Error('Your admin account needs an email address to notify the station head.');
+      }
+      const notificationRef = doc(collection(db, 'stations', assignedStationId, 'notifications'), `account-assignment-${crypto.randomUUID()}`);
+      const targetName = typeof profile.displayName === 'string' && profile.displayName.trim()
+        ? profile.displayName.trim()
+        : profile.email;
+      transaction.set(notificationRef, {
+        type: 'personal-station-assigned',
+        uid: admin.uid,
+        displayName: admin.displayName.trim() || admin.email,
+        adminEmail: admin.email,
+        targetUid: uid,
+        targetName,
+        message: `Admin account: ${admin.email} changed "${targetName}" station to ${assignedStationId}.`,
+        createdAt: serverTimestamp(),
+      });
+    }
+  });
 }
 
 /**
@@ -319,16 +496,22 @@ export async function updateUserRole(
 export async function deleteUserAccount(
   uid: string,
 ): Promise<void> {
-  await deleteDoc(
-    doc(db, 'users', uid),
-  );
+  const profile = await getUserProfile(uid);
+  const batch = writeBatch(db);
+  batch.delete(profile.ref);
+  if (profile.ref.path !== userProfileRef(uid).path) {
+    batch.delete(userProfileRef(uid));
+    batch.delete(stationAccountIndexRef(uid));
+  }
+  await batch.commit();
 }
 
 export interface CreateAccountInput {
   displayName: string;
   email: string;
   password: string;
-  role: UserRole;
+  role: UserRole | null;
+  accountType: AccountType;
 
   // Existing display name.
   station: string;
@@ -336,18 +519,53 @@ export interface CreateAccountInput {
   // F1 Station Accounts + AOR.
   stationId: string | null;
   aorBarangays: string[];
+  newStation?: { id: string; name: string };
 }
 
 /**
  * Creates a real Firebase Auth account without disturbing
  * the signed-in administrator.
  *
- * A secondary Firebase app owns the temporary authentication
- * session for the newly-created user.
+ * A secondary Firebase app owns the authentication session
+ * for the newly-created user.
  */
 export async function createUserAccount(
   input: CreateAccountInput,
 ): Promise<void> {
+  const newStation = input.newStation
+    ? {
+        id: input.newStation.id.trim(),
+        name: input.newStation.name.trim(),
+      }
+    : null;
+  if (newStation && input.accountType !== 'station') {
+    throw new Error('A new station must be created with a station account.');
+  }
+  if (newStation && (!/^[A-Za-z0-9_-]{1,128}$/.test(newStation.id)
+    || !newStation.name || newStation.name.length > 120)) {
+    throw new Error('Enter a valid station name and Station ID.');
+  }
+  const stationId =
+    newStation?.id ?? (typeof input.stationId === 'string' && input.stationId.trim()
+      ? input.stationId.trim()
+      : null);
+  if (stationId && !/^[A-Za-z0-9_-]{1,128}$/.test(stationId)) {
+    throw new Error('Choose a valid Station ID from the station directory.');
+  }
+  if (input.accountType === 'station' && !stationId) {
+    throw new Error('Station accounts need a valid Station ID.');
+  }
+  if (input.accountType === 'person' && !input.role) {
+    throw new Error('Choose a role for the personal account.');
+  }
+  const stationSnapshot = stationId ? await getDoc(doc(db, 'stations', stationId)) : null;
+  if (newStation && stationSnapshot?.exists()) {
+    throw new Error('That Station ID already exists.');
+  }
+  if (stationId && !newStation && (!stationSnapshot?.exists() || stationSnapshot.data().active !== true)) {
+    throw new Error('Choose an active station from the station directory.');
+  }
+
   const secondary = initializeApp(
     firebaseConfig,
     `admin-create-${Date.now()}`,
@@ -357,20 +575,6 @@ export async function createUserAccount(
     const secondaryAuth =
       getAuth(secondary);
 
-    // A secondary Firebase app has its own Auth instance.
-    // Connecting the main app does not connect this instance.
-    if (process.env.NODE_ENV === 'development') {
-      if (secondary.options.projectId !== 'demo-hydro-scout-api') {
-        throw new Error('Secondary Firebase development isolation failed');
-      }
-
-      connectAuthEmulator(
-        secondaryAuth,
-        'http://127.0.0.1:9099',
-        { disableWarnings: true },
-      );
-    }
-
     const cred =
       await createUserWithEmailAndPassword(
         secondaryAuth,
@@ -378,60 +582,89 @@ export async function createUserAccount(
         input.password,
       );
 
-    if (input.displayName.trim()) {
+    const stationName = newStation?.name
+      ?? (stationSnapshot?.exists() ? String(stationSnapshot.data().name ?? '') : '');
+    const displayName = input.accountType === 'station'
+      ? stationName.trim()
+      : input.displayName.trim();
+
+    if (displayName) {
       await updateProfile(
         cred.user,
         {
-          displayName:
-            input.displayName.trim(),
+          displayName,
         },
       );
     }
-
-    const stationId =
-      typeof input.stationId === 'string' &&
-      input.stationId.trim()
-        ? input.stationId.trim()
-        : null;
 
     const aorBarangays =
       readAorBarangays(
         input.aorBarangays,
       );
 
-    await setDoc(
-      doc(db, 'users', cred.user.uid),
-      {
-        uid: cred.user.uid,
+    const profileData = {
+      uid: cred.user.uid,
 
-        email:
-          input.email.trim(),
+      email:
+        input.email.trim(),
 
-        displayName:
-          input.displayName.trim(),
+      displayName,
 
-        role:
-          input.role,
+      accountType: input.accountType,
+      ...(input.accountType === 'person' ? { role: input.role } : {}),
 
-        ...(input.role === 'sub_admin'
-          ? { accountType: 'station' }
-          : {}),
+      station: stationName
+        || input.station.trim()
+        || 'Unassigned',
 
-        station:
-          input.station.trim() ||
-          'Unassigned',
+      // F1 Station Accounts + AOR.
+      stationId,
+      ...(input.accountType === 'person'
+        ? { stationMembershipStatus: stationId ? 'approved' : 'none' }
+        : {}),
+      aorBarangays: input.accountType === 'station' ? [] : aorBarangays,
 
-        // F1 Station Accounts + AOR.
-        stationId,
-        aorBarangays,
+      createdAt:
+        serverTimestamp(),
 
-        createdAt:
-          serverTimestamp(),
+      lastLoginAt:
+        null,
+    };
+    try {
+      await runTransaction(db, async transaction => {
+        const stationRef = stationId ? doc(db, 'stations', stationId) : null;
+        const currentStation = stationRef ? await transaction.get(stationRef) : null;
+        if (newStation && currentStation?.exists()) {
+          throw new Error('That Station ID already exists.');
+        }
+        if (stationId && !newStation
+          && (!currentStation?.exists() || currentStation.data().active !== true)) {
+          throw new Error('Choose an active station from the station directory.');
+        }
 
-        lastLoginAt:
-          null,
-      },
-    );
+        if (newStation && stationRef) {
+          transaction.set(stationRef, {
+            name: newStation.name,
+            active: true,
+            createdAt: serverTimestamp(),
+          });
+        }
+        if (input.accountType === 'station' && stationId) {
+          transaction.set(stationAccountRef(stationId, cred.user.uid), profileData);
+          transaction.set(stationAccountIndexRef(cred.user.uid), { stationId });
+        } else {
+          transaction.set(userProfileRef(cred.user.uid), profileData);
+        }
+      });
+    } catch (error) {
+      try {
+        await deleteUser(cred.user);
+      } catch (rollbackError) {
+        console.error('Failed to remove the Auth account after its Firestore profile could not be created:', rollbackError);
+        throw new Error('The Firestore profile could not be created, and the new sign-in account could not be rolled back. Contact an administrator.');
+      }
+      throw error;
+    }
 
     await secondarySignOut(
       secondaryAuth,

@@ -5,90 +5,105 @@ import { haversineM } from '../lib/haversine.ts';
 
 const hydrant = { lat: 14.65, lng: 121.06 };
 const fire = { lat: 14.652, lng: 121.062 };
-// The services snap both ends onto the nearest mapped path.
+// Routes start and end on the nearest mapped path, a little off each pin.
 const snapped = [[121.0601, 14.6501], [121.061, 14.651], [121.0619, 14.6519]];
 const ok = (distance, coordinates = snapped) => ({ code: 'Ok', routes: [{ distance, geometry: { coordinates } }] });
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
+const hang = signal => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted'))));
 
-function setup(answers, overrides = {}) {
-  const urls = [];
+function setup({ streets, mapbox }, overrides = {}) {
+  const calls = [];
   const dependencies = {
     mapboxToken: 'pk.test',
     distanceM: haversineM,
     fetch: async (url, init) => {
-      urls.push(url);
-      const answer = answers[url.includes('api.mapbox.com') ? 'mapbox' : 'osrm'];
-      return typeof answer === 'function' ? answer(init) : answer;
+      calls.push(url);
+      return typeof mapbox === 'function' ? mapbox(init.signal) : mapbox;
+    },
+    streetPath: async (from, to, signal) => {
+      calls.push(`streets ${from} ${to}`);
+      return typeof streets === 'function' ? streets(signal) : streets;
     },
     ...overrides,
   };
-  return { dependencies, urls };
+  return { dependencies, calls };
 }
 
-test('uses the Mapbox walking route and adds the gap at each end', async () => {
-  const { dependencies, urls } = setup({ mapbox: json(ok(600)) });
+test('uses the street network and adds the gap at each end', async () => {
+  const { dependencies, calls } = setup({ streets: { distanceM: 300, coordinates: snapped }, mapbox: json(ok(600)) });
   const route = await fetchHoseRoute(hydrant, fire, dependencies);
   const gaps = haversineM(14.65, 121.06, 14.6501, 121.0601) + haversineM(14.6519, 121.0619, 14.652, 121.062);
   assert.ok(gaps > 20 && gaps < 40);
-  assert.equal(route.source, 'mapbox');
-  assert.equal(route.meters, 600 + gaps);
+  assert.equal(route.source, 'streets');
+  assert.equal(route.meters, 300 + gaps);
   assert.deepEqual(route.path, [[121.06, 14.65], ...snapped, [121.062, 14.652]]);
-  assert.equal(urls.length, 1);
-  assert.match(urls[0], /\/mapbox\/walking\/121\.06,14\.65;121\.062,14\.652\?.*access_token=pk\.test/);
+  assert.equal(calls[0], 'streets 121.06,14.65 121.062,14.652');
 });
 
-test('falls back to OSRM whenever Mapbox does not return a usable route', async () => {
+test('asks Mapbox walking at the same time and cancels it once the street network answers', async () => {
+  let mapboxSignal;
+  const { dependencies, calls } = setup({
+    streets: { distanceM: 300, coordinates: snapped },
+    mapbox: signal => { mapboxSignal = signal; return hang(signal); },
+  });
+  assert.equal((await fetchHoseRoute(hydrant, fire, dependencies)).source, 'streets');
+  assert.match(calls[1], /\/mapbox\/walking\/121\.06,14\.65;121\.062,14\.652\?.*access_token=pk\.test/);
+  assert.equal(mapboxSignal.aborted, true);
+});
+
+test('falls back to Mapbox walking whenever the street network has no usable path', async () => {
   const failures = [
-    json({ message: 'Not Authorized' }, 401),
-    json({ code: 'NoRoute', routes: [] }),
-    json({ code: 'Ok', routes: [] }),
-    json(ok('600')),
-    json(ok(600, [[121.06, 14.65]])),
-    json(ok(600, [[121.06, 'north'], [121.061, 14.651]])),
-    new Response('not json'),
-    () => { throw new TypeError('network down'); },
+    null,
+    { distanceM: 300, coordinates: [[121.06, 14.65]] },
+    { distanceM: NaN, coordinates: snapped },
+    { distanceM: 300, coordinates: [[121.06, 'north'], [121.061, 14.651]] },
+    () => { throw new TypeError('tiles offline'); },
   ];
-  for (const mapbox of failures) {
-    const { dependencies, urls } = setup({ mapbox, osrm: json(ok(640)) });
+  for (const streets of failures) {
+    const { dependencies } = setup({ streets, mapbox: json(ok(640)) });
     const route = await fetchHoseRoute(hydrant, fire, dependencies);
-    assert.equal(route.source, 'osrm');
+    assert.equal(route.source, 'mapbox');
     assert.ok(route.meters > 640);
-    assert.equal(urls.length, 2);
-    assert.match(urls[1], /router\.project-osrm\.org\/route\/v1\/driving\/121\.06,14\.65;121\.062,14\.652/);
   }
 });
 
-test('goes straight to OSRM when there is no Mapbox token', async () => {
-  const { dependencies, urls } = setup({ osrm: json(ok(640)) }, { mapboxToken: undefined });
-  assert.equal((await fetchHoseRoute(hydrant, fire, dependencies)).source, 'osrm');
-  assert.equal(urls.length, 1);
+test('returns null when neither source answers so the caller can fall back to a straight line', async () => {
+  const mapboxFailures = [
+    json({ message: 'Not Authorized' }, 401),
+    json({ code: 'NoRoute', routes: [] }),
+    json(ok('600')),
+    new Response('not json'),
+    () => { throw new TypeError('network down'); },
+  ];
+  for (const mapbox of mapboxFailures) {
+    const { dependencies } = setup({ streets: null, mapbox });
+    assert.equal(await fetchHoseRoute(hydrant, fire, dependencies), null);
+  }
 });
 
-test('returns null when no service answers so the caller can fall back to a straight line', async () => {
-  const { dependencies, urls } = setup({ mapbox: json({}, 500), osrm: () => { throw new TypeError('offline'); } });
-  assert.equal(await fetchHoseRoute(hydrant, fire, dependencies), null);
-  assert.equal(urls.length, 2);
+test('skips a source it has no means to ask', async () => {
+  const noToken = setup({ streets: { distanceM: 300, coordinates: snapped } }, { mapboxToken: undefined });
+  assert.equal((await fetchHoseRoute(hydrant, fire, noToken.dependencies)).source, 'streets');
+  assert.equal(noToken.calls.length, 1);
+
+  const noStreets = setup({ mapbox: json(ok(640)) }, { streetPath: undefined });
+  assert.equal((await fetchHoseRoute(hydrant, fire, noStreets.dependencies)).source, 'mapbox');
 });
 
-test('a service that does not answer in time is abandoned for the next one', async () => {
-  const hang = init => new Promise((_resolve, reject) => {
-    init.signal.addEventListener('abort', () => reject(new Error('aborted')));
-  });
-  const { dependencies } = setup({ mapbox: hang, osrm: json(ok(640)) }, { timeoutMs: 20 });
-  assert.equal((await fetchHoseRoute(hydrant, fire, dependencies)).source, 'osrm');
+test('a source that does not answer in time is abandoned', async () => {
+  const { dependencies } = setup({ streets: hang, mapbox: json(ok(640)) }, { timeoutMs: 20 });
+  assert.equal((await fetchHoseRoute(hydrant, fire, dependencies)).source, 'mapbox');
 });
 
-test('cancelling stops the lookup without trying the next service', async () => {
+test('cancelling stops the lookup', async () => {
   const controller = new AbortController();
-  const cancelMidRequest = init => new Promise((_resolve, reject) => {
-    init.signal.addEventListener('abort', () => reject(new Error('aborted')));
-    controller.abort();
-  });
-  const { dependencies, urls } = setup({ mapbox: cancelMidRequest, osrm: json(ok(640)) }, { signal: controller.signal });
+  const { dependencies } = setup({
+    streets: signal => { const pending = hang(signal); controller.abort(); return pending; },
+    mapbox: json(ok(640)),
+  }, { signal: controller.signal });
   assert.equal(await fetchHoseRoute(hydrant, fire, dependencies), null);
-  assert.equal(urls.length, 1);
 
-  const alreadyCancelled = setup({ mapbox: json(ok(600)) }, { signal: controller.signal });
+  const alreadyCancelled = setup({ streets: { distanceM: 300, coordinates: snapped } }, { signal: controller.signal });
   assert.equal(await fetchHoseRoute(hydrant, fire, alreadyCancelled.dependencies), null);
-  assert.equal(alreadyCancelled.urls.length, 0);
+  assert.equal(alreadyCancelled.calls.length, 0);
 });

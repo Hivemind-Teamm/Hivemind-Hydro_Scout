@@ -40,11 +40,27 @@ export async function POST(req: NextRequest) {
     try {
       const app = adminApp();
       const decoded = await getAuth(app).verifySessionCookie(session, true);
-      const userDoc = await getFirestore(app)
-        .collection("users")
-        .doc(decoded.uid)
-        .get();
-      role = userDoc.exists ? userDoc.data()?.role ?? null : null;
+      const firestore = getFirestore(app);
+      const indexDoc = await firestore.collection("stationAccountIndex").doc(decoded.uid).get();
+      let profileDoc;
+      if (indexDoc.exists) {
+        const stationId = indexDoc.data()?.stationId;
+        if (typeof stationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(stationId)) {
+          throw new Error("Station account index contains an invalid station ID.");
+        }
+        profileDoc = await firestore.collection("stations")
+          .doc(stationId)
+          .collection("accounts")
+          .doc(decoded.uid)
+          .get();
+      } else {
+        profileDoc = await firestore.collection("users").doc(decoded.uid).get();
+      }
+      role = profileDoc.exists
+        ? profileDoc.data()?.accountType === "station"
+          ? "head"
+          : profileDoc.data()?.role ?? null
+        : null;
     } catch {
       /* invalid/expired/revoked cookie → treated as unauthenticated below */
     }

@@ -193,7 +193,7 @@ test('mock GPS -> real controller -> real Firestore -> cleanup', async () => {
     });
 
     const locationRef = fixtures.db
-      .collection('unitLocations')
+      .collection('incidentUnitLocations')
       .doc(writer.locationId);
 
     let gpsCallback;

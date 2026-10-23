@@ -56,7 +56,7 @@ test('the hose used always covers the line and never exceeds what the supply pum
 test('reports where the hose length came from', () => {
   assert.deepEqual(estimate({ straightLineM: 240.4, route: { meters: 320, source: 'mapbox' } }).distance,
     { source: 'mapbox', straightLineM: 240 });
-  assert.equal(estimate(routed(320, 'osrm')).distance.source, 'osrm');
+  assert.equal(estimate(routed(320, 'streets')).distance.source, 'streets');
   // No route yet, or routing failed: the straight-line estimate stands in.
   const fallback = estimate({ straightLineM: 250, route: null });
   assert.deepEqual(fallback.distance, { source: 'straight-line', straightLineM: 250 });

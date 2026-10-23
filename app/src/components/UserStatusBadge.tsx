@@ -13,7 +13,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function UserStatusBadge() {
-  const { user, role, loading } = useAuth();
+  const { user, role, accountType, loading } = useAuth();
 
   if (loading || !user) return null;
 
@@ -37,7 +37,7 @@ export default function UserStatusBadge() {
       <div style={{ display: "flex", flexDirection: "column" }}>
         <span style={{ fontWeight: 600 }}>{user.email}</span>
         <span style={{ color: "#555" }}>
-          Logged in as: {role ? ROLE_LABELS[role] ?? role : "Unknown role"}
+          Logged in as: {accountType === "station" ? "Station Account" : role ? ROLE_LABELS[role] ?? role : "Unknown role"}
         </span>
       </div>
       <LogoutButton />

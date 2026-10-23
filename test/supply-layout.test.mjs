@@ -57,10 +57,8 @@ test('draws every counted truck exactly once', () => {
 });
 
 test('a relay right by the fire is drawn with the engine instead of under the fire pin', () => {
-  // 940 m: the second relay stands 26 m from the fire.
   const close = layoutSupplyLine(line, estimate(940));
   assert.deepEqual(close.trucks.map(t => [t.role, t.count]), [['pumper', 1], ['relay', 1], ['engine', 2]]);
-  // 1000 m: 86 m away, far enough to draw on its own.
   const apart = layoutSupplyLine(line, estimate(1000));
   assert.deepEqual(apart.trucks.map(t => [t.role, t.count]), [['pumper', 1], ['relay', 1], ['relay', 1], ['engine', 1]]);
   assert.equal(MERGE_NEAR_FIRE_M, 50);

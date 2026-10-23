@@ -43,5 +43,5 @@ export async function deleteIncidentDeviceLocation({
     throw new Error('location-session-changed');
   }
 
-  await deleteDoc(doc(db, 'unitLocations', locationId));
+  await deleteDoc(doc(db, 'incidentUnitLocations', locationId));
 }

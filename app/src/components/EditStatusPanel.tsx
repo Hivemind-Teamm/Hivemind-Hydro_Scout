@@ -27,7 +27,7 @@ const STATUS_OPTIONS: { value: HydrantStatus; label: string; color: string; bg: 
 ];
 
 export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: EditStatusPanelProps) {
-  const { user, role } = useAuth();
+  const { user, role, accountType } = useAuth();
   const isMobile = useIsMobile();
   const [selectedStatus, setSelectedStatus] = useState<HydrantStatus>(hydrant.status);
   const [cleanliness, setCleanliness] = useState('');
@@ -41,7 +41,9 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   const { requestConsent, modalOpen: consentOpen, handleAllow, handleDecline } = useStorageConsent();
 
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
-  const roleLabel = role ? (ROLE_LABELS[role] ?? role) : 'Authorized';
+  const roleLabel = accountType === 'station'
+    ? 'Station Account'
+    : role ? (ROLE_LABELS[role] ?? role) : 'Authorized';
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();

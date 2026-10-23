@@ -336,7 +336,7 @@ function StatBox({ value, label, sub }: { value: number; label: string; sub?: st
 
 /* ── Main component ───────────────────────────────────────────────────────── */
 export default function OperationsDashboard({ hydrants, reports, role, onClose, onFindOnMap }: Props) {
-  const { user } = useAuth();
+  const { user, accountType } = useAuth();
   const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
   const total = hydrants.length;
   const openReports  = reports.filter(r => r.status === 'pending').length;
@@ -346,7 +346,7 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose, 
   const zones    = useMemo(() => computeZones(hydrants), [hydrants]);
   const trend    = useMemo(() => computeTrendData(hydrants), [hydrants]);
   const activity = useMemo(() => computeRecentActivity(hydrants), [hydrants]);
-  const roleLabel = role === 'admin' ? 'Admin' : 'Head';
+  const roleLabel = accountType === 'station' ? 'Station Account' : role === 'admin' ? 'Admin' : 'Head';
 
   // Selected zone drives the geographic drill-down (toggles off when re-tapped).
   const [selectedZone, setSelectedZone] = useState<string | null>(null);

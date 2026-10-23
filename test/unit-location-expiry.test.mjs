@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  DEFAULT_UNIT_LOCATION_TIMEOUT_MS, freshUnitLocations, locationTimeoutMs, watchUnitLocationExpiry,
+  DEFAULT_UNIT_LOCATION_STALE_AFTER_MS, DEFAULT_UNIT_LOCATION_TIMEOUT_MS,
+  freshUnitLocations, locationTimeoutMs, watchUnitLocationExpiry,
 } from '../lib/unit-location-expiry.ts';
 
 const position = (stationId, updatedAt) => ({ stationId, updatedAt, lat: 14.65, lng: 121.06, accuracy: 8 });
 
-test('uses a configurable timeout with a 90-second default', () => {
-  assert.equal(DEFAULT_UNIT_LOCATION_TIMEOUT_MS, 90_000);
+test('uses a configurable timeout with a 15-minute default', () => {
+  assert.equal(DEFAULT_UNIT_LOCATION_TIMEOUT_MS, 900_000);
+  assert.equal(DEFAULT_UNIT_LOCATION_STALE_AFTER_MS, 360_000);
   assert.equal(locationTimeoutMs('5'), 300_000);
   for (const value of [undefined, '', 'bad', '0', '-5', 'Infinity', '1441']) {
     assert.equal(locationTimeoutMs(value), DEFAULT_UNIT_LOCATION_TIMEOUT_MS);
@@ -28,6 +30,22 @@ test('expires successive reports without another snapshot', t => {
   t.mock.timers.tick(50);
   assert.deepEqual(visible.map(location => location.stationId), ['second']);
   t.mock.timers.tick(30);
+  assert.equal(visible.length, 0);
+  watcher.stop();
+});
+
+test('marks a location stale after two missed three-minute updates and expires it at the existing timeout', t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1000 });
+  let visible = [];
+  const watcher = watchUnitLocationExpiry(locations => { visible = locations; }, 900, 360);
+  watcher.update([position('station', 1000)]);
+  assert.equal(visible[0].isStale, false);
+  t.mock.timers.tick(359);
+  assert.equal(visible[0].isStale, false);
+  t.mock.timers.tick(1);
+  assert.equal(visible[0].isStale, true);
+  assert.equal(visible.length, 1);
+  t.mock.timers.tick(540);
   assert.equal(visible.length, 0);
   watcher.stop();
 });

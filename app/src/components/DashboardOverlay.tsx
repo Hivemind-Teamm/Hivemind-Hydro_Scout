@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useState, useEffect, useRef } from 'react';
+import { useStationNotifications } from '@/lib/use-station-notifications';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -13,7 +14,7 @@ import {
 import { HYDRANT_PIN_FILTER } from './hydrantIcon';
 import OtwHazardPanel from './OtwHazardPanel';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
-import { FiAlertTriangle } from 'react-icons/fi';
+import { FiAlertTriangle, FiBell, FiUsers } from 'react-icons/fi';
 import { MdLocalFireDepartment } from 'react-icons/md';
 
 interface DashboardOverlayProps {
@@ -86,10 +87,13 @@ function DashboardOverlay({
   fireActive = false,
   onToggleFirePin,
 }: DashboardOverlayProps) {
-  const { user, role } = useAuth();
+  const { user, role, accountType, stationId, stationAccessIds } = useAuth();
+  const { hasUnreadActivity, hasUnreadMembers } = useStationNotifications();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
+  const canManageStation = !!stationId && (role === 'admin' || role === 'head' || stationAccessIds.includes(stationId));
+  const canApproveStationMembers = !!stationId && (role === 'admin' || role === 'head');
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   // Fire response planning is for responders — the same roles that can route.
   const canPinFire = role === 'authorized' || role === 'head' || role === 'admin';
@@ -104,7 +108,7 @@ function DashboardOverlay({
   const displayName = user?.displayName?.trim()
     || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Guest');
   const roleLabel: Record<string, string> = { admin: 'Admin', head: 'Head Inspector', authorized: 'Authorized', general: 'General' };
-  const displayRole = roleLabel[role ?? ''] ?? 'Guest';
+  const displayRole = accountType === 'station' ? 'Station Account' : roleLabel[role ?? ''] ?? 'Guest';
 
   const syncedLabel = loading
     ? 'Syncing…'
@@ -126,6 +130,30 @@ function DashboardOverlay({
             </div>
             <div className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${loading ? 'bg-amber-400' : 'bg-[#2fbf4f]'}`} />
+              {canApproveStationMembers && (
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-members'))}
+                  aria-label="Station member approvals"
+                  title="Station member approvals"
+                  className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
+                >
+                  <FiUsers size={17} />
+                  {hasUnreadMembers && <span role="img" aria-label="Unread member approvals" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
+                </button>
+              )}
+              {canManageStation && (
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-activity'))}
+                  aria-label="Station activity"
+                  title="Station activity"
+                  className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
+                >
+                  <FiBell size={17} />
+                  {hasUnreadActivity && <span role="img" aria-label="Unread station activity" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
+                </button>
+              )}
               <button
                 onClick={() => setMobileMenuOpen(true)}
                 aria-label="Open menu"
@@ -277,6 +305,15 @@ function DashboardOverlay({
                   onClick={() => { setMobileMenuOpen(false); onFlyTo(DILIMAN_CENTER.lat, DILIMAN_CENTER.lng, DEFAULT_ZOOM); }}
                   icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>}
                 />
+                {stationId && (
+                  <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
+                    <span className="text-neutral-400 dark:text-neutral-500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Station</p>
+                      <p className="truncate text-sm font-bold text-neutral-700 dark:text-neutral-100">{stationId}</p>
+                    </div>
+                  </div>
+                )}
                 {/* Data feed */}
                 <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
                   <span className="text-neutral-400 dark:text-neutral-500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg></span>
@@ -381,6 +418,13 @@ function DashboardOverlay({
             </button>
           </div>
 
+          {stationId && (
+            <div className="flex min-w-0 flex-col justify-center border-r border-white/15 px-5">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">Station</span>
+              <span className="mt-0.5 max-w-36 truncate text-xs font-bold text-white" title={stationId}>{stationId}</span>
+            </div>
+          )}
+
           {/* Sync status + timestamp */}
           <div className="flex flex-col justify-center border-r border-white/15 px-5">
             <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">Data Feed</span>
@@ -423,6 +467,36 @@ function DashboardOverlay({
                     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
                   Admin Dashboard
+                </button>
+              </div>
+            )}
+
+            {canApproveStationMembers && (
+              <div className="flex items-center border-l border-white/15 px-3">
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-members'))}
+                  aria-label="Station member approvals"
+                  title="Station member approvals"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
+                >
+                  <FiUsers size={18} />
+                  {hasUnreadMembers && <span role="img" aria-label="Unread member approvals" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
+                </button>
+              </div>
+            )}
+
+            {canManageStation && (
+              <div className="flex items-center border-l border-white/15 px-2">
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-activity'))}
+                  aria-label="Station activity"
+                  title="Station activity"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
+                >
+                  <FiBell size={18} />
+                  {hasUnreadActivity && <span role="img" aria-label="Unread station activity" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
                 </button>
               </div>
             )}
@@ -994,4 +1068,3 @@ function MobileMenuRow({ label, value, icon, onClick, accent = false }: {
     </button>
   );
 }
-

@@ -37,7 +37,7 @@ export function createIncidentLocationWriter({
   }
 
   const locationId = incidentLocationDocumentId(uid, deviceId);
-  const locationRef = doc(db, 'unitLocations', locationId);
+  const locationRef = doc(db, 'incidentUnitLocations', locationId);
 
   function requireOwner() {
     if (getCurrentUid() !== uid) {

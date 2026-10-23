@@ -266,8 +266,6 @@ function SupplyDiagram({ estimate, estimated }: { estimate: ReadyEstimate; estim
   const stages = supplyStages(estimate);
   const relays = estimate.trucks.relayPumpers;
   const summary = `Hydrant, ${estimate.fireTrucks} fire trucks and ${stages.length} hose ${stages.length === 1 ? 'stage' : 'stages'} to the fire`;
-  // Past four stages one node per relay no longer fits the panel: show the
-  // relays as one counted truck in the middle of the line instead.
   const collapsed = stages.length > 4;
 
   return (

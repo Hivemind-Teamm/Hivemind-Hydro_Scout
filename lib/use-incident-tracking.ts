@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { auth, db } from './firebase';
@@ -28,13 +28,18 @@ interface TrackingStatus {
 }
 
 export function useIncidentTracking(enabled = true) {
-  const { user, role, trustedStationId } = useAuth();
+  const { user, accountType, stationId } = useAuth();
+
+  const trustedStationId =
+    accountType === 'station' && stationId
+      ? stationId
+      : null;
   const uid = user?.uid ?? null;
 
   const eligible =
     enabled &&
     !!uid &&
-    role === 'sub_admin' &&
+    accountType === 'station' &&
     !!trustedStationId;
 
   const scope =

@@ -70,8 +70,20 @@ try {
   process.exit(1);
 }
 
-const ref = db.collection("users").doc(uid);
+const index = await db.collection("stationAccountIndex").doc(uid).get();
+const stationId = index.exists ? index.data()?.stationId : null;
+if (index.exists && (typeof stationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(stationId))) {
+  console.error(`Invalid station account index for ${uid}.`);
+  process.exit(1);
+}
+const ref = stationId
+  ? db.collection("stations").doc(stationId).collection("accounts").doc(uid)
+  : db.collection("users").doc(uid);
 const before = await ref.get();
+if (stationId && !before.exists) {
+  console.error(`Station account profile not found for ${uid} at stations/${stationId}/accounts/${uid}.`);
+  process.exit(1);
+}
 const prevRole = before.exists ? before.data()?.role ?? "(none)" : "(no document)";
 
 await ref.set(

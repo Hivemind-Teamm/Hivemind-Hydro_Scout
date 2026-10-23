@@ -9,7 +9,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { SupplyTruck } from '@/lib/supply-layout';
 
 import dynamic from 'next/dynamic';
 
@@ -19,6 +18,7 @@ import { useTheme } from '@/lib/theme-context';
 import { useUnitLocations } from '@/lib/use-unit-locations';
 
 import type { Hydrant } from '../data/hydrants';
+import type { SupplyTruck } from '@/lib/supply-layout';
 
 /* -------------------------------------------------------------------------- */
 /* MapLibre lazy loading                                                      */
@@ -385,7 +385,7 @@ function MapView({
   }, []);
   const closeStation = () => setSelectedStationId(null);
   const selectStation = (stationId: string) => {
-    const location = unitLocations.find(unit => unit.stationId === stationId);
+    const location = unitLocations.find(unit => unit.id === stationId);
     if (!location) return;
     if (firePinMode) { onFirePin?.(location.lat, location.lng); return; }
     if (addHydrantMode) { onMapClick(location.lat, location.lng); return; }
@@ -397,9 +397,9 @@ function MapView({
   };
   const handleBackgroundClick = () => { closeStation(); onMapBackgroundClick(); };
   const handleHydrantSelect = (hydrant: Hydrant) => { closeStation(); onSelectHydrant(hydrant); };
-  const visibleStationId = !addHydrantMode && !firePinMode && unitLocations.some(unit => unit.stationId === selectedStationId)
+  const visibleStationId = !addHydrantMode && !firePinMode && unitLocations.some(unit => unit.id === selectedStationId)
     ? selectedStationId : null;
-  const selectedStation = unitLocations.find(unit => unit.stationId === visibleStationId);
+  const selectedStation = unitLocations.find(unit => unit.id === visibleStationId);
 
   /*
    * Preload the MapLibre chunk.

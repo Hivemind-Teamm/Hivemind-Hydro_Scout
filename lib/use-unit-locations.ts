@@ -1,20 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collectionGroup, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from './auth-context';
 import { db } from './firebase';
 import { mapUnitLocation, type MapUnitLocation } from './map-unit-location';
-import { watchUnitLocationExpiry } from './unit-location-expiry';
-import { INCIDENT_LOCATION_CONFIG } from './incident-location-config';
+import { locationTimeoutMs, watchUnitLocationExpiry } from './unit-location-expiry';
 
-const TIMEOUT_MS = INCIDENT_LOCATION_CONFIG.staleTimeoutMs;
+const TIMEOUT_MS = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES);
 
 export function useUnitLocations() {
-  const { user, role, stationId, loading } = useAuth();
+  const { user, loading } = useAuth();
   const uid = user?.uid;
-  const canReadLocations = role === 'admin' || (role === 'sub_admin' && !!stationId);
-  const scope = !loading && uid && canReadLocations ? `${uid}:${role}:${stationId ?? ''}` : null;
+  const scope = !loading && uid ? uid : null;
   const [state, setState] = useState<{
     scope: string | null; locations: MapUnitLocation[]; error: boolean;
   }>({ scope: null, locations: [], error: false });
@@ -38,7 +36,8 @@ export function useUnitLocations() {
       console.warn('Unit location listener failed:', error);
       publish([], true);
     };
-    const stopLocations = onSnapshot(collection(db, 'unitLocations'), snapshot => {
+    const publicLocations = query(collectionGroup(db, 'unitLocations'), where('public', '==', true));
+    const stopLocations = onSnapshot(publicLocations, snapshot => {
       publish(snapshot.docs.flatMap(record => {
         const location = mapUnitLocation(record.id, record.data());
         return location ? [location] : [];
@@ -51,7 +50,7 @@ export function useUnitLocations() {
       window.removeEventListener('focus', expiry.refresh);
       stopLocations();
     };
-  }, [scope, uid, role]);
+  }, [scope, uid]);
 
   // Never render another session's cached markers while effect cleanup runs.
   return state.scope === scope && scope ? state : { locations: [], error: false };

@@ -10,7 +10,7 @@
 
 import type { FireResponseConfig } from './fire-response.config';
 
-export type RouteSource = 'mapbox' | 'osrm' | 'straight-line';
+export type RouteSource = 'streets' | 'mapbox' | 'straight-line';
 
 export interface SupplyLineInput {
   /** Straight-line distance from the hydrant to the fire, in metres. */

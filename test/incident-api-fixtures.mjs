@@ -1,9 +1,11 @@
+
 import { randomUUID } from "node:crypto";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, GeoPoint } from "firebase-admin/firestore";
 
 const PROJECT = "demo-hydro-scout-api";
+const STATION_ID = "TEST-STATION-001";
 
 export async function createIncidentFixtures() {
   if (
@@ -31,14 +33,31 @@ export async function createIncidentFixtures() {
     }
 
     for (const uid of created.reverse()) {
+      await db
+        .collection("stations")
+        .doc(STATION_ID)
+        .collection("accounts")
+        .doc(uid)
+        .delete();
+
+      await db.collection("stationAccountIndex").doc(uid).delete();
       await db.collection("users").doc(uid).delete();
       await auth.deleteUser(uid);
     }
+
+    await db.collection("stations").doc(STATION_ID).delete();
     await deleteApp(app);
   }
 
   try {
     const accounts = {};
+
+    await db.collection("stations").doc(STATION_ID).set({
+      name: "Test Fire Station",
+      station: "Test Fire Station",
+      active: true,
+      aorBarangays: ["TEST-BARANGAY-A"],
+    });
 
     for (const role of ["admin", "head", "sub_admin"]) {
       const id = randomUUID();
@@ -49,17 +68,38 @@ export async function createIncidentFixtures() {
       await auth.createUser({ uid, email, password });
       created.push(uid);
 
-      await db.collection("users").doc(uid).set({
-        role,
-        email,
-        ...(role === "sub_admin"
-          ? {
-              accountType: "station",
-              stationId: "TEST-STATION-001",
-              aorBarangays: ["TEST-BARANGAY-A"],
-            }
-          : {}),
-      });
+      if (role === "sub_admin") {
+        // The name "sub_admin" is retained as a fixture key
+        // for older tests. The account itself uses the new
+        // verified station-account model.
+
+        await db.collection("stationAccountIndex").doc(uid).set({
+          stationId: STATION_ID,
+        });
+
+        await db
+          .collection("stations")
+          .doc(STATION_ID)
+          .collection("accounts")
+          .doc(uid)
+          .set({
+            uid,
+            email,
+            role: "head",
+            accountType: "station",
+            stationId: STATION_ID,
+            station: "Test Fire Station",
+            aorBarangays: ["TEST-BARANGAY-A"],
+            active: true,
+          });
+      } else {
+        await db.collection("users").doc(uid).set({
+          uid,
+          role,
+          accountType: "person",
+          email,
+        });
+      }
 
       accounts[role] = { uid, email, password };
     }
@@ -75,7 +115,7 @@ export async function createIncidentFixtures() {
         data: {
           status: "active",
           location: new GeoPoint(14.65, 121.06),
-          assignedStationIds: ["TEST-STATION-001"],
+          assignedStationIds: [STATION_ID],
         },
       },
       {
@@ -91,7 +131,7 @@ export async function createIncidentFixtures() {
         data: {
           status: "resolved",
           location: new GeoPoint(14.67, 121.08),
-          assignedStationIds: ["TEST-STATION-001"],
+          assignedStationIds: [STATION_ID],
         },
       },
       {
@@ -99,7 +139,7 @@ export async function createIncidentFixtures() {
         data: {
           status: "active",
           location: "invalid-coordinates",
-          assignedStationIds: ["TEST-STATION-001"],
+          assignedStationIds: [STATION_ID],
         },
       },
     ];
@@ -113,6 +153,7 @@ export async function createIncidentFixtures() {
       accounts,
       cleanup,
       db,
+      stationId: STATION_ID,
       incidentId,
       otherIncidentId,
       resolvedIncidentId,
@@ -127,6 +168,7 @@ export async function createIncidentFixtures() {
         "Fixture setup and cleanup both failed."
       );
     }
+
     throw error;
   }
 }

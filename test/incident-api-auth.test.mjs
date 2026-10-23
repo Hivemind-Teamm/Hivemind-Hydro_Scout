@@ -303,9 +303,14 @@ test("Incident GET enforces trusted station assignments", async () => {
     assert.deepEqual(resolved.body.incidents, []);
 
     // Losing the trusted station account also revokes feed access.
-    await db.collection("users").doc(accounts.sub_admin.uid).update({
-      accountType: "general",
-    });
+    await db
+      .collection("stations")
+      .doc("TEST-STATION-001")
+      .collection("accounts")
+      .doc(accounts.sub_admin.uid)
+      .update({
+        accountType: "general",
+      });
 
     const noStation = await readIncidentFeed(subCookie);
     assert.equal(noStation.status, 403);

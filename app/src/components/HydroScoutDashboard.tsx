@@ -16,6 +16,7 @@ import UserProfileModal, { type ViewingUser } from './UserProfileModal';
 import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
 import FireResponsePanel from './FireResponsePanel';
+import StationResponseControl from './StationResponseControl';
 
 // The three heaviest, rarely-open surfaces are split out of the initial
 // bundle so the first load parses/executes less JS on phones. They're warmed
@@ -1234,6 +1235,7 @@ export default function HydroScoutDashboard() {
         fireActive={!!fire}
         onToggleFirePin={handleToggleFirePinMode}
       />
+      <StationResponseControl hasFireIncident={!!fire} />
 
       {/* Fire-pin mode hint. Bottom-center on desktop (clear of the search bar
           and the side panels); under the search row on phones, pushed below

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useAuth } from '@/lib/auth-context';
 import { useIncidentTracking } from '@/lib/use-incident-tracking';
@@ -10,10 +10,10 @@ const trackingEnabled =
   process.env.NEXT_PUBLIC_ENABLE_INCIDENT_TRACKING === 'true';
 
 export default function IncidentTrackingStatus() {
-  const { role } = useAuth();
+  const { accountType } = useAuth();
   const tracking = useIncidentTracking(trackingEnabled);
 
-  if (role !== 'sub_admin') return null;
+  if (accountType !== 'station') return null;
 
   const label = !trackingEnabled
     ? 'Incident GPS inactive (test gate off)'

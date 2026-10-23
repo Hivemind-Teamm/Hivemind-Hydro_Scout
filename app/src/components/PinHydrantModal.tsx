@@ -40,11 +40,13 @@ interface PinHydrantModalProps {
 }
 
 export default function PinHydrantModal({ onClose, initialLat, initialLng, initialAddress }: PinHydrantModalProps) {
-  const { user, role } = useAuth();
+  const { user, role, accountType } = useAuth();
   const isMobile = useIsMobile();
 
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
-  const roleLabel   = role ? (ROLE_LABELS[role] ?? role) : 'Authorized User';
+  const roleLabel   = accountType === 'station'
+    ? 'Station Account'
+    : role ? (ROLE_LABELS[role] ?? role) : 'Authorized User';
 
   // Location
   const [latStr, setLatStr] = useState(initialLat != null ? initialLat.toFixed(6) : '');
