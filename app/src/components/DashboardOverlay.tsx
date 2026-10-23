@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useState, useEffect, useRef } from 'react';
+import { useStationNotifications } from '@/lib/use-station-notifications';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -87,6 +88,7 @@ function DashboardOverlay({
   onToggleFirePin,
 }: DashboardOverlayProps) {
   const { user, role, accountType, stationId, stationAccessIds } = useAuth();
+  const { hasUnreadActivity, hasUnreadMembers } = useStationNotifications();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
@@ -134,9 +136,10 @@ function DashboardOverlay({
                   onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-members'))}
                   aria-label="Station member approvals"
                   title="Station member approvals"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
+                  className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
                 >
                   <FiUsers size={17} />
+                  {hasUnreadMembers && <span role="img" aria-label="Unread member approvals" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
                 </button>
               )}
               {canManageStation && (
@@ -145,9 +148,10 @@ function DashboardOverlay({
                   onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-activity'))}
                   aria-label="Station activity"
                   title="Station activity"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
+                  className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
                 >
                   <FiBell size={17} />
+                  {hasUnreadActivity && <span role="img" aria-label="Unread station activity" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
                 </button>
               )}
               <button
@@ -474,9 +478,10 @@ function DashboardOverlay({
                   onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-members'))}
                   aria-label="Station member approvals"
                   title="Station member approvals"
-                  className="flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
                 >
                   <FiUsers size={18} />
+                  {hasUnreadMembers && <span role="img" aria-label="Unread member approvals" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
                 </button>
               </div>
             )}
@@ -488,9 +493,10 @@ function DashboardOverlay({
                   onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-activity'))}
                   aria-label="Station activity"
                   title="Station activity"
-                  className="flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
                 >
                   <FiBell size={18} />
+                  {hasUnreadActivity && <span role="img" aria-label="Unread station activity" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
                 </button>
               </div>
             )}

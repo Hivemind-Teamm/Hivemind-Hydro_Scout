@@ -11,9 +11,12 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export interface ViewingUser {
+  uid?: string;
   name: string;
   role: string;
   accountType?: 'person' | 'station';
+  station?: string;
+  status?: string;
 }
 
 interface UserProfileModalProps {
@@ -52,8 +55,9 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
         {/* Body */}
         <div className="px-5 py-4">
           <div className="mb-3 flex flex-col gap-2.5">
-            <InfoRow label="Area"          value="QC Diliman Station" />
-            <InfoRow label="Account Status" value="Active" />
+            <InfoRow label="Station" value={user.station ?? 'Not provided'} />
+            <InfoRow label="Account Status" value={user.status ?? 'Not provided'} />
+            {user.uid && <InfoRow label="Account ID" value={user.uid} />}
           </div>
 
           <div className="rounded-lg bg-neutral-50 border border-neutral-200 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400">
@@ -76,7 +80,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500">{label}</span>
-      <span className="text-[11px] font-bold text-neutral-700 dark:text-neutral-200">{value}</span>
+      <span className="min-w-0 max-w-[65%] break-all text-right text-[11px] font-bold text-neutral-700 dark:text-neutral-200">{value}</span>
     </div>
   );
 }

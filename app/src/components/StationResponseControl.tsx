@@ -11,10 +11,12 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { FiActivity, FiCheck, FiLogOut, FiX } from 'react-icons/fi';
+import { FiActivity, FiLogOut } from 'react-icons/fi';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { useStations } from '../data/stations';
+import StationNotificationPanels from './StationNotificationPanels';
+import type { JoinRequest } from '@/lib/use-station-notifications';
 import { locationTimeoutMs } from '@/lib/unit-location-expiry';
 
 type ResponseRecord = {
@@ -26,19 +28,6 @@ type ResponseRecord = {
   startedAt?: { toDate?: () => Date } | null;
   endedAt?: { toDate?: () => Date } | null;
   lastLocationAt?: { toDate?: () => Date } | null;
-}
-
-type JoinRequest = { id: string; uid: string; displayName: string; email: string; stationId: string; status: string };
-type StationNotification = {
-  id: string;
-  uid?: string;
-  message: string;
-  type: string;
-  createdAt?: ResponseRecord['startedAt'];
-}
-
-function formatTime(value: ResponseRecord['startedAt']) {
-  return value && typeof value.toDate === 'function' ? value.toDate().toLocaleString() : 'Just now';
 }
 
 function currentPosition(): Promise<GeolocationPosition> {
@@ -62,8 +51,6 @@ export default function StationResponseControl({ hasFireIncident }: { hasFireInc
   const canApprove = role === 'admin' || role === 'head';
   const [activeResponses, setActiveResponses] = useState<ResponseRecord[]>([]);
   const [responses, setResponses] = useState<ResponseRecord[]>([]);
-  const [requests, setRequests] = useState<JoinRequest[]>([]);
-  const [notifications, setNotifications] = useState<StationNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [openMemberApprovals, setOpenMemberApprovals] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -85,14 +72,7 @@ export default function StationResponseControl({ hasFireIncident }: { hasFireInc
       setResponses(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as ResponseRecord))
         .sort((a, b) => ((b.startedAt?.toDate?.().getTime() ?? 0) - (a.startedAt?.toDate?.().getTime() ?? 0))));
     }, err => { console.error('Failed to load station response history:', err); setError('Could not load station response history.'); });
-    const joins = onSnapshot(query(collection(db, 'stationJoinRequests'), where('stationId', '==', stationId), where('status', '==', 'pending')), snapshot => {
-      setRequests(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as JoinRequest)));
-    }, err => { console.error('Failed to load station join requests:', err); setError('Could not load station join requests.'); });
-    const noticeList = onSnapshot(collection(db, 'stations', stationId, 'notifications'), snapshot => {
-      setNotifications(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as StationNotification))
-        .sort((a, b) => ((b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0))).slice(0, 20));
-    }, err => { console.error('Failed to load station notifications:', err); setError('Could not load station notifications.'); });
-    return () => { active(); joins(); noticeList(); };
+    return () => { active(); };
   }, [canManage, stationId]);
 
   useEffect(() => {
@@ -338,63 +318,10 @@ export default function StationResponseControl({ hasFireIncident }: { hasFireInc
         {hasPendingStationRequest && <span className="px-2 text-xs font-semibold text-amber-700">Station request pending approval</span>}
         {error && <span role="alert" className="max-w-56 text-xs text-red-600">{error}</span>}
       </div>}
-      {open && canManage && (
-        <section className="pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[2501] max-h-[70dvh] w-[min(28rem,calc(100vw-2rem))] overflow-y-auto rounded-xl bg-white p-4 shadow-2xl dark:bg-neutral-900">
-          <header className="flex items-center justify-between gap-3">
-            <h2 className="font-bold text-neutral-900 dark:text-white">{station?.name ?? stationId} activity</h2>
-            <button onClick={() => setOpen(false)} aria-label="Close station activity" className="rounded p-2"><FiX /></button>
-          </header>
-          {error && <p role="alert" className="mt-3 text-xs text-red-600">{error}</p>}
-          <div className="mt-3">
-            {notifications.map(item => {
-              const label = item.type.startsWith('membership-')
-                ? 'Membership update'
-                : item.type === 'personal-station-assigned'
-                  ? 'Account assignment'
-                : item.type.startsWith('response-') || item.type === 'station-response-closed'
-                  ? 'Response activity'
-                  : 'Station activity';
-              return (
-                <article key={item.id} className="border-b border-neutral-100 py-3 last:border-0 dark:border-neutral-800">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="text-xs font-semibold text-neutral-500">{label}</span>
-                      <p className="mt-1 text-sm text-neutral-800 dark:text-neutral-100">{item.message}</p>
-                      <span className="mt-1 block text-xs text-neutral-400">{formatTime(item.createdAt)}</span>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-            {!notifications.length && <p className="py-4 text-sm text-neutral-500">No station activity yet.</p>}
-          </div>
-        </section>
-      )}
-      {openMemberApprovals && canApprove && (
-        <section className="pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[2501] max-h-[70dvh] w-[min(28rem,calc(100vw-2rem))] overflow-y-auto rounded-xl bg-white p-4 shadow-2xl dark:bg-neutral-900">
-          <header className="flex items-center justify-between gap-3">
-            <h2 className="font-bold text-neutral-900 dark:text-white">Member approvals · {station?.name ?? stationId}</h2>
-            <button onClick={() => setOpenMemberApprovals(false)} aria-label="Close member approvals" className="rounded p-2"><FiX /></button>
-          </header>
-          {error && <p role="alert" className="mt-3 text-xs text-red-600">{error}</p>}
-          <p className="mt-2 text-xs text-neutral-500">Approving a request assigns the member to this station.</p>
-          <div className="mt-3">
-            {requests.map(request => (
-              <article key={request.id} className="flex items-center justify-between gap-3 border-b border-neutral-100 py-3 last:border-0 dark:border-neutral-800">
-                <span className="min-w-0">
-                  <b className="block truncate text-sm text-neutral-800 dark:text-neutral-100">{request.displayName}</b>
-                  <small className="block truncate text-neutral-500">{request.email}</small>
-                </span>
-                <span className="flex shrink-0 gap-1">
-                  <button onClick={() => void reviewRequest(request, true)} aria-label={`Approve ${request.displayName} and assign station`} title="Approve and assign station" className="rounded bg-green-600 p-2 text-white"><FiCheck /></button>
-                  <button onClick={() => void reviewRequest(request, false)} aria-label={`Reject ${request.displayName}`} title="Reject" className="rounded bg-red-600 p-2 text-white"><FiX /></button>
-                </span>
-              </article>
-            ))}
-            {!requests.length && <p className="py-4 text-sm text-neutral-500">No pending member requests.</p>}
-          </div>
-        </section>
-      )}
+      <StationNotificationPanels key={user.uid + ':' + stationId} stationName={station?.name ?? stationId ?? 'Station'}
+        activityOpen={open && canManage} membersOpen={openMemberApprovals && canApprove}
+        closeActivity={() => setOpen(false)} closeMembers={() => setOpenMemberApprovals(false)}
+        reviewRequest={reviewRequest} />
     </>
   );
 }
