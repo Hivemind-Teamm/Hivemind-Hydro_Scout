@@ -9,6 +9,7 @@ try {
     for (const [uid, role, stationId] of [['head', 'head', 'one'], ['member', 'general', 'one'], ['outsider', 'head', 'two']]) {
       await context.firestore().doc(`users/${uid}`).set({ accountType: 'person', displayName: uid, role, stationId });
     }
+    await context.firestore().doc('users/delegate').set({ accountType: 'person', displayName: 'Delegate', role: 'authorized', stationId: 'one', stationMembershipStatus: 'approved', stationAccessIds: ['one'] });
   });
   const db = env.authenticatedContext('head').firestore();
   const notice = (patch = {}) => ({ type: 'fire-pinned', uid: 'head', displayName: 'head', message: 'head pinned a fire incident.', lat: 14.65, lng: 121.06, createdAt: serverTimestamp(), ...patch });
@@ -17,6 +18,11 @@ try {
   await assertSucceeds(ref.get());
   await assertFails(ref.update({ message: 'Changed' }));
   await assertFails(ref.delete());
+  for (const uid of ['member', 'delegate', 'outsider']) {
+    const limited = env.authenticatedContext(uid).firestore();
+    await assertFails(limited.doc('stations/one/notifications/fire').get());
+    await assertFails(limited.collection('stations/one/notifications').get());
+  }
   for (const patch of [{ uid: 'outsider' }, { displayName: 'outsider' }, { lat: 91 }, { lng: -181 }, { lat: '14' }, { type: 'other' }, { extra: true }, { message: 'Spoofed' }, { hydrantId: 'HYD-001' }]) {
     await assertFails(db.collection('stations/one/notifications').add(notice(patch)));
   }
@@ -31,6 +37,17 @@ try {
   batch.set(db.doc('hydrants/HYD-001'), { location: new GeoPoint(14.65, 121.06), createdAt: serverTimestamp() });
   batch.set(db.doc('stations/one/notifications/hydrant'), pin);
   await assertSucceeds(batch.commit());
+  const update = notice({ type: 'hydrant-updated', hydrantId: 'HYD-001', message: 'head updated hydrant HYD-001.' });
+  await assertFails(db.collection('stations/one/notifications').add(update));
+  const edit = db.batch();
+  edit.update(db.doc('hydrants/HYD-001'), { updatedAt: serverTimestamp(), waterCleanliness: 'Clear' });
+  edit.set(db.doc('stations/one/notifications/update'), update);
+  await assertSucceeds(edit.commit());
+  // Ownership metadata cannot be forged at creation or reassigned by an edit.
+  await assertFails(db.doc('hydrants/HYD-001/reports/forged').set({ reporterUid: 'member', status: 'pending' }));
+  await assertSucceeds(db.doc('hydrants/HYD-001/reports/own').set({ reporterUid: 'head', status: 'pending' }));
+  await assertFails(db.doc('hydrants/HYD-001/reports/own').update({ reporterUid: 'member' }));
+  await assertSucceeds(db.doc('hydrants/HYD-001/reports/own').update({ status: 'resolved' }));
   // Existing hydrants cannot be replayed as fresh pin events.
   await assertFails(db.collection('stations/one/notifications').add(pin));
   const mismatch = db.batch();

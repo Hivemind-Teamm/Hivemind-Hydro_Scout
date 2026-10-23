@@ -87,13 +87,13 @@ function DashboardOverlay({
   fireActive = false,
   onToggleFirePin,
 }: DashboardOverlayProps) {
-  const { user, role, accountType, stationId, stationAccessIds, locationPrivacyAvailable, locationPrivacyGranted, openLocationConsent } = useAuth();
-  const { hasUnreadActivity, hasUnreadMembers } = useStationNotifications();
+  const { user, role, accountType, stationId, locationPrivacyAvailable, locationPrivacyGranted, openLocationConsent } = useAuth();
+  const { hasUnreadActivity, hasUnreadMembers, canViewActivity, canApproveMembers } = useStationNotifications();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
-  const canManageStation = !!stationId && (role === 'admin' || role === 'head' || stationAccessIds.includes(stationId));
-  const canApproveStationMembers = !!stationId && (role === 'admin' || role === 'head');
+  const canManageStation = canViewActivity;
+  const canApproveStationMembers = canApproveMembers;
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   // Fire response planning is for responders — the same roles that can route.
   const canPinFire = role === 'authorized' || role === 'head' || role === 'admin';

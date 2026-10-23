@@ -4,6 +4,7 @@ export type StationNotification = {
   id: string; uid?: string; displayName?: string; adminEmail?: string;
   targetUid?: string; targetName?: string; message: string; type: string; createdAt?: Timestamp | null;
   responseId?: string;
+  limited?: boolean;
   hydrantId?: string;
   lat?: number;
   lng?: number;

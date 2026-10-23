@@ -103,13 +103,18 @@ service cloud.firestore {
         && ((data.type == 'fire-pinned'
             && !('hydrantId' in data)
             && data.message == data.displayName + ' pinned a fire incident.')
-          || (data.type == 'hydrant-pinned'
+          || (data.type in ['hydrant-pinned', 'hydrant-updated']
             && data.hydrantId is string && data.hydrantId.matches('^HYD-[0-9]{3}$')
-            && !exists(/databases/$(database)/documents/hydrants/$(data.hydrantId))
-            && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.createdAt == request.time
+            && ((data.type == 'hydrant-pinned'
+                && !exists(/databases/$(database)/documents/hydrants/$(data.hydrantId))
+                && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.createdAt == request.time)
+              || (data.type == 'hydrant-updated'
+                && exists(/databases/$(database)/documents/hydrants/$(data.hydrantId))
+                && get(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.get('updatedAt', null) != request.time
+                && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.updatedAt == request.time))
             && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.location.latitude() == data.lat
             && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.location.longitude() == data.lng
-            && data.message == data.displayName + ' pinned hydrant ' + data.hydrantId + '.'));
+            && data.message == data.displayName + (data.type == 'hydrant-pinned' ? ' pinned hydrant ' : ' updated hydrant ') + data.hydrantId + '.'));
     }
 
     function isValidStationNotification(stationId, notificationId) {
@@ -341,7 +346,8 @@ service cloud.firestore {
       }
 
       match /notifications/{notificationId} {
-        allow read: if canManageStation(stationId);
+        // Other roles receive a server-filtered projection through /api/notifications.
+        allow read: if isAdmin() || isHeadForStation(stationId);
         allow create: if isSignedIn() && (isValidMapNotification(stationId) || isValidStationNotification(stationId, notificationId));
         allow update, delete: if false;
       }
@@ -349,7 +355,7 @@ service cloud.firestore {
       // Per-viewer read receipts; reading a panel alone never writes a receipt.
       match /notificationReads/{viewerUid}/items/{receiptId} {
         function ownsReadState() {
-          return isSignedIn() && request.auth.uid == viewerUid && canManageStation(stationId);
+          return isSignedIn() && request.auth.uid == viewerUid && (isAdmin() || isHeadForStation(stationId));
         }
         function validReadReceipt() {
           let data = request.resource.data;
@@ -723,8 +729,11 @@ service cloud.firestore {
       match /reports/{reportId} {
         // Direct-path access (read a hydrant's own reports, file new ones).
         allow read: if true;
-        allow create: if isAuthorized() || isHead() || isAdmin();
-        allow update, delete: if isHead() || isAdmin();
+        allow create: if (isAuthorized() || isHead() || isAdmin())
+          && (!('reporterUid' in request.resource.data) || request.resource.data.reporterUid == request.auth.uid);
+        allow update: if (isHead() || isAdmin())
+          && request.resource.data.get('reporterUid', null) == resource.data.get('reporterUid', null);
+        allow delete: if isHead() || isAdmin();
       }
     }
 

@@ -23,7 +23,7 @@ import {
   orderBy,
   GeoPoint,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { mapActivityActor } from '@/lib/map-activity';
 import {
   hydrantFromDoc,
@@ -140,7 +140,16 @@ export async function updateHydrantStatus(hydrantId: string, input: EditHydrantI
   }
 
   try {
-    await updateDoc(ref, payload);
+    const actor = await mapActivityActor();
+    await runTransaction(db, async tx => {
+      const hydrant = await tx.get(ref);
+      tx.update(ref, payload);
+      if (actor && hydrant.exists()) tx.set(doc(collection(db, 'stations', actor.stationId, 'notifications')), {
+        type: 'hydrant-updated', uid: actor.uid, displayName: actor.displayName, hydrantId,
+        lat: hydrant.data().location.latitude, lng: hydrant.data().location.longitude,
+        message: `${actor.displayName} updated hydrant ${hydrantId}.`, createdAt: serverTimestamp(),
+      });
+    });
   } catch (error) {
     logFirestoreError('update:hydrant-status', error);
     throw error;
@@ -230,6 +239,7 @@ export async function createReport(hydrantId: string, input: CreateReportInput):
       description: input.description,
       location: input.location,
       reporter: input.reporter,
+      reporterUid: auth.currentUser?.uid ?? '',
       role: input.role,
       photos: input.photos ?? [],
       status: 'pending',
@@ -356,7 +366,7 @@ export async function updateReportStatus(
   const reportRef = doc(db, 'hydrants', hydrantId, 'reports', firestoreId);
 
   if (!meta) {
-    await updateDoc(reportRef, { status });
+    await updateDoc(reportRef, { status, resolvedAt: serverTimestamp() });
     return;
   }
 

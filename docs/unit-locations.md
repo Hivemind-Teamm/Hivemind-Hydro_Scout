@@ -87,7 +87,10 @@ necessary before considering this an operational incident workflow.
 - The responder, that station's head, administrators, and users delegated station
   access can read the private `stationResponses` history, which includes the
   responder identity and response times.
-- Station notifications are visible to the head and delegated station managers.
+- Full station notifications are visible to the head and administrators.
+  Approved authorized station members receive a server-filtered operational
+  feed without responder identities or administrative details. Other accounts
+  receive only their own membership/report outcomes.
   Station access logs are restricted to heads and administrators.
 - Activity and member approval lists use Reports Register-style cards, clickable
   account profiles and unread dots on rows and their main icons. Opening a linked
@@ -130,8 +133,9 @@ the live location. The response history remains.
 | `stations/{stationId}/unitLocations/{reportId}` | Station GPS reports and active responder map positions | Active response reports are signed-in-readable; private station reports are restricted to their owner and station managers |
 | `stationJoinRequests/{uid}` | Requested station and review status | Requesting user and station managers |
 | `stationResponses/{responseId}` | Private responder identity, station and start/end history | Responder, station head/delegates, administrators |
-| `stations/{stationId}/notifications/{id}` | Membership, response, and station-access notices | Station head/delegates, administrators |
-| `stations/{stationId}/notificationReads/{uid}/items/{id}` | Per-account event-version read receipts | Only that account, while it has station-management access |
+| `stations/{stationId}/notifications/{id}` | Membership, response, and map activity | Raw documents: station head/admins; limited operational projection via authenticated API for approved authorized station members |
+| `stations/{stationId}/notificationReads/{uid}/items/{id}` | Management event-version read receipts | Only that account, while it is a station head/admin |
+| `users/{uid}/notificationReads/{eventVersionHash}` | Limited-role read receipts | Own account, through the authenticated notifications API |
 | `stations/{stationId}/accessLogs/{id}` | Who opened station activity and when | Station head and administrators |
 | `incidents/{incidentId}` | Trusted assignments for the experimental incident feed | Server-managed; exposed through the authenticated incident API |
 

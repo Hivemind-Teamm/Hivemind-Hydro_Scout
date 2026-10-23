@@ -6,6 +6,7 @@ import { db } from './firebase';
 import { useAuth } from './auth-context';
 import { notificationReadKey, parseReadNotifications } from './notification-read-state';
 import { stationNotificationFeed, type StationResponseSummary, type StationNotification } from './station-notification-feed';
+import { useLimitedNotifications } from './use-limited-notifications';
 export type { StationNotification } from './station-notification-feed';
 
 type NoticeTime = Timestamp | null;
@@ -28,9 +29,9 @@ function readStorage(key: string) {
   catch { return sessionReads.get(key) ?? '[]'; }
 }
 
-export function useStationNotifications() {
-  const { user, role, stationId, stationAccessIds } = useAuth();
-  const canManage = !!user && !!stationId && (role === 'admin' || role === 'head' || stationAccessIds.includes(stationId));
+function useManagementNotifications() {
+  const { user, role, stationId } = useAuth();
+  const canManage = !!user && !!stationId && (role === 'admin' || role === 'head');
   const scope = canManage ? `${user!.uid}:${stationId}` : null;
   const storageKey = `hydroscout:notification-reads:${scope}`;
   const [state, setState] = useState<{
@@ -132,5 +133,16 @@ export function useStationNotifications() {
     hasUnreadMembers: readsReady && requests.some(item => !read.has(memberKey(item))),
     readActivity: (item: StationNotification) => { markRead(activityKey(item)); void persistRead('activity', item); },
     readMember: (item: JoinRequest) => { markRead(memberKey(item)); void persistRead('member', item); },
+  };
+}
+
+export function useStationNotifications() {
+  const { user, role, stationId, stationMembershipStatus } = useAuth();
+  const fullDetails = role === 'admin' || role === 'head';
+  const management = useManagementNotifications();
+  const limited = useLimitedNotifications(user && !fullDetails ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
+  return { ...(fullDetails ? management : limited), fullDetails,
+    canViewActivity: !!user,
+    canApproveMembers: !!user && !!stationId && fullDetails,
   };
 }

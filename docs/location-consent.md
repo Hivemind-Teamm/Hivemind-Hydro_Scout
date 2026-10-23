@@ -49,7 +49,10 @@ can read the active station-labeled map location for cross-station coordination.
 The map location does not include the responder's UID or name. The responder,
 station head, administrators, and delegated station managers can read the private
 response history, including responder identity and start/end times. Station heads
-and delegated managers can read the in-app notification history. Notifications
+and administrators can read the full in-app notification history. Approved
+authorized station members receive operational summaries without responder
+identities, account links or administrative details. General users receive only
+their own membership/report outcomes. Notifications
 are displayed only inside Hydro-Scout; browser/device alerts and notification
 permission prompts are not part of this workflow. Location consent remains
 separate from reading notifications and does not make background GPS reliable.

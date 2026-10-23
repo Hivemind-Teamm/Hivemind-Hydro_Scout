@@ -41,7 +41,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   closeActivity: () => void; closeMembers: () => void;
   reviewRequest: (request: JoinRequest, approved: boolean) => Promise<void>;
 }) {
-  const { notifications, requests, error: notificationError, isActivityUnread, isMemberUnread, readActivity, readMember } = useStationNotifications();
+  const { notifications, requests, error: notificationError, isActivityUnread, isMemberUnread, readActivity, readMember, fullDetails } = useStationNotifications();
   const [profile, setProfile] = useState<ViewingUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -105,7 +105,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       onClick={activityOpen ? closeActivity : closeMembers}
       className="pointer-events-auto absolute inset-0 z-[4000] bg-black/25" />}
     {(activityOpen || membersOpen) && <section aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}>
-      {activityOpen ? header('Station activity', 'Map, account and response updates', closeActivity) : header('Member approvals', 'Pending membership requests', closeMembers)}
+      {activityOpen ? header(fullDetails ? 'Station activity' : 'Notifications', fullDetails ? 'Map, account and response updates' : 'Station operations and your updates', closeActivity) : header('Member approvals', 'Pending membership requests', closeMembers)}
       <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification or linked account to mark it as read. Times are shown in PHT.</p>
       {(error || notificationError) && <p role="alert" className="px-4 py-2 text-xs text-red-600">{error || notificationError}</p>}
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}
@@ -177,14 +177,14 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       <dl className="space-y-3 text-xs">
         <div><dt className="text-neutral-400">Station</dt><dd className="mt-1 font-semibold">{selected.response?.stationName || stationName}</dd></div>
         {selected.response ? <>
-          <div><dt className="text-neutral-400">Responder</dt><dd className="mt-1">{selected.uid ? accountLink(selected.uid, selected.displayName || 'Responder', 'Member', () => readActivity(selected)) : selected.displayName}</dd></div>
+          {!selected.limited && <div><dt className="text-neutral-400">Responder</dt><dd className="mt-1">{selected.uid ? accountLink(selected.uid, selected.displayName || 'Responder', 'Member', () => readActivity(selected)) : selected.displayName}</dd></div>}
           <div><dt className="text-neutral-400">Status</dt><dd className="mt-1 font-semibold">{selected.response.status === 'active' ? 'Responding' : 'Ended'}</dd></div>
           <div><dt className="text-neutral-400">Started</dt><dd className="mt-1">{time(selected.response.startedAt)}</dd></div>
           <div><dt className="text-neutral-400">Ended</dt><dd className="mt-1">{selected.response.status === 'active' ? 'Response ongoing' : time(selected.response.endedAt)}</dd></div>
           <div><dt className="text-neutral-400">Duration</dt><dd className="mt-1">{responseDuration(selected.response, now)}</dd></div>
-          <div><dt className="text-neutral-400">Last location report</dt><dd className="mt-1">{time(selected.response.lastLocationAt)}</dd></div>
+          {!selected.limited && <div><dt className="text-neutral-400">Last location report</dt><dd className="mt-1">{time(selected.response.lastLocationAt)}</dd></div>}
           {selected.response.endedByName && <div><dt className="text-neutral-400">Ended by</dt><dd className="mt-1">{selected.response.endedByUid ? accountLink(selected.response.endedByUid, selected.response.endedByName, 'Member', () => readActivity(selected)) : selected.response.endedByName}{selected.response.endReason === 'station-head' ? ' · Station management' : ''}</dd></div>}
-          <div><dt className="text-neutral-400">Response ID</dt><dd className="mt-1 break-all font-mono text-[10px]">{selected.responseId}</dd></div>
+          {!selected.limited && <div><dt className="text-neutral-400">Response ID</dt><dd className="mt-1 break-all font-mono text-[10px]">{selected.responseId}</dd></div>}
         </> : <>
           {selected.uid && <div><dt className="text-neutral-400">{selected.type === 'personal-station-assigned' ? 'Admin' : 'Account'}</dt><dd className="mt-1">{accountLink(selected.uid, selected.displayName || selected.adminEmail || 'View account', selected.type === 'personal-station-assigned' ? 'Admin' : 'Member', () => readActivity(selected))}</dd></div>}
           {selected.targetUid && <div><dt className="text-neutral-400">Edited account</dt><dd className="mt-1">{accountLink(selected.targetUid, selected.targetName || 'View account', 'Member', () => readActivity(selected))}</dd></div>}
@@ -192,6 +192,6 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
         <div><dt className="text-neutral-400">Notification date and time</dt><dd className="mt-1">{time(selected.createdAt)}</dd></div>
       </dl>
     </NotificationDialog>}
-    {profile && <UserProfileModal user={profile} onClose={() => setProfile(null)} />}
+    {fullDetails && profile && <UserProfileModal user={profile} onClose={() => setProfile(null)} />}
   </>;
 }

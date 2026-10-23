@@ -32,10 +32,50 @@ Another device signed into the same account receives those read receipts; anothe
 account has its own independent state. Deploy the read-receipt rules with the app.
 
 Receipts live at `stations/{stationId}/notificationReads/{uid}/items/{receiptId}`.
-Only the viewing account can read or write its receipts, and it must still have
-station-management access. A receipt references an existing notification or
+Only the viewing account can read or write its receipts, and it must still be
+a station head or admin. A receipt references an existing notification or
 same-station request and its creation timestamp. A new event version is unread.
 Receipts cannot change the source notification or membership approval status.
+
+## Notification access by role
+
+| Viewer | Visible notifications | Detail level |
+| --- | --- | --- |
+| Head, station account, admin | Full assigned-station activity and member approvals | Actor/account links, response history and management fields; approval actions |
+| Approved authorized personal member | Assigned-station hydrant pins/updates, fire pins, start/end responses, plus own updates | Generic event summary, hydrant/pin location, station, status and event times; no other people's names, profiles, emails, GPS heartbeat or management identifiers |
+| General user, pending/rejected member, unassigned account | Own report and membership status updates only | Own outcome, hydrant ID and event time; no station operations or other accounts |
+
+Delegated station access does not grant full notification details or member
+approval controls. Direct reads of raw station notifications and management
+read receipts are restricted to station heads and admins. Other roles use the
+authenticated `/api/notifications` endpoint: it resolves the viewer's profile
+on every request, scopes all queries to that station/UID and constructs an
+explicit safe-field projection before sending data to the browser. It does not
+send raw event messages, actor identities or administrative event categories.
+
+Limited feeds refresh every 15 seconds while the page is visible and on focus.
+They include up to 100 recent station events and the viewer's 100 most recent
+reports. Reads persist under `users/{uid}/notificationReads/{eventVersionHash}`
+through a same-origin, authenticated endpoint; only currently visible event
+versions may be marked read. Browser/session read state is a fallback. A new
+outcome has a new read identity; logging in again does not restore read dots.
+
+New reports carry the creator's verified `reporterUid`, which cannot be changed
+by later report edits. Legacy reports without an owner UID are deliberately
+excluded from personal notifications; names/emails are not used to guess
+ownership. Existing report-submission permissions are unchanged.
+
+Deploy the rules and additive report-query indexes with the application:
+
+```powershell
+npx.cmd -y firebase-tools@latest deploy --only firestore:rules,firestore:indexes --project hydro-scout
+```
+
+Focused access audit:
+
+```json
+{ "score": 5, "summary": "Limited notifications use server-side station/owner selection and an explicit field allowlist. Tested revoked membership, delegated access, administrative/identity exclusion, report ownership and event versions. Raw management notifications stay restricted to heads/admins.", "findings": [] }
+```
 
 ## Live response notification cards
 

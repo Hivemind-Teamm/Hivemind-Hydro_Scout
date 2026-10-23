@@ -80,14 +80,14 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
   }, [canManage, stationId]);
 
   useEffect(() => {
-    if (!canManage) return;
+    if (!user) return;
     const toggleActivity = () => {
       setOpenMemberApprovals(false);
       setOpen(current => !current);
     };
     window.addEventListener('hydroscout:toggle-station-activity', toggleActivity);
     return () => window.removeEventListener('hydroscout:toggle-station-activity', toggleActivity);
-  }, [canManage]);
+  }, [user]);
 
   useEffect(() => {
     if (!canApprove || !stationId) return;
@@ -305,7 +305,6 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
   if (!user) return null;
   const hasPendingStationRequest = stationMembershipStatus === 'pending';
   const canShowResponseAction = canRespond && (activeResponses.length > 0 || hasFireIncident);
-  if (!canShowResponseAction && !canManage && !hasPendingStationRequest) return null;
 
   const responseAction = canShowResponseAction ? (
     <button
@@ -327,7 +326,7 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
         {error && <span role="alert" className="max-w-56 text-xs text-red-600">{error}</span>}
       </div>}
       <StationNotificationPanels key={user.uid + ':' + stationId} stationName={station?.name ?? stationId ?? 'Station'}
-        activityOpen={open && canManage} membersOpen={openMemberApprovals && canApprove}
+        activityOpen={open} membersOpen={openMemberApprovals && canApprove}
         closeActivity={() => setOpen(false)} closeMembers={() => setOpenMemberApprovals(false)}
         reviewRequest={reviewRequest} />
     </>
