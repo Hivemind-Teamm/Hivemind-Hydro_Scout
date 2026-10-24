@@ -2,11 +2,12 @@
 // Runs before `npm run dev` and `npm run build` (Vercel builds included) and
 // stops them when the server would be unable to verify logins:
 //
-//   1. Node.js must match package.json "engines.node". firebase-admin 14 loads
-//      the ESM-only `jose` package with require(), which older Node rejects
-//      with ERR_REQUIRE_ESM (the October 2026 login outage, see
-//      docs/incidents/2026-10-25-login-outage.md).
-//   2. firebase-admin's app/auth/firestore modules must load.
+//   1. Node.js must match package.json "engines.node" (Vercel uses the same).
+//   2. firebase-admin's app/auth/firestore modules must load WITHOUT require()
+//      of ES modules. Vercel's function runtime cannot require() ESM even on
+//      Node 24, so firebase-admin 14 (jwks-rsa 4 -> ESM-only jose 6) broke every
+//      login there with ERR_REQUIRE_ESM while working locally (the October 2026
+//      outage, see docs/incidents/2026-10-25-login-outage.md).
 //   3. Production Vercel builds need a FIREBASE_SERVICE_ACCOUNT_KEY that parses
 //      and belongs to the Firebase project in .firebaserc.
 //
