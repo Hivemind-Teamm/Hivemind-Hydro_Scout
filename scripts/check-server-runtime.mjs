@@ -2,20 +2,22 @@
 // Runs before `npm run dev` and `npm run build` (Vercel builds included) and
 // stops them when the server would be unable to verify logins:
 //
-//   1. Node.js must match package.json "engines.node". firebase-admin 14 loads
-//      the ESM-only `jose` package with require(), which older Node rejects
-//      with ERR_REQUIRE_ESM (the October 2026 login outage, see
-//      docs/incidents/2026-10-25-login-outage.md).
-//   2. firebase-admin's app/auth/firestore modules must load.
+//   1. Node.js must match package.json "engines.node" (Vercel uses the same).
+//   2. firebase-admin's app/auth/firestore modules must load WITHOUT require()
+//      of ES modules. Vercel's function runtime cannot require() ESM even on
+//      Node 24, so firebase-admin 14 (jwks-rsa 4 -> ESM-only jose 6) broke every
+//      login there with ERR_REQUIRE_ESM while working locally (the October 2026
+//      outage, see docs/incidents/2026-10-25-login-outage.md).
 //   3. Production Vercel builds need a FIREBASE_SERVICE_ACCOUNT_KEY that parses
 //      and belongs to the Firebase project in .firebaserc.
 //
 // Prints no secret values. Do not weaken or skip this check to get a build through.
 
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
-const require = createRequire(import.meta.url);
+const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const readJson = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
 const failures = [];
 
@@ -33,9 +35,14 @@ if (!wantedMajor) {
 
 for (const id of ["firebase-admin/app", "firebase-admin/auth", "firebase-admin/firestore"]) {
   try {
-    require(id);
+    execFileSync(process.execPath, ["--no-experimental-require-module", "-e", `require(${JSON.stringify(id)})`], {
+      cwd: projectRoot,
+      stdio: "pipe",
+    });
   } catch (err) {
-    failures.push(`Cannot load ${id} on Node.js ${process.versions.node}: ${err.code ?? ""} ${String(err.message).split("\n")[0]}`);
+    const output = String(err.stderr || err.message);
+    const reason = output.split("\n").find((line) => /\bERR_|Error\b/.test(line))?.trim() ?? output.trim();
+    failures.push(`Cannot load ${id} without require(esm), as on Vercel: ${reason.slice(0, 300)}`);
   }
 }
 

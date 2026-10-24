@@ -5,10 +5,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 
-const require = createRequire(import.meta.url);
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
 
 test('Node.js is pinned to one major that firebase-admin supports', async () => {
@@ -22,9 +21,14 @@ test('Node.js is pinned to one major that firebase-admin supports', async () => 
     `engines.node ${pkg.engines.node} is below firebase-admin's requirement ${admin.engines.node}.`);
 });
 
-test('Firebase Admin modules load on this Node.js (fails with ERR_REQUIRE_ESM on old runtimes)', () => {
+// Vercel's runtime cannot require() ES modules even on Node 24; firebase-admin 14
+// (jwks-rsa 4 -> ESM-only jose 6) failed there with ERR_REQUIRE_ESM. Load it the same way.
+test('Firebase Admin loads without require(esm), as on Vercel', () => {
   for (const id of ['firebase-admin/app', 'firebase-admin/auth', 'firebase-admin/firestore']) {
-    assert.doesNotThrow(() => require(id), `${id} failed to load on Node.js ${process.versions.node}`);
+    assert.doesNotThrow(
+      () => execFileSync(process.execPath, ['--no-experimental-require-module', '-e', `require(${JSON.stringify(id)})`], { stdio: 'pipe' }),
+      `${id} needs require(esm), which Vercel does not provide. Pin a firebase-admin whose dependencies are CommonJS.`,
+    );
   }
 });
 
