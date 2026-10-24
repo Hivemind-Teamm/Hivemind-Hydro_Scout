@@ -2,10 +2,21 @@
 
 import { useState, useRef, FormEvent, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth, SESSION_REJECTED_ERROR, SESSION_UNAVAILABLE_ERROR } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useIsMobile, useIsShort } from "@/lib/use-media-query";
 import AuthShell, { AccentTicks, BRAND } from "../src/components/AuthShell";
+
+// Firebase sign-in can succeed while the server session step fails; never blame
+// the user's credentials for a server-side failure.
+function signInErrorMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : "";
+  if (message === SESSION_UNAVAILABLE_ERROR) {
+    return "Sign-in is temporarily unavailable on the server. Your password is fine; please contact an administrator.";
+  }
+  if (message === SESSION_REJECTED_ERROR) return "Unable to verify your session. Please try again.";
+  return "Unable to sign in. Check your credentials and try again.";
+}
 
 export default function LoginPage() {
   // useSearchParams() needs a Suspense boundary to prerender (Next.js 16).
@@ -106,7 +117,7 @@ function LoginContent() {
       .catch((err) => {
         if (attemptedRedirectUid.current !== user.uid) return;
         console.error('Session verification failed:', err);
-        setError('Unable to verify your session. Please try again.');
+        setError(signInErrorMessage(err));
       });
   }, [user, loading, router, searchParams, refreshSession]);
 
@@ -127,12 +138,7 @@ function LoginContent() {
 
       router.push(next);
     } catch (err) {
-      setError(
-        err instanceof Error &&
-        err.message === 'session-verification-failed'
-          ? 'Unable to verify your session. Please try again.'
-          : 'Unable to sign in. Check your credentials and try again.'
-      );
+      setError(signInErrorMessage(err));
       console.error(err);
     } finally {
       setSubmitting(false);

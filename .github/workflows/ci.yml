@@ -1,0 +1,30 @@
+# Runs on every pull request and push to main. Guards against the October
+# 2026 login outage (docs/incidents/2026-10-25-login-outage.md): the server
+# runtime check, type check and production tripwire tests must pass.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Same Node.js major as Vercel: package.json "engines.node".
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - name: Server runtime check (Node version + Firebase Admin modules)
+        run: node scripts/check-server-runtime.mjs
+      - name: Type check
+        run: npx tsc --noEmit --incremental false
+      - name: Production guardrail tests
+        run: node --test test/production-guardrails.test.mjs

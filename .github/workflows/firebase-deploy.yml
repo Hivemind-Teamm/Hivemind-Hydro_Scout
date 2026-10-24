@@ -1,0 +1,52 @@
+# Vercel deploys the app from main, but never Firestore rules or indexes.
+# This deploys them from the same commit so the two cannot drift apart
+# (October 2026: hydrant updates failed because committed rules were never
+# deployed). Requires the FIREBASE_SERVICE_ACCOUNT repository secret: the JSON
+# key of a service account with the Firebase Rules Admin and
+# Cloud Datastore Index Admin roles on the hydro-scout project.
+name: Deploy Firestore rules and indexes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - firestore.indexes.json
+      - firebase.json
+      - .github/workflows/firebase-deploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - name: Write deploy credential
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT repository secret; Firestore rules/indexes were NOT deployed."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+      - name: Deploy rules and indexes
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+        run: npx --yes firebase-tools@15.33.0 deploy --only firestore:rules,firestore:indexes --project hydro-scout --non-interactive
+      - name: Verify live rules and indexes match this commit
+        env:
+          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/check-firebase-deploy.mjs
