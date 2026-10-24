@@ -24,6 +24,9 @@ firebase-admin-…/auth: Error [ERR_REQUIRE_ESM]: require() of ES Module
 - The first fix (PR #19, pin Node 24.x) was based on reproducing the error on Node 20. Production then ran Node 24.21 and still failed
   with the same error; the full Vercel stack trace showed the runtime, not the Node version, was the limit.
 - Final fix: `firebase-admin@13.10.0`, whose chain (`jwks-rsa@3` → `jose@4`) ships CommonJS and needs no require(esm).
+  That works only on Node.js ≥ 22.12 (firebase-admin 14 declares `node >= 22`).
+- The repo did not pin a Node.js version, so the Vercel project ran an older runtime, while everyone developed locally on Node 24.
+  The bug could not be reproduced locally; it reproduces exactly on Node 20.17.
 
 Every server route that uses Firebase Admin was affected, not just login: photo upload, incidents and notifications.
 
@@ -40,6 +43,7 @@ Every server route that uses Firebase Admin was affected, not just login: photo 
 | 2026-10-25 | Reported; diagnosed from the Vercel runtime log. PR #19 (Node pin, 503/401 split, health check, guardrails) merged; production on Node 24.21 still fails with `ERR_REQUIRE_ESM`. |
 | 2026-10-25 02:01 | Current Firestore rules published and `reports` index created. |
 | 2026-10-25 | Root cause confirmed (no require(esm) on Vercel); firebase-admin pinned to 13.10.0. |
+| 2026-10-25 | Reported; diagnosed from the Vercel runtime log; fixed. |
 
 Both June commits were AI-assisted and both changed code before anyone looked at the real error message.
 
@@ -59,6 +63,8 @@ The live rules matched `94e0f90`, not `8c91b45`, and the live project had **no**
 | `firebase-admin` `^13.10.0` (was `^14.0.0`) | Root-cause fix: no ESM-only dependency loaded with `require()`. |
 | `package.json` `"engines": { "node": "24.x" }` | Same Node major locally, in CI and on Vercel (overrides the dashboard setting). |
 | `scripts/check-server-runtime.mjs` (runs before `dev` and `build`) | Fails the build if Node is wrong, Firebase Admin cannot load **with require(esm) disabled** (as on Vercel), or the production service-account key is missing or belongs to another project. A broken build never goes live. |
+| `package.json` `"engines": { "node": "24.x" }` | Vercel uses it to pick the runtime (overrides the dashboard setting). Root-cause fix. |
+| `scripts/check-server-runtime.mjs` (runs before `dev` and `build`) | Fails the build if Node is wrong, Firebase Admin cannot load, or the production service-account key is missing or belongs to another project. A broken build never goes live. |
 | `/api/auth/session`: 503 for server faults, 401 for bad tokens | A broken server can no longer look like a wrong password. |
 | Login page messages | 503 shows "temporarily unavailable on the server… your password is fine". |
 | `GET /api/health` | Public pass/fail check that Firebase Admin loads and its credential works. |
@@ -72,4 +78,5 @@ The live rules matched `94e0f90`, not `8c91b45`, and the live project had **no**
 1. Read the production error before changing anything. The fix took minutes once the Vercel log line was available.
 2. A fallback that hides a failure is worse than the failure. It also opened a security hole (unverified tokens).
 3. Reproduce under production's constraints, not just its version. Matching Node 24 was not enough; Vercel's runtime also lacks require(esm). Read the full stack trace (open the log entry), not the truncated list view.
+3. Pin the runtime. "Works on my machine" here meant Node 24 locally against an older Node on Vercel.
 4. Deploy everything that production depends on (app, rules, indexes) from the same commit, automatically.

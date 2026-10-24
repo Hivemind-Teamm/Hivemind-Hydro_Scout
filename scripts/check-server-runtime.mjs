@@ -13,11 +13,10 @@
 //
 // Prints no secret values. Do not weaken or skip this check to get a build through.
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
-const projectRoot = fileURLToPath(new URL("..", import.meta.url));
+const require = createRequire(import.meta.url);
 const readJson = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
 const failures = [];
 
@@ -35,14 +34,9 @@ if (!wantedMajor) {
 
 for (const id of ["firebase-admin/app", "firebase-admin/auth", "firebase-admin/firestore"]) {
   try {
-    execFileSync(process.execPath, ["--no-experimental-require-module", "-e", `require(${JSON.stringify(id)})`], {
-      cwd: projectRoot,
-      stdio: "pipe",
-    });
+    require(id);
   } catch (err) {
-    const output = String(err.stderr || err.message);
-    const reason = output.split("\n").find((line) => /\bERR_|Error\b/.test(line))?.trim() ?? output.trim();
-    failures.push(`Cannot load ${id} without require(esm), as on Vercel: ${reason.slice(0, 300)}`);
+    failures.push(`Cannot load ${id} on Node.js ${process.versions.node}: ${err.code ?? ""} ${String(err.message).split("\n")[0]}`);
   }
 }
 
