@@ -7,6 +7,22 @@ const SESSION_COOKIE = "session";
 const SESSION_META_COOKIE = "session_meta";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
+// Firebase Auth codes that mean the server's own setup is broken, not the
+// caller's token. Errors without an `auth/` code (module load failure, missing
+// FIREBASE_SERVICE_ACCOUNT_KEY, Firestore outage) are server faults too.
+// Server faults return 503 so a broken deployment never looks like a bad login.
+const SERVER_FAULT_AUTH_CODES = new Set([
+  'auth/invalid-credential',
+  'auth/insufficient-permission',
+  'auth/internal-error',
+  'auth/project-not-found',
+]);
+
+function isTokenRejection(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && code.startsWith('auth/') && !SERVER_FAULT_AUTH_CODES.has(code);
+}
+
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
 
@@ -75,16 +91,25 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, role });
   } catch (adminErr) {
-    console.error('[session] Firebase Admin verification failed:', adminErr);
-
     // Never derive an authenticated session from unverified JWT claims.
     // Clear stale cookies rather than retaining misleading session state.
     try { cookieStore.delete(SESSION_COOKIE); } catch {}
     try { cookieStore.delete(SESSION_META_COOKIE); } catch {}
 
+    if (isTokenRejection(adminErr)) {
+      console.warn('[session] ID token rejected:', (adminErr as { code: string }).code);
+      return NextResponse.json(
+        { ok: false, error: 'Session verification failed.' },
+        { status: 401 },
+      );
+    }
+
+    // Nobody can sign in while this persists. Check GET /api/health and the
+    // Vercel runtime log; do not "fix" it by trusting unverified tokens.
+    console.error('[session] Firebase Admin unavailable (server fault, not a bad token):', adminErr);
     return NextResponse.json(
-      { ok: false, error: 'Session verification failed.' },
-      { status: 401 },
+      { ok: false, error: 'Session service unavailable.' },
+      { status: 503 },
     );
   }
 }

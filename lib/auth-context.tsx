@@ -93,6 +93,10 @@ function stationIdForProfile(data: DocumentData | null | undefined): string | nu
     : null;
 }
 
+// Error messages thrown by refreshSession(); the login page maps them to UI text.
+export const SESSION_REJECTED_ERROR = "session-verification-failed";
+export const SESSION_UNAVAILABLE_ERROR = "session-service-unavailable";
+
 async function syncSessionCookie(idToken: string | null): Promise<void> {
   const response = await fetch("/api/auth/session", {
     method: "POST",
@@ -100,7 +104,9 @@ async function syncSessionCookie(idToken: string | null): Promise<void> {
     credentials: "same-origin",
     body: JSON.stringify({ idToken }),
   });
-  if (!response.ok) throw new Error("Could not synchronize the server session.");
+  // 503: the server cannot verify any login (deployment fault), not this user's token.
+  if (response.status === 503) throw new Error(SESSION_UNAVAILABLE_ERROR);
+  if (!response.ok) throw new Error(SESSION_REJECTED_ERROR);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
