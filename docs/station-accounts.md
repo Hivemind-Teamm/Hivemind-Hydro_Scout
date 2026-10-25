@@ -1,5 +1,75 @@
 # Station account profiles
 
+## Login activity status
+
+Personal and station accounts with a live session display `Active now` (green).
+Offline accounts explicitly display `Last logged in [date and time] (PHT)` using
+`lastLoginAt`, or `Never logged in` when no timestamp exists. A recent login date
+alone never marks someone active. Profile popups show membership separately.
+
+`AccountPresenceReporter` runs only for a Firebase-authenticated user with a
+loaded account role. Each tab/device writes its own UUID record at
+`accountPresenceSessions/{sessionId}` with only `uid`, assigned `stationId` and
+server-generated `lastSeenAt`. Heartbeats run once per minute, on focus and on
+reconnection. Explicit sign-out attempts to remove that session before identity
+is cleared, without blocking an offline logout indefinitely. Other devices keep
+their own records. Closed/crashed/disconnected sessions stop counting after
+three minutes (plus the UI's up-to-one-minute refresh interval). Suspended browser
+tabs may also age out until they resume; this is connected app presence, not a
+guarantee that a person is looking at the screen.
+
+Only owners may create/update their own presence, with the current assigned
+station and request-time timestamp. Admins can read the directory; station heads
+and existing station delegates can read same-station presence. General users
+can read only their own sessions. Presence never grants permissions. No location,
+IP address or device fingerprint is stored. The `uid`/`stationId` index supports
+same-station profile lookups. Stale documents are ignored by freshness checks;
+administrators may remove them as maintenance. Existing login timestamp writes
+and token/session verification are unchanged.
+
+Presence rules/indexes must deploy before other accounts can report their live
+status. The verified current account can immediately display its own active
+session. Focused presence audit:
+
+```json
+{ "score": 5, "summary": "Tested own-session writes, authoritative station/timestamps, immutable owner, cross-station privacy, independent tabs/devices and stale-session expiry. Presence does not affect authorization.", "findings": [] }
+```
+
+## Station members panel
+
+Station Members, Member Approvals and Station Activity use the Account Settings
+header color (`#e0353b`) in both themes.
+
+Station accounts, heads and admins with an assigned station can open **Station
+Members** from the header's members icon on desktop or mobile. The adjacent
+check-mark icon remains **Member Approvals**, with its independent unread count.
+Activity, approvals and the roster are mutually exclusive panels.
+
+The searchable roster reads existing personal profiles assigned to the current
+station, showing name, role, active/last-login status and active response status.
+Selecting a row opens its profile. Pending/rejected requests and station sign-in
+accounts are excluded. Legacy manually assigned personal profiles without an
+approval flag remain visible because their station assignment is authoritative.
+No duplicate roster or access-log record is written. Removed/reassigned members
+disappear from the list and any open profile. Opening the roster marks no
+notification read and grants no account-edit, removal or reassignment controls.
+
+Roster queries, presence and response subscriptions are station-scoped and covered
+by existing manager/admin read permissions. Tests verify public visitors,
+ordinary members and other-station heads cannot issue these roster queries.
+No additional rules or indexes are needed for this panel.
+
+## Profile storage
+
+The admin's Manage Accounts table supports name ordering, ascending/descending
+access tiers, most recent login and newest account creation. Tier order is
+General, Authorized, Head/Station, Admin; station accounts retain their fixed
+head-equivalent operations tier. Sorting does not change permissions and applies
+after the existing role/search filters. Station Directory supports name ordering,
+recent station-account login and latest station-account creation. Where a station
+has several logins, its date ordering uses the most recent matching timestamp.
+Missing dates sort last; ties use names and IDs consistently.
+
 Personal profiles remain at `users/{uid}`. A station login's profile is stored
 at `stations/{stationId}/accounts/{uid}` so a station can have multiple
 accounts without placing login data on its public directory document.
@@ -23,8 +93,8 @@ All activity cards are clickable and open notification details. Both the admin
 and edited-account names in an assignment notification still link to profile
 cards. Opening a notification or either profile marks that update read. Member
 request cards open the requester's profile; approval/rejection buttons remain
-independent actions. Each unread row and
-its main notification icon display a red dot; the icon clears after all its rows
+independent actions. Unread activity rows and main notification icons display
+red count badges (shown as `99+` above 99); the icon clears after all its entries
 are read. Membership-request unread state is separate from approval status.
 Read state is stored per viewer/station in Firestore, with browser storage as a
 fallback. Logging out and back in must not restore dots on already-read events.
@@ -95,6 +165,13 @@ Unread indicators remain red and independent of these event colors.
 
 Both notification panels appear above hydrant full details with a dimmed
 backdrop. Opening a panel does not mark its items read.
+Fire incident notification cards with valid saved coordinates mark the update
+read, close the activity panel and fly the map to the original pin location.
+This navigation does not create a new incident or move the user's current fire
+pin. Historical notifications without usable coordinates still open details.
+Shared fire markers are visible across stations to all signed-in accounts; public
+visitors cannot read them. See [shared fire map pins](shared-fire-pins.md) for
+ownership, clear/move behavior and deployment requirements.
 
 Deploy the updated `firestore.rules` before using pin activity against the live
 database. Map events are create-only and restricted to authorized actors in
@@ -109,11 +186,21 @@ Focused map-activity rules audit (not an audit of unrelated existing rules):
 { "score": 5, "summary": "Tested map activity rules reject spoofed actors, cross-station writes, invalid coordinates, edits, deletes, and replayed hydrant creation notices. Hydrant/notice writes are atomic.", "findings": [] }
 ```
 
-Each response appears as one live card in Station Activity. Its title is
-`[Responder] started response` while active, with an animated yellow glow that
-does not depend on whether the notification is read. On response end or management
-closure, the same card changes to `[Responder] ended response` and stops glowing.
-Users requesting reduced motion get a static yellow highlight while active.
+Responses share one daily card per station, based on the response's start date
+in Philippine time. One person is named directly; two people show both names;
+three or more show the first name and `N others`. Distinct people are counted
+once in the title, while repeat responses remain separate detail entries.
+All-active/all-ended groups say `started response`/`ended response`; mixed groups
+say `updated their response status`. Limited-role summaries never include names.
+An overnight response remains in its start-day group until ended. Historical
+entries missing timestamps remain individual rather than receiving invented dates.
+
+The daily card glows yellow while any response in it is active, independently
+of read status. It stops glowing when all responses end. Reduced-motion users
+get a static yellow highlight. Opening a daily card reveals an expandable list;
+expanding each personnel entry marks only that entry's current event version read.
+Opening the group alone does not mark all personnel read. New updates arriving
+while the group is open remain unread until their entries are viewed again.
 
 Cards show the station, start date/time, end date/time or ongoing status, and
 duration. Details also include the last location-report time, response ID and
@@ -124,8 +211,12 @@ The feed groups immutable start/end/closure events by `responseId` and reconcile
 them with the authorized station response history. Existing historical events
 therefore also appear as one card without migrating stored records. The latest
 source event remains the read-receipt identity: an end/closure update can become
-unread again until opened, while GPS heartbeats do not reset read state. Separate
-responses from the same person remain separate cards.
+unread again until viewed, while GPS heartbeats do not reset read state. Daily
+group IDs are presentation keys and are never written as read receipts. No data
+migration or rule/index changes are needed for this grouping. The group badge
+counts unread response entries; the main activity badge counts unread response
+entries plus other unread activity. Each view decreases the corresponding count.
+Member approval icon counts independently track unread pending requests.
 
 ```powershell
 npx.cmd -y firebase-tools@latest deploy --only firestore:rules --project hydro-scout

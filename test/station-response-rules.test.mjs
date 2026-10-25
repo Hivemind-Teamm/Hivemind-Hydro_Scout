@@ -15,6 +15,7 @@ try {
       uid: 'admin', role: 'admin', accountType: 'person', displayName: 'Admin',
     });
     await db.doc('stations/DILIMAN-01').set({ name: 'Diliman Fire Station', active: true, createdAt: serverTimestamp() });
+    await db.doc('firePins/abcdefghijklmnopqrst').set({ lat: 14.65, lng: 121.06, stationId: 'DILIMAN-01', status: 'active', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     await db.doc('stations/DILIMAN-01/accounts/head-1').set({
       uid: 'head-1', accountType: 'station', stationId: 'DILIMAN-01',
       displayName: 'Diliman Fire Station',
@@ -133,9 +134,11 @@ try {
   const noticePath = `stations/DILIMAN-01/notifications/${responseId}_start`;
 
   const memberDb = dbFor('member-1');
+  const buildStart = (incident = {}) => {
   const start = memberDb.batch();
   start.update(memberDb.doc('users/member-1'), { activeResponseId: responseId });
   start.set(memberDb.doc(responsePath), {
+    firePinId: 'abcdefghijklmnopqrst', incidentLat: 14.65, incidentLng: 121.06, ...incident,
     responseId,
     uid: 'member-1',
     displayName: 'Responder One',
@@ -164,7 +167,14 @@ try {
     message: 'Responder One started responding.',
     createdAt: serverTimestamp(),
   });
-  await assertSucceeds(start.commit());
+  return start;
+  };
+  await assertFails(buildStart({ firePinId: 'missingincidentpin00' }).commit());
+  await assertFails(buildStart({ incidentLat: 10 }).commit());
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst').update({ status: 'cleared' }));
+  await assertFails(buildStart().commit());
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst').update({ status: 'active' }));
+  await assertSucceeds(buildStart().commit());
 
   const otherDb = dbFor('member-2');
   await assertSucceeds(headDb.doc(responsePath).get());

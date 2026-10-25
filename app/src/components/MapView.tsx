@@ -13,6 +13,7 @@ import {
 import dynamic from 'next/dynamic';
 
 import DilimanMap from './DilimanMap';
+import type { MapFirePin } from '@/lib/use-shared-fire-pins';
 import StationInfoPanel from './StationInfoPanel';
 import { useTheme } from '@/lib/theme-context';
 import { useUnitLocations } from '@/lib/use-unit-locations';
@@ -300,6 +301,8 @@ interface MapViewProps {
    * fire instead of selecting/adding hydrants.
    */
   firePinMode?: boolean;
+  sharedFirePins?: MapFirePin[];
+  onSelectFire?: (id: string) => void;
 
   fire?:
     | FireOverlay
@@ -361,6 +364,7 @@ function MapView({
   onMapMove,
 
   firePinMode = false,
+  sharedFirePins = [], onSelectFire,
 
   fire = null,
 
@@ -511,6 +515,7 @@ function MapView({
             onMapMove={
               onMapMove
             }
+            sharedFirePins={sharedFirePins} onSelectFire={onSelectFire}
             firePinMode={
               firePinMode
             }
@@ -586,6 +591,7 @@ function MapView({
             onMapMove={
               onMapMove
             }
+            sharedFirePins={sharedFirePins} onSelectFire={onSelectFire}
             firePinMode={
               firePinMode
             }

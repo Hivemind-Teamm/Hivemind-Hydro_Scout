@@ -17,10 +17,12 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { useStations } from '../data/stations';
 import StationNotificationPanels from './StationNotificationPanels';
+import StationMembersPanel from './StationMembersPanel';
 import type { JoinRequest } from '@/lib/use-station-notifications';
 import { locationTimeoutMs } from '@/lib/unit-location-expiry';
 
 type ResponseRecord = {
+  firePinId?: string;
   id: string;
   uid: string;
   displayName: string;
@@ -40,9 +42,10 @@ function currentPosition(): Promise<GeolocationPosition> {
   }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 }));
 }
 
-export default function StationResponseControl({ hasFireIncident, actionContainer }: {
-  hasFireIncident: boolean;
+export default function StationResponseControl({ fireIncident, actionContainer, onViewFireLocation }: {
+  fireIncident: { id: string; lat: number; lng: number } | null;
   actionContainer: HTMLDivElement | null;
+  onViewFireLocation: (lat: number, lng: number) => void;
 }) {
   const {
     user, role, accountType, stationId, stationMembershipStatus, stationAccessIds,
@@ -52,11 +55,15 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
   const station = stations.find(item => item.id === stationId);
   const canRespond = !!user && accountType === 'person' && !!stationId && stationMembershipStatus === 'approved';
   const canManage = !!user && !!stationId && (role === 'admin' || role === 'head' || stationAccessIds.includes(stationId));
-  const canApprove = role === 'admin' || role === 'head';
+  const canViewRoster = role === 'admin' || role === 'head';
+  const canApprove = canViewRoster && accountType !== 'station';
   const [activeResponses, setActiveResponses] = useState<ResponseRecord[]>([]);
+  const activeResponseId = activeResponses[0]?.id;
   const [responses, setResponses] = useState<ResponseRecord[]>([]);
+  const [responseStation, setResponseStation] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [openMemberApprovals, setOpenMemberApprovals] = useState(false);
+  const [openRoster, setOpenRoster] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,15 +80,17 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
   useEffect(() => {
     if (!canManage || !stationId) return;
     const active = onSnapshot(query(collection(db, 'stationResponses'), where('stationId', '==', stationId)), snapshot => {
+      setResponseStation(stationId);
       setResponses(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as ResponseRecord))
         .sort((a, b) => ((b.startedAt?.toDate?.().getTime() ?? 0) - (a.startedAt?.toDate?.().getTime() ?? 0))));
-    }, err => { console.error('Failed to load station response history:', err); setError('Could not load station response history.'); });
+    }, err => { setResponseStation(null); console.error('Failed to load station response history:', err); setError('Could not load station response history.'); });
     return () => { active(); };
   }, [canManage, stationId]);
 
   useEffect(() => {
     if (!user) return;
     const toggleActivity = () => {
+      setOpenRoster(false);
       setOpenMemberApprovals(false);
       setOpen(current => !current);
     };
@@ -92,6 +101,7 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
   useEffect(() => {
     if (!canApprove || !stationId) return;
     const toggleMemberApprovals = () => {
+      setOpenRoster(false);
       setOpen(false);
       setOpenMemberApprovals(current => !current);
     };
@@ -100,8 +110,15 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
   }, [canApprove, stationId]);
 
   useEffect(() => {
-    const response = activeResponses[0];
-    if (!response || !stationId) return;
+    if (!canViewRoster || !stationId) return;
+    const toggle = () => { setOpen(false); setOpenMemberApprovals(false); setOpenRoster(current => !current); };
+    window.addEventListener('hydroscout:toggle-station-roster', toggle);
+    return () => window.removeEventListener('hydroscout:toggle-station-roster', toggle);
+  }, [canViewRoster, stationId]);
+
+  useEffect(() => {
+    if (!activeResponseId || !stationId) return;
+    const response = { id: activeResponseId };
     if (!canUseDeviceLocation) {
       void deleteDoc(doc(db, 'stations', stationId, 'unitLocations', response.id)).catch(err => {
         console.error('Could not remove the location after consent withdrawal:', err);
@@ -152,7 +169,7 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
       window.removeEventListener('focus', resume);
       window.removeEventListener('online', resume);
     };
-  }, [activeResponses, canUseDeviceLocation, station, stationId]);
+  }, [activeResponseId, canUseDeviceLocation, station, stationId]);
 
   const staleAfterMs = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES);
 
@@ -190,7 +207,7 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
   }, [role, responses, staleAfterMs, stationId, user]);
 
   async function startResponse() {
-    if (!user || !stationId || !station) return;
+    if (!user || !stationId || !station || !fireIncident) return;
     setError(null);
     if (!canUseDeviceLocation) {
       openLocationConsent();
@@ -202,6 +219,9 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
       const id = crypto.randomUUID();
       const batch = writeBatch(db);
       batch.set(doc(db, 'stationResponses', id), {
+        firePinId: fireIncident.id,
+        incidentLat: fireIncident.lat,
+        incidentLng: fireIncident.lng,
         responseId: id,
         uid: user.uid,
         displayName: user.displayName?.trim() || user.email || 'Responder',
@@ -276,7 +296,7 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
   }
 
   async function reviewRequest(request: JoinRequest, approved: boolean) {
-    if (!stationId) return;
+    if (!canApprove || !stationId) return;
     setError(null);
     try {
       const batch = writeBatch(db);
@@ -304,7 +324,8 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
 
   if (!user) return null;
   const hasPendingStationRequest = stationMembershipStatus === 'pending';
-  const canShowResponseAction = canRespond && (activeResponses.length > 0 || hasFireIncident);
+  const canShowResponseAction = canRespond && !!fireIncident && (!activeResponses.length
+    || !activeResponses[0].firePinId || activeResponses[0].firePinId === fireIncident.id);
 
   const responseAction = canShowResponseAction ? (
     <button
@@ -328,7 +349,11 @@ export default function StationResponseControl({ hasFireIncident, actionContaine
       <StationNotificationPanels key={user.uid + ':' + stationId} stationName={station?.name ?? stationId ?? 'Station'}
         activityOpen={open} membersOpen={openMemberApprovals && canApprove}
         closeActivity={() => setOpen(false)} closeMembers={() => setOpenMemberApprovals(false)}
-        reviewRequest={reviewRequest} />
+        reviewRequest={reviewRequest} onViewFireLocation={onViewFireLocation} />
+      {openRoster && canViewRoster && stationId && <StationMembersPanel key={`roster:${user.uid}:${stationId}`} stationId={stationId}
+        stationName={station?.name ?? stationId} onClose={() => setOpenRoster(false)}
+        responsesReady={responseStation === stationId}
+        respondingUids={new Set(responses.filter(response => responseStation === stationId && response.stationId === stationId && response.status === 'active').map(response => response.uid))} />}
     </>
   );
 }

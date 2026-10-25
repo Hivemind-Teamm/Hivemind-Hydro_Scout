@@ -36,6 +36,8 @@ interface FireResponsePanelProps {
   onRecenter: () => void;
   onMovePin: () => void;
   onClear: () => void;
+  canEdit?: boolean;
+  onDismiss?: () => void;
   responseActionRef?: Ref<HTMLDivElement>;
   /** Mobile only — collapses the panel to an edge tab. */
   onMinimize?: () => void;
@@ -43,7 +45,7 @@ interface FireResponsePanelProps {
 
 export default function FireResponsePanel({
   lat, lng, address, radiusM, candidates, nearestOutside, supply, estimate, routing, loading, maxHeight,
-  onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize, responseActionRef,
+  onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize, responseActionRef, canEdit = true, onDismiss,
 }: FireResponsePanelProps) {
   const operationalCount = candidates.filter((c) => c.hydrant.status === 'operational').length;
   const radiusLabel = formatDistance(radiusM);
@@ -59,7 +61,7 @@ export default function FireResponsePanel({
           <MdLocalFireDepartment className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/75">Fire Incident</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/75">Shared Fire Incident</p>
           <p className={`truncate text-sm font-bold leading-snug ${address === null ? 'italic text-white/70' : ''}`} title={address ?? undefined}>
             {address ?? 'Locating address…'}
           </p>
@@ -74,7 +76,7 @@ export default function FireResponsePanel({
               <FiChevronDown className="h-4 w-4" strokeWidth={2.5} />
             </HeaderButton>
           ) : (
-            <HeaderButton label="Clear fire pin" onClick={onClear}>
+            <HeaderButton label="Close fire details" onClick={onDismiss ?? onClear}>
               <FiX className="h-4 w-4" strokeWidth={2.5} />
             </HeaderButton>
           )}
@@ -162,13 +164,16 @@ export default function FireResponsePanel({
       <div className="flex shrink-0 gap-2 border-t border-neutral-100 px-3.5 py-2.5 dark:border-neutral-800">
         <button
           onClick={onMovePin}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          disabled={!canEdit}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           <FiMove className="h-3.5 w-3.5" /> Move pin
         </button>
         <button
           onClick={onClear}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-neutral-800 py-1.5 text-xs font-bold text-white hover:bg-neutral-700 dark:bg-neutral-700 dark:hover:bg-neutral-600"
+          disabled={!canEdit}
+          title="Clear this incident from all signed-in maps"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-neutral-800 py-1.5 text-xs font-bold text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-neutral-700 dark:hover:bg-neutral-600"
         >
           <FiX className="h-3.5 w-3.5" strokeWidth={2.5} /> Clear fire
         </button>

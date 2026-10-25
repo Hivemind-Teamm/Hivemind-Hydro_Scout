@@ -28,6 +28,7 @@ export function limitedOperationalNotification(item: StationNotification): Stati
     ...(typeof item.lat === 'number' && typeof item.lng === 'number' ? { lat: item.lat, lng: item.lng } : {}),
     ...(item.response ? {
       response: { id: '', uid: '', displayName: '', stationId: '', status: item.response.status,
+        incidentLat: item.response.incidentLat, incidentLng: item.response.incidentLng,
         startedAt: item.response.startedAt, endedAt: item.response.endedAt },
     } : {}),
   };

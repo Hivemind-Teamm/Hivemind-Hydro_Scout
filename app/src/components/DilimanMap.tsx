@@ -1,5 +1,7 @@
 'use client';
 import StationUnitIcon from './StationUnitIcon';
+import SharedFirePinMarker from './SharedFirePinMarker';
+import type { MapFirePin } from '@/lib/use-shared-fire-pins';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapGL, { Marker, Layer, Source, type MapRef, type MarkerEvent } from 'react-map-gl/mapbox';
@@ -103,6 +105,8 @@ interface DilimanMapProps {
   onMapMove?: () => void;
   firePinMode?: boolean;
   fire?: FireOverlay | null;
+  sharedFirePins?: MapFirePin[];
+  onSelectFire?: (id: string) => void;
   onFirePin?: (lat: number, lng: number) => void;
   onFireMove?: (lat: number, lng: number) => void;
 }
@@ -348,7 +352,7 @@ export default function DilimanMap({
   unitLocations = [],
   hydrants, aorBarangays, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
-  firePinMode = false, fire = null, onFirePin, onFireMove,
+  firePinMode = false, fire = null, onFirePin, onFireMove, sharedFirePins = [], onSelectFire,
 }: DilimanMapProps) {
   const mapRef = useRef<MapRef>(null);
   const otwAnimRef = useRef<number | null>(null);
@@ -844,12 +848,12 @@ export default function DilimanMap({
             longitude={fire.lng}
             latitude={fire.lat}
             anchor="center"
-            draggable
+            draggable={!!onFireMove}
             onDragEnd={(e) => onFireMove?.(e.lngLat.lat, e.lngLat.lng)}
             // Don't let a tap on the pin read as a background tap (closes panels).
             onClick={(e) => e.originalEvent.stopPropagation()}
           >
-            <div className="fire-pin" title="Fire location — drag to adjust">
+            <div className="fire-pin" title={onFireMove ? 'Fire location — drag to adjust' : 'Fire location'}>
               <span className="fire-pin-pulse" />
               <span className="fire-pin-pulse fire-pin-pulse-late" />
               <span className="fire-pin-core">
@@ -859,6 +863,9 @@ export default function DilimanMap({
           </Marker>
         )}
 
+        {sharedFirePins.map(pin => <Marker key={`fire-${pin.id}`} longitude={pin.lng} latitude={pin.lat} anchor="center">
+          <SharedFirePinMarker arrivalAt={pin.arrivalAt} onSelect={() => onSelectFire?.(pin.id)} />
+        </Marker>)}
         {unitLocations.map(location => (
           <Marker key={location.id} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
             <StationUnitIcon location={location} selected={selectedStationId === location.stationId}

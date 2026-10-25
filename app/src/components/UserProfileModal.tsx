@@ -1,6 +1,8 @@
 'use client';
 
 import { FiX } from 'react-icons/fi';
+import { lastLoggedInLabel } from '@/lib/account-login-status';
+import { useAccountPresence } from '@/lib/use-account-presence';
 import AvatarPlaceholder from './AvatarPlaceholder';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -17,6 +19,7 @@ export interface ViewingUser {
   accountType?: 'person' | 'station';
   station?: string;
   status?: string;
+  lastLoginAt?: Date | null;
 }
 
 interface UserProfileModalProps {
@@ -25,6 +28,7 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ user, onClose }: UserProfileModalProps) {
+  const active = useAccountPresence(user.uid);
   const badgeColor = user.accountType === 'station' ? '#e0353b' : ROLE_COLORS[user.role ?? 'general'] ?? '#6b7280';
 
   return (
@@ -56,7 +60,8 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
         <div className="px-5 py-4">
           <div className="mb-3 flex flex-col gap-2.5">
             <InfoRow label="Station" value={user.station ?? 'Not provided'} />
-            <InfoRow label="Account Status" value={user.status ?? 'Not provided'} />
+            <InfoRow label="Account Status" value={active ? 'Active now' : user.lastLoginAt === undefined ? 'Not provided' : lastLoggedInLabel(user.lastLoginAt)} />
+            {user.status && <InfoRow label="Membership status" value={user.status} />}
             {user.uid && <InfoRow label="Account ID" value={user.uid} />}
           </div>
 

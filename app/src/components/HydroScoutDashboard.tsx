@@ -34,7 +34,7 @@ import {
 } from '../data/hydrants';
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
-import { notifyFirePin } from '@/lib/map-activity';
+import { useSharedFirePins } from '@/lib/use-shared-fire-pins';
 import { useIsMobile } from '@/lib/use-media-query';
 import { useOnlineStatus } from '@/lib/use-online-status';
 import { haversineM, formatDistance, formatDuration, distToRouteM } from '@/lib/haversine';
@@ -63,38 +63,6 @@ const ROUTE_CORRIDOR_M = 300;
 // than an ordinary car obeying normal flow. 0.75 ≈ 25% faster than free-flow.
 // Tune to match observed local response times.
 const EMERGENCY_ETA_FACTOR = 0.75;
-
-// A pinned fire survives a reload (like OTW mode), but a pin left over from a
-// past incident shouldn't greet the next shift — it expires after this long.
-const FIRE_INCIDENT_KEY    = 'hydroscout_fire_incident';
-const FIRE_INCIDENT_TTL_MS = 12 * 60 * 60 * 1000;
-
-interface FireIncident {
-  lat: number;
-  lng: number;
-  /** Reverse-geocoded address; null while the lookup is in flight. */
-  address: string | null;
-  pinnedAt: number;
-}
-
-function loadFireIncident(): FireIncident | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(FIRE_INCIDENT_KEY);
-    if (!raw) return null;
-    const f = JSON.parse(raw) as Partial<FireIncident>;
-    if (
-      typeof f.lat !== 'number' || typeof f.lng !== 'number' || typeof f.pinnedAt !== 'number' ||
-      Date.now() - f.pinnedAt > FIRE_INCIDENT_TTL_MS
-    ) {
-      localStorage.removeItem(FIRE_INCIDENT_KEY);
-      return null;
-    }
-    return { lat: f.lat, lng: f.lng, address: typeof f.address === 'string' ? f.address : null, pinnedAt: f.pinnedAt };
-  } catch {
-    return null; // storage blocked or corrupt data
-  }
-}
 
 // Nominatim reverse geocode; falls back to the coordinates on any failure.
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
@@ -155,7 +123,10 @@ export default function HydroScoutDashboard() {
   // and the hydrant the user picked to run the supply line from (null → the
   // nearest operational one is used).
   const [firePinMode,        setFirePinMode]        = useState(false);
-  const [fireIncident,       setFireIncident]       = useState<FireIncident | null>(loadFireIncident);
+  const [selectedFireId, setSelectedFireId] = useState<string | null>(null);
+  const [movingFireId, setMovingFireId] = useState<string | null>(null);
+  const fireWritePending = useRef(false);
+  const [fireAddress, setFireAddress] = useState<{ key: string; address: string } | null>(null);
   const [fireSupplyChoice,   setFireSupplyChoice]   = useState<string | null>(null);
   const [firePanelMinimized, setFirePanelMinimized] = useState(false);
 
@@ -221,7 +192,10 @@ export default function HydroScoutDashboard() {
   const [mapReady, setMapReady] = useState(false);
   const splashStartedRef = useRef(false);
 
-  const { role, aorBarangays, canUseDeviceLocation } = useAuth();
+  const { user, role, aorBarangays, canUseDeviceLocation } = useAuth();
+  const sharedFires = useSharedFirePins();
+  const { create: createSharedFirePin, move: moveSharedFirePin } = sharedFires;
+  const fireIncident = sharedFires.pins.find(pin => pin.id === selectedFireId) ?? null;
   const userLocation = canUseDeviceLocation ? storedUserLocation : null;
   const locationAllowedRef = useRef(canUseDeviceLocation);
   useEffect(() => { locationAllowedRef.current = canUseDeviceLocation; }, [canUseDeviceLocation]);
@@ -230,7 +204,8 @@ export default function HydroScoutDashboard() {
   // (see DashboardOverlay). A pin restored from storage stays hidden for
   // anyone else rather than being wiped.
   const canPinFire = role === 'authorized' || role === 'head' || role === 'admin';
-  const fire = canPinFire ? fireIncident : null;
+  const fire = canPinFire && fireIncident ? { ...fireIncident, address: fireAddress?.key === `${fireIncident.id}:${fireIncident.lat}:${fireIncident.lng}` ? fireAddress.address : null } : null;
+  const canEditFire = !!fireIncident && sharedFires.canEdit(fireIncident);
   const { hydrants, loading, error } = useHydrants();
   const { reports, loading: reportsLoading } = useReports();
   const hasPendingReports = reports.some((r) => r.status === 'pending');
@@ -277,12 +252,6 @@ export default function HydroScoutDashboard() {
     if (otwRoute) localStorage.setItem(OTW_ROUTE_KEY, JSON.stringify(otwRoute));
   }, [otwRoute]);
 
-  useEffect(() => {
-    try {
-      if (fireIncident) localStorage.setItem(FIRE_INCIDENT_KEY, JSON.stringify(fireIncident));
-      else localStorage.removeItem(FIRE_INCIDENT_KEY);
-    } catch { /* storage unavailable — the pin just won't survive a reload */ }
-  }, [fireIncident]);
 
   useEffect(() => {
     if (loading || !hydrants.length || otwRestoredRef.current) return;
@@ -807,45 +776,38 @@ export default function HydroScoutDashboard() {
     );
   }, [isMobile]);
 
-  // A fire restored after a reload is framed once the map is up — an active
-  // incident matters more than the usual first-fix fly to the user's position,
-  // which is skipped. (A restored OTW route keeps priority over both.)
-  const restoredFireRef = useRef(fire);
-  useEffect(() => {
-    const restored = restoredFireRef.current;
-    if (!mapReady || !restored) return;
-    restoredFireRef.current = null;
-    hasAutoLocatedRef.current = true;
-    if (!otwRouteRef.current) fitFireRadius(restored.lat, restored.lng);
-  }, [mapReady, fitFireRadius]);
-
   // Moves (or first places) the fire and looks up its address. Moving the pin
   // keeps the incident's original timestamp; the address lookup only lands if
   // the pin hasn't moved again since.
-  const placeFire = useCallback((lat: number, lng: number) => {
-    setFireIncident((prev) => ({ lat, lng, address: null, pinnedAt: prev?.pinnedAt ?? Date.now() }));
-    reverseGeocode(lat, lng).then((address) => {
-      setFireIncident((prev) => (prev && prev.lat === lat && prev.lng === lng ? { ...prev, address } : prev));
-    });
-  }, []);
+  const selectedFireLat = fireIncident?.lat;
+  const selectedFireLng = fireIncident?.lng;
+  useEffect(() => {
+    if (!selectedFireId || selectedFireLat === undefined || selectedFireLng === undefined) return;
+    let active = true;
+    const key = `${selectedFireId}:${selectedFireLat}:${selectedFireLng}`;
+    void reverseGeocode(selectedFireLat, selectedFireLng).then(address => { if (active) setFireAddress({ key, address }); });
+    return () => { active = false; };
+  }, [selectedFireId, selectedFireLat, selectedFireLng]);
 
   // Map tap in fire-pin mode. A fresh spot gets a fresh supply-hydrant pick.
   const handleFirePin = useCallback((lat: number, lng: number) => {
+    if (!canPinFire || fireWritePending.current) return;
+    fireWritePending.current = true;
     setFirePinMode(false);
     setFirePanelMinimized(false);
     setFireSupplyChoice(null);
-    placeFire(lat, lng);
-    fitFireRadius(lat, lng);
-    void notifyFirePin(lat, lng).catch((error) => {
-      console.error('Could not publish fire pin activity:', error);
-      showGeoError('Fire pinned, but station activity could not be saved.');
-    });
-  }, [placeFire, fitFireRadius, showGeoError]);
+    const task = movingFireId ? moveSharedFirePin(movingFireId, lat, lng).then(() => movingFireId) : createSharedFirePin(lat, lng);
+    setMovingFireId(null);
+    void task.then(id => { setSelectedFireId(id); fitFireRadius(lat, lng); })
+      .catch(() => showGeoError('Could not save shared fire incident. Check your connection and permissions.'))
+      .finally(() => { fireWritePending.current = false; });
+  }, [canPinFire, movingFireId, moveSharedFirePin, createSharedFirePin, fitFireRadius, showGeoError]);
 
   // Fire marker dragged. Keeps the user's supply pick if it's still in range.
-  const handleFireMove = useCallback((lat: number, lng: number) => {
-    placeFire(lat, lng);
-  }, [placeFire]);
+  const handleFireMove = (lat: number, lng: number) => {
+    if (!fireIncident || !canEditFire) return;
+    void sharedFires.move(fireIncident.id, lat, lng).catch(() => showGeoError('Could not move the shared fire incident.'));
+  };
 
   const handleToggleFirePinMode = useCallback(() => {
     if (firePinMode) {
@@ -854,6 +816,7 @@ export default function HydroScoutDashboard() {
     }
     // Pick modes are exclusive, and an open hydrant card would sit over the
     // map the user is about to tap.
+    setMovingFireId(null);
     setFirePinMode(true);
     setAddHydrantMode(false);
     setPendingLocation(null);
@@ -866,11 +829,12 @@ export default function HydroScoutDashboard() {
     if (isMobile) setFirePanelMinimized(true);
   }, [firePinMode, isMobile]);
 
-  const handleClearFire = useCallback(() => {
+  const handleClearFire = () => {
+    if (!fireIncident || !canEditFire) return;
     setFirePinMode(false);
-    setFireIncident(null);
-    setFireSupplyChoice(null);
-  }, []);
+    void sharedFires.clear(fireIncident.id).then(() => { setSelectedFireId(null); setFireSupplyChoice(null); })
+      .catch(() => showGeoError('Could not clear the shared fire incident.'));
+  };
 
   const handleRecenterFire = useCallback(() => {
     if (fireLat !== undefined && fireLng !== undefined) fitFireRadius(fireLat, fireLng);
@@ -1055,6 +1019,19 @@ export default function HydroScoutDashboard() {
   const handleZoomIn        = useCallback(() => controllerRef.current?.zoomIn(), []);
   const handleZoomOut       = useCallback(() => controllerRef.current?.zoomOut(), []);
   const handleOverlayFlyTo  = useCallback((lat: number, lng: number, zoom?: number) => controllerRef.current?.flyTo(lat, lng, zoom), []);
+  const handleViewFireNotification = useCallback((lat: number, lng: number) => {
+    setSelectedHydrant(null);
+    setShowFullDetails(false);
+    setShowEdit(false);
+    setShowReport(false);
+    setShowReports(false);
+    setNearestPanelOpen(false);
+    setNearestHydrant(null);
+    const pin = sharedFires.pins.find(item => item.lat === lat && item.lng === lng);
+    setSelectedFireId(pin?.id ?? null);
+    if (pin) setFirePanelMinimized(false);
+    controllerRef.current?.flyTo(lat, lng, 17);
+  }, [sharedFires.pins]);
   const handleToggleReports = useCallback(() => setShowReports((v) => !v), []);
   const handleOpenDashboard = useCallback(() => setShowOpsDashboard(true), []);
   const handleOpenAdmin     = useCallback(() => setShowAdminDashboard(true), []);
@@ -1080,8 +1057,10 @@ export default function HydroScoutDashboard() {
         onSelectSupply={setFireSupplyChoice}
         onViewHydrant={handleSelectHydrant}
         onRecenter={handleRecenterFire}
-        onMovePin={handleToggleFirePinMode}
+        onMovePin={() => { if (fireIncident && canEditFire) { handleToggleFirePinMode(); setMovingFireId(fireIncident.id); } }}
         onClear={handleClearFire}
+        canEdit={canEditFire}
+        onDismiss={() => setSelectedFireId(null)}
         responseActionRef={setResponseActionContainer}
         onMinimize={isMobile ? () => setFirePanelMinimized(true) : undefined}
       />
@@ -1162,7 +1141,15 @@ export default function HydroScoutDashboard() {
           firePinMode={firePinMode}
           fire={fireOverlay}
           onFirePin={handleFirePin}
-          onFireMove={handleFireMove}
+          onFireMove={canEditFire ? handleFireMove : undefined}
+          sharedFirePins={user ? sharedFires.pins.filter(pin => pin.id !== fire?.id) : []}
+          onSelectFire={id => {
+            const pin = sharedFires.pins.find(item => item.id === id);
+            if (!pin) return;
+            setSelectedFireId(id); setFirePanelMinimized(false); setFireSupplyChoice(null);
+            setSelectedHydrant(null); setShowFullDetails(false);
+            controllerRef.current?.flyTo(pin.lat, pin.lng, 17);
+          }}
         />
       </div>
 
@@ -1239,10 +1226,11 @@ export default function HydroScoutDashboard() {
         hazardPanelMinimized={hazardPanelMinimized}
         onHazardPanelMinimizedChange={setHazardPanelMinimized}
         firePinMode={firePinMode}
-        fireActive={!!fire}
+        fireActive={false}
         onToggleFirePin={handleToggleFirePinMode}
       />
-      <StationResponseControl hasFireIncident={!!fire} actionContainer={responseActionContainer} />
+      <StationResponseControl fireIncident={fireIncident} actionContainer={responseActionContainer} onViewFireLocation={handleViewFireNotification} />
+      {sharedFires.error && <p role="alert" className="pointer-events-auto absolute bottom-24 left-4 right-20 z-[2400] max-w-sm rounded-lg bg-white/95 p-3 text-xs text-red-600 shadow dark:bg-neutral-900">{sharedFires.error}</p>}
 
       {/* Fire-pin mode hint. Bottom-center on desktop (clear of the search bar
           and the side panels); under the search row on phones, pushed below
