@@ -1,5 +1,38 @@
 # Station account profiles
 
+## Hydrant editing by station AoR
+
+The authoritative AoR is `stations/{stationId}.aorBarangays`. In **Admin →
+Station Directory → Edit AoR**, enter the exact barangay names found on hydrants,
+separated by commas. This setting applies to the station account and all approved
+authorized/head members assigned to that station. Personal `aorBarangays` lists
+no longer grant hydrant-edit permissions. General accounts remain read-only.
+
+Station accounts and eligible members may edit inspection/status fields within
+that active station's AoR, including pressure, cleanliness, hazards, notes, photos
+and the inspection register. They cannot change hydrant coordinates or barangay,
+or delete hydrants. Admins retain global editing. A missing/inactive station,
+unapproved membership, missing hydrant barangay, or an empty AoR disables editing.
+Map AoR highlighting uses the same station list. Existing unconfigured stations
+need admin setup before their members can edit; no placeholder AoR is assumed.
+
+Firestore enforces these boundaries even when clients bypass the UI. Deploy the
+updated rules separately from Vercel and verify `npm run check:firebase`. No new
+indexes are needed. Creation of new hydrants and report permissions are separate
+from these existing-hydrant editing rules.
+
+Verification: `test/aor-rules.test.mjs` and
+`test/station-hydrant-aor-rules.test.mjs` run against the Firestore emulator;
+`node --test test/hydrant-edit-access.test.mjs` checks matching UI decisions.
+The rule tests cover inside/outside AoR edits, station/head/authorized roles,
+unapproved and general accounts, account-list spoofing, inactive/empty stations,
+immutable coordinates/barangay, and admin-only AoR configuration.
+
+Scoped security review:
+```json
+{"score":5,"summary":"Station records supply AoR authority; approved membership and roles gate access, non-admin edits use a field allowlist, and only admins configure AoR.","findings":[]}
+```
+
 ## Login activity status
 
 Personal and station accounts with a live session display `Active now` (green).
@@ -8,8 +41,9 @@ Offline accounts explicitly display `Last logged in [date and time] (PHT)` using
 alone never marks someone active. Profile popups show membership separately.
 
 `AccountPresenceReporter` runs only for a Firebase-authenticated user with a
-loaded account role. Each tab/device writes its own UUID record at
-`accountPresenceSessions/{sessionId}` with only `uid`, assigned `stationId` and
+loaded account role. Each account has a readable console heading at
+`accountPresence/{uid}` and each tab/device writes its own UUID record at
+`accountPresence/{uid}/presenceSessions/{sessionId}` with only `uid`, assigned `stationId` and
 server-generated `lastSeenAt`. Heartbeats run once per minute, on focus and on
 reconnection. Explicit sign-out attempts to remove that session before identity
 is cleared, without blocking an offline logout indefinitely. Other devices keep
@@ -22,8 +56,8 @@ Only owners may create/update their own presence, with the current assigned
 station and request-time timestamp. Admins can read the directory; station heads
 and existing station delegates can read same-station presence. General users
 can read only their own sessions. Presence never grants permissions. No location,
-IP address or device fingerprint is stored. The `uid`/`stationId` index supports
-same-station profile lookups. Stale documents are ignored by freshness checks;
+IP address or device fingerprint is stored. Collection-group indexes support
+station-wide and recent-presence lookups. Stale documents are ignored by freshness checks;
 administrators may remove them as maintenance. Existing login timestamp writes
 and token/session verification are unchanged.
 
@@ -57,7 +91,31 @@ notification read and grants no account-edit, removal or reassignment controls.
 Roster queries, presence and response subscriptions are station-scoped and covered
 by existing manager/admin read permissions. Tests verify public visitors,
 ordinary members and other-station heads cannot issue these roster queries.
-No additional rules or indexes are needed for this panel.
+The `presenceSessions.stationId` collection-group index supports the roster query.
+
+## Operational Firestore layout
+
+Station-owned workflow data is nested below its station:
+
+- `stations/{stationId}/joinRequests/{uid}`
+- `stations/{stationId}/responses/{responseId}`
+- `stations/{stationId}/notifications/{notificationId}`
+- `stations/{stationId}/unitLocations/{responseId}`
+
+`stationAccountIndex/{uid}` intentionally remains a minimal top-level lookup. A
+Firebase UID does not contain a station ID, so authenticated server and rules code
+need this index to locate `stations/{stationId}/accounts/{uid}` without scanning
+every station. It contains no password, token, role, or contact information.
+
+Preview the non-destructive operational-data copy with:
+
+```powershell
+npm run migrate:operational-layout -- --project hydro-scout
+```
+
+After the preview is reviewed, the new app/rules/indexes are ready, and a backup
+exists, add `--apply`. The migration copies records to the nested layout and never
+deletes the legacy source collections, allowing rollback during rollout.
 
 ## Profile storage
 

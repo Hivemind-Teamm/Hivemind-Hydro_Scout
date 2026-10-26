@@ -1,7 +1,24 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import ts from 'typescript';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { limitedNotificationFeed, notificationProfile, serializeLimitedNotification } from '../lib/limited-notification-service.ts';
+
+const require = createRequire(import.meta.url);
+const cache = new Map();
+function load(file) {
+  if (cache.has(file)) return cache.get(file);
+  const exports = {};
+  cache.set(file, exports);
+  const code = ts.transpileModule(readFileSync(file, 'utf8'), { compilerOptions: {
+    module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
+  } }).outputText;
+  new Function('require', 'exports', code)(id => id.startsWith('.') ? load(path.resolve(path.dirname(file), `${id}.ts`)) : require(id), exports);
+  return exports;
+}
+const { limitedNotificationFeed, notificationProfile, serializeLimitedNotification } = load(path.resolve('lib/limited-notification-service.ts'));
 
 if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Local Firestore emulator required.');
 const app = initializeApp({ projectId: 'demo-limited-notifications' }, 'limited-notifications-test');
@@ -13,12 +30,12 @@ try {
     'users/member': { accountType: 'person', role: 'authorized', stationId: 'one', stationMembershipStatus: 'approved' },
     'users/general': { accountType: 'person', role: 'general' },
     'users/delegate': { accountType: 'person', role: 'authorized', stationId: 'one', stationMembershipStatus: 'pending', stationAccessIds: ['one'] },
-    'stationJoinRequests/general': { uid: 'general', stationId: 'one', status: 'rejected', createdAt: stamp, reviewedAt: stamp },
-    'stationJoinRequests/other': { uid: 'other', stationId: 'one', status: 'pending', createdAt: stamp },
+    'stations/one/joinRequests/general': { uid: 'general', stationId: 'one', status: 'rejected', createdAt: stamp, reviewedAt: stamp },
+    'stations/one/joinRequests/other': { uid: 'other', stationId: 'one', status: 'pending', createdAt: stamp },
     'stations/one/notifications/fire': { type: 'fire-pinned', message: 'SECRET person pinned fire', uid: 'SECRET', displayName: 'SECRET', createdAt: stamp, lat: 14.65, lng: 121.06 },
     'stations/one/notifications/account': { type: 'personal-station-assigned', message: 'SECRET admin email', createdAt: stamp },
     'stations/two/notifications/other': { type: 'fire-pinned', message: 'Other station', createdAt: stamp },
-    'stationResponses/response': { stationId: 'one', status: 'active', uid: 'SECRET', displayName: 'SECRET', lastLocationAt: stamp, startedAt: stamp },
+    'stations/one/responses/response': { stationId: 'one', status: 'active', uid: 'SECRET', displayName: 'SECRET', lastLocationAt: stamp, startedAt: stamp },
     'stations/one/notifications/response_start': { type: 'response-started', responseId: 'response', uid: 'SECRET', displayName: 'SECRET', message: 'SECRET responding', createdAt: stamp },
     'hydrants/HYD-001/reports/own': { reporterUid: 'general', status: 'pending', description: 'PRIVATE', createdAt: stamp },
     'hydrants/HYD-001/reports/other': { reporterUid: 'other', status: 'resolved', createdAt: stamp },
@@ -37,7 +54,7 @@ try {
   await db.doc('users/member').update({ stationMembershipStatus: 'rejected' });
   assert.deepEqual(await feed('member'), []);
   await db.doc('users/member').update({ stationMembershipStatus: 'approved' });
-  await db.doc('stationResponses/response').update({ status: 'ended', endedAt: Timestamp.fromMillis(2000), endedByName: 'SECRET' });
+  await db.doc('stations/one/responses/response').update({ status: 'ended', endedAt: Timestamp.fromMillis(2000), endedByName: 'SECRET' });
   await db.doc('stations/one/notifications/response_end').set({ type: 'response-ended', responseId: 'response', message: 'SECRET ended', createdAt: Timestamp.fromMillis(2000) });
   const ended = (await feed('member')).filter(item => item.response);
   assert.equal(ended.length, 1);

@@ -12,7 +12,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check:firebase": "node ./scripts/check-firebase-deploy.mjs"
+    "check:firebase": "node ./scripts/check-firebase-deploy.mjs",
+    "migrate:operational-layout": "node ./scripts/migrate-operational-layout.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^2.0.5",

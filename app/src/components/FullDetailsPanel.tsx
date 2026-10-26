@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth-context';
+import { useHydrantEditAccess } from '@/lib/use-hydrant-edit-access';
 import { useIsMobile } from '@/lib/use-media-query';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { type Report, STATUS_COLORS } from '../data/reports';
@@ -539,6 +540,7 @@ function MaintenanceTab({ hydrant, linkedReports, onViewUser }: {
 /* ──────────────────────── ADMIN ──────────────────────── */
 function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHeadOrAdmin: boolean; onClose: () => void }) {
   const { user, role } = useAuth();
+  const canEdit = useHydrantEditAccess(hydrant.barangay);
   const [validating,      setValidating]      = useState(false);
   const [validated,       setValidated]       = useState(false);
   const [flagging,        setFlagging]        = useState(false);
@@ -551,6 +553,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
   const userRole = role ?? 'admin';
 
   async function handleValidate() {
+    if (!canEdit) return;
     setValidating(true); setActionError(null);
     try { await validateHydrant(hydrant.id, by, userRole); setValidated(true); }
     catch (e) { setActionError(e instanceof Error ? e.message : 'Failed to validate.'); }
@@ -558,6 +561,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
   }
 
   async function handleFlag() {
+    if (!canEdit) return;
     setFlagging(true); setActionError(null);
     try { await flagForReinspection(hydrant.id, by, userRole); setFlagged(true); }
     catch (e) { setActionError(e instanceof Error ? e.message : 'Failed to flag.'); }
@@ -601,7 +605,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
             {/* Validate */}
             <button
               onClick={handleValidate}
-              disabled={validating || validated}
+              disabled={!canEdit || validating || validated}
               className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] hover:bg-neutral-50 active:scale-[0.98] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
             >
               {validating ? 'Validating…' : validated ? <span className="inline-flex items-center gap-1"><FiCheck className="h-3.5 w-3.5" strokeWidth={3} /> Record Validated</span> : 'Validate Hydrant Record'}
@@ -610,7 +614,7 @@ function AdminTab({ hydrant, isHeadOrAdmin, onClose }: { hydrant: Hydrant; isHea
             {/* Flag for Re-inspection */}
             <button
               onClick={handleFlag}
-              disabled={flagging || flagged}
+              disabled={!canEdit || flagging || flagged}
               className="w-full rounded-lg border border-neutral-200 py-2.5 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] hover:bg-neutral-50 active:scale-[0.98] active:duration-75 disabled:pointer-events-none disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
             >
               {flagging ? 'Flagging…' : flagged ? <span className="inline-flex items-center gap-1"><FiCheck className="h-3.5 w-3.5" strokeWidth={3} /> Flagged for Re-inspection</span> : 'Flag for Re-inspection'}

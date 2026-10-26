@@ -3,6 +3,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { adminApp } from '@/lib/firebase-admin';
 import { clearFireIncident, FireClearError } from '@/lib/clear-fire-incident';
+import { FIRE_INCIDENT_ID_PATTERN } from '@/lib/firestore-layout.mjs';
 
 export const runtime = 'nodejs';
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (!session) return reply({ error: 'Authentication required.' }, 401);
   let id: unknown;
   try { id = (await req.json()).id; } catch { return reply({ error: 'Invalid request.' }, 400); }
-  if (typeof id !== 'string' || !/^[A-Za-z0-9]{20}$/.test(id)) return reply({ error: 'Invalid incident.' }, 400);
+  if (typeof id !== 'string' || !FIRE_INCIDENT_ID_PATTERN.test(id)) return reply({ error: 'Invalid incident.' }, 400);
   try {
     const app = adminApp();
     const decoded = await getAuth(app).verifySessionCookie(session, true);
