@@ -17,12 +17,13 @@ try {
   const dbFor = uid => uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore();
   const data = (uid = 'member', stationId = 'one') => ({ uid, stationId, lastSeenAt: serverTimestamp() });
   const member = dbFor('member');
-  const path = `accountPresenceSessions/${first}`;
+  const path = `accountPresence/member/presenceSessions/${first}`;
+  await assertSucceeds(member.doc('accountPresence/member').set({ uid: 'member', stationId: 'one', displayName: 'Member' }));
   await assertSucceeds(member.doc(path).set(data()));
   await assertSucceeds(member.doc(path).set(data()));
   await assertSucceeds(member.doc(path).get());
-  await assertSucceeds(dbFor('admin').collection('accountPresenceSessions').where('lastSeenAt', '>', Timestamp.fromMillis(0)).get());
-  await assertSucceeds(dbFor('head').collection('accountPresenceSessions').where('uid', '==', 'member').where('stationId', '==', 'one').get());
+  await assertSucceeds(dbFor('admin').collectionGroup('presenceSessions').where('lastSeenAt', '>', Timestamp.fromMillis(0)).get());
+  await assertSucceeds(dbFor('head').collection('accountPresence/member/presenceSessions').where('stationId', '==', 'one').get());
   for (const uid of [null, 'outsider', 'general']) {
     await assertFails(dbFor(uid).doc(path).get());
     await assertFails(dbFor(uid).doc(path).set(data()));
@@ -31,14 +32,15 @@ try {
   for (const patch of [{ uid: 'head' }, { stationId: 'two' }, { lastSeenAt: Timestamp.fromMillis(0) }, { extra: true }]) {
     await assertFails(member.doc(path).set({ ...data(), ...patch }));
   }
+  await assertFails(member.doc('accountPresence/head/presenceSessions/00000000-0000-4000-8000-000000000005').set(data()));
   for (const field of ['uid', 'stationId', 'lastSeenAt']) await assertFails(member.doc(path).update({ [field]: deleteField() }));
   await assertFails(dbFor('head').doc(path).update({ lastSeenAt: serverTimestamp() }));
-  await assertFails(member.doc('accountPresenceSessions/not-a-session').set(data()));
-  await assertSucceeds(member.doc(`accountPresenceSessions/${second}`).set(data()));
+  await assertFails(member.doc('accountPresence/member/presenceSessions/not-a-session').set(data()));
+  await assertSucceeds(member.doc(`accountPresence/member/presenceSessions/${second}`).set(data()));
   await assertSucceeds(member.doc(path).delete());
-  await assertSucceeds(member.doc(`accountPresenceSessions/${second}`).get());
-  await assertSucceeds(dbFor('general').doc('accountPresenceSessions/00000000-0000-4000-8000-000000000003').set(data('general', null)));
-  await assertSucceeds(dbFor('station').doc('accountPresenceSessions/00000000-0000-4000-8000-000000000004').set(data('station')));
-  await assertFails(dbFor('station').collection('accountPresenceSessions').get());
+  await assertSucceeds(member.doc(`accountPresence/member/presenceSessions/${second}`).get());
+  await assertSucceeds(dbFor('general').doc('accountPresence/general/presenceSessions/00000000-0000-4000-8000-000000000003').set(data('general', null)));
+  await assertSucceeds(dbFor('station').doc('accountPresence/station/presenceSessions/00000000-0000-4000-8000-000000000004').set(data('station')));
+  await assertFails(dbFor('station').collectionGroup('presenceSessions').get());
   console.log('Account presence ownership, station privacy, immutable identity, session isolation and timestamp checks passed.');
 } finally { await env.cleanup(); }

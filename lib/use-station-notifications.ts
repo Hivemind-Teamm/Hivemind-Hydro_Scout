@@ -85,12 +85,12 @@ function useManagementNotifications() {
       publish();
       syncLocalReads();
     }, fail);
-    const stopRequests = onSnapshot(query(collection(db, 'stationJoinRequests'), where('stationId', '==', stationId), where('status', '==', 'pending')), snapshot => {
+    const stopRequests = onSnapshot(query(collection(db, 'stations', stationId, 'joinRequests'), where('status', '==', 'pending')), snapshot => {
       requests = snapshot.docs.map(record => ({ ...record.data(), id: record.id } as JoinRequest));
       publish();
       syncLocalReads();
     }, fail);
-    const stopResponses = onSnapshot(query(collection(db, 'stationResponses'), where('stationId', '==', stationId)), snapshot => {
+    const stopResponses = onSnapshot(collection(db, 'stations', stationId, 'responses'), snapshot => {
       responses = snapshot.docs.map(record => ({ ...record.data(), id: record.id } as StationResponseSummary));
       publish();
     }, responseError => {

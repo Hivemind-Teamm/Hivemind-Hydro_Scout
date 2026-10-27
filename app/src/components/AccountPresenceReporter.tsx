@@ -12,7 +12,10 @@ export default function AccountPresenceReporter() {
   const uid = !loading && role !== null ? user?.uid : undefined;
   useEffect(() => {
     if (!uid) return;
-    const ref = doc(db, 'accountPresenceSessions', crypto.randomUUID());
+    // A readable account heading in the console; this metadata never grants access.
+    void setDoc(doc(db, 'accountPresence', uid), { uid, stationId, displayName: user?.displayName || user?.email || 'Account' })
+      .catch(error => console.warn('Account presence label could not update:', error.code));
+    const ref = doc(db, 'accountPresence', uid, 'presenceSessions', crypto.randomUUID());
     const session = presenceSession(
       () => setDoc(ref, { uid, stationId, lastSeenAt: serverTimestamp() }),
       () => deleteDoc(ref),
@@ -44,6 +47,6 @@ export default function AccountPresenceReporter() {
       document.removeEventListener('visibilitychange', visible);
       void removeWithTimeout().finally(unsubscribe);
     };
-  }, [uid, stationId]);
+  }, [uid, stationId, user?.displayName, user?.email]);
   return null;
 }

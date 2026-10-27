@@ -26,7 +26,7 @@ export async function limitedNotificationFeed(db: Firestore, uid: string, profil
     const events = await db.collection(`stations/${access.stationId}/notifications`).orderBy('createdAt', 'desc').limit(100).get();
     const notices = events.docs.map(record => ({ ...record.data(), id: record.id }) as StationNotification);
     const responseIds = [...new Set(notices.flatMap(item => item.responseId ? [item.responseId] : []))];
-    const records = responseIds.length ? await db.getAll(...responseIds.map(id => db.doc(`stationResponses/${id}`))) : [];
+    const records = responseIds.length ? await db.getAll(...responseIds.map(id => db.doc(`stations/${access.stationId}/responses/${id}`))) : [];
     const responses = records.filter(record => record.data()?.stationId === access.stationId)
       .map(record => ({ ...record.data(), id: record.id }) as StationResponseSummary);
     for (const source of stationNotificationFeed(notices, responses)) {
@@ -37,10 +37,11 @@ export async function limitedNotificationFeed(db: Firestore, uid: string, profil
     }
   }
   const [request, reports] = await Promise.all([
-    db.doc(`stationJoinRequests/${uid}`).get(),
+    db.collectionGroup('joinRequests').where('uid', '==', uid).get(),
     db.collectionGroup('reports').where('reporterUid', '==', uid).orderBy('createdAt', 'desc').limit(100).get(),
   ]);
-  const membership = request.data();
+  const membership = request.docs.map(record => record.data())
+    .sort((a, b) => millis(b.reviewedAt ?? b.createdAt) - millis(a.reviewedAt ?? a.createdAt))[0];
   if (membership?.uid === uid && ['pending', 'approved', 'rejected'].includes(membership.status)) {
     const createdAt = membership.reviewedAt ?? membership.createdAt;
     items.push({ id: token(`membership:${uid}:${membership.status}`, millis(createdAt)), limited: true,

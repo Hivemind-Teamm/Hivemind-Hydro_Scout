@@ -11,11 +11,11 @@ export async function clearFireIncident(db: Firestore, uid: string, id: string) 
   const role = profile.accountType === 'station' ? 'head' : profile.role;
   if (!['authorized', 'head', 'admin'].includes(role)) throw new FireClearError('Not authorized to clear incidents.', 403);
   return db.runTransaction(async transaction => {
-    const pinRef = db.doc(`firePins/${id}`);
+    const pinRef = db.doc(`fireIncidents/${id}`);
     const [pin, owner, responders, incidents] = await Promise.all([
-      transaction.get(pinRef), transaction.get(db.doc(`firePinOwners/${id}`)),
-      transaction.get(db.collection('stationResponses').where('status', '==', 'active')),
-      transaction.get(db.collection('firePins').where('status', '==', 'active')),
+      transaction.get(pinRef), transaction.get(db.doc(`fireIncidents/${id}/ownership/record`)),
+      transaction.get(db.collectionGroup('responses').where('status', '==', 'active')),
+      transaction.get(db.collection('fireIncidents').where('status', '==', 'active')),
     ]);
     if (!pin.exists) throw new FireClearError('Incident not found.', 404);
     const data = pin.data()!;
