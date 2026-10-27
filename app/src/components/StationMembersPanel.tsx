@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collectionGroup, collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { FiX } from 'react-icons/fi';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
@@ -31,7 +31,7 @@ export default function StationMembersPanel({ stationId, stationName, responding
       });
       setState({ scope, members, loading: false, error: null });
     }, () => setState({ scope, members: [], loading: false, error: 'Station members could not load. Check your connection and station access.' }));
-    const stopPresence = onSnapshot(query(collectionGroup(db, 'presenceSessions'), where('stationId', '==', stationId)), snapshot => {
+    const stopPresence = onSnapshot(query(collection(db, 'accountPresenceSessions'), where('stationId', '==', stationId)), snapshot => {
       setPresence({ scope, records: snapshot.docs.map(record => record.data() as PresenceRecord), receivedAt: Date.now() });
     }, () => setPresence({ scope, records: [], receivedAt: 0 }));
     return () => { stopMembers(); stopPresence(); };

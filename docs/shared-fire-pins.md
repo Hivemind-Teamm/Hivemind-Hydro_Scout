@@ -28,8 +28,8 @@ coordinate bounds and prevents reopening cleared records through a client edit.
 
 ## Data and privacy
 
-`fireIncidents/{id}` contains only `lat`, `lng`, `stationId`, `status`, `createdAt`,
-and `updatedAt`. Its immutable `fireIncidents/{id}/ownership/record` document contains
+`firePins/{id}` contains only `lat`, `lng`, `stationId`, `status`, `createdAt`,
+and `updatedAt`. Its separate immutable `firePinOwners/{id}` document contains
 `uid`, `stationId`, and `createdAt`; only the creator, appropriate station managers
 and admins can read it. Signed-in general map readers receive no creator identity.
 Creation atomically saves the map pin, ownership and the creator station's activity
@@ -44,9 +44,8 @@ Active shared pins persist across reloads until explicitly cleared; the previous
 local 12-hour expiry no longer controls them. Hydrant selections, supply routes,
 addresses and panel selection remain local UI state.
 
-Deploy the revised Firestore rules and indexes with the app. New incident IDs use
-`FIRE-YYYYMMDD-<random>` for easier console navigation; migrated records retain
-their old IDs so stored references and history remain valid.
+Deploy the revised Firestore rules with the app. The active-status and own-owner
+queries use default single-field indexes; there is no new fire-pin composite index.
 
 ## Verification
 
@@ -63,18 +62,6 @@ Focused rule audit:
 { "score": 5, "summary": "Signed-in-only map data, separate private ownership, authoritative station/creator validation, bounded fields, immutable ownership and creation metadata, and explicit edit roles. Tested public denial and cross-client updates.", "findings": [] }
 ```
 # Incident-linked responses
-
-General accounts can select an active fire marker to open a read-only incident
-panel showing latitude, longitude, pin date/time in PHT, status and **View in map**.
-If that incident is cleared while selected, its details update to Cleared.
-The panel exposes no personnel data, response actions, planning, or edit controls.
-Public visitors have no access. Only approved Authorized and Head personal
-accounts with a station assignment can start/end responses. General and station
-accounts cannot perform personal response actions; admins coordinate incidents
-but do not start personal responses. Firestore also rejects General response
-starts, manual ends, heartbeats and response-location writes. If an existing
-responder is demoted to General, their client removes its response marker;
-incident clearing or station management can close the old response record.
 
 New responses store `firePinId`, `incidentLat`, and `incidentLng`. Starting a
 response requires the selected incident to remain active, with matching

@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 export interface Station {
   id: string;
   name: string;
   active: boolean;
-  aorBarangays?: string[];
 }
 
 export function useStations() {
@@ -23,7 +22,6 @@ export function useStations() {
         id: record.id,
         name: typeof record.data().name === 'string' ? record.data().name : record.id,
         active: true,
-        aorBarangays: Array.isArray(record.data().aorBarangays) ? record.data().aorBarangays.filter((value: unknown): value is string => typeof value === 'string') : [],
       })).sort((a, b) => a.name.localeCompare(b.name)));
       setError(null);
       setLoading(false);
@@ -36,12 +34,6 @@ export function useStations() {
   ), []);
 
   return { stations, loading, error };
-}
-
-export async function updateStationAor(id: string, text: string) {
-  const aorBarangays = [...new Set(text.split(/[,\n]/).map(value => value.trim()).filter(Boolean))];
-  if (aorBarangays.length > 100 || aorBarangays.some(value => value.length > 120)) throw new Error('Use up to 100 barangays, each at most 120 characters.');
-  await updateDoc(doc(db, 'stations', id), { aorBarangays });
 }
 
 export async function createStation(idInput: string, nameInput: string) {

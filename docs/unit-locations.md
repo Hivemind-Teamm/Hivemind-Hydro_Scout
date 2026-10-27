@@ -85,7 +85,7 @@ necessary before considering this an operational incident workflow.
   do not contain a responder UID or display name. Anonymous visitors cannot read
   these locations.
 - The responder, that station's head, administrators, and users delegated station
-  access can read the private `stations/{stationId}/responses` history, which includes the
+  access can read the private `stationResponses` history, which includes the
   responder identity and response times.
 - Full station notifications are visible to the head and administrators.
   Approved authorized station members receive a server-filtered operational
@@ -133,11 +133,8 @@ the live location. The response history remains.
 | --- | --- | --- |
 | `stations/{stationId}` | Admin-managed station ID, name, active flag | Public station directory |
 | `stations/{stationId}/unitLocations/{reportId}` | Station GPS reports and active responder map positions | Active response reports are signed-in-readable; private station reports are restricted to their owner and station managers |
-| `stations/{stationId}/joinRequests/{uid}` | Requested station and review status | Requesting user and station managers |
-| `stations/{stationId}/responses/{responseId}` | Private responder identity, station and start/end history | Responder, station head/delegates, administrators |
-| `accountPresence/{uid}/presenceSessions/{sessionId}` | Per-device/tab online heartbeat without location | Account owner, same-station managers, administrators |
-| `fireIncidents/{incidentId}` | Signed-in shared fire marker and lifecycle state | Signed-in accounts |
-| `fireIncidents/{incidentId}/ownership/record` | Incident creator and station ownership | Creator, station managers, administrators |
+| `stationJoinRequests/{uid}` | Requested station and review status | Requesting user and station managers |
+| `stationResponses/{responseId}` | Private responder identity, station and start/end history | Responder, station head/delegates, administrators |
 | `stations/{stationId}/notifications/{id}` | Membership, response, and map activity | Raw documents: station head/admins; limited operational projection via authenticated API for approved authorized station members |
 | `stations/{stationId}/notificationReads/{uid}/items/{id}` | Management event-version read receipts | Only that account, while it is a station head/admin |
 | `users/{uid}/notificationReads/{eventVersionHash}` | Limited-role read receipts | Own account, through the authenticated notifications API |

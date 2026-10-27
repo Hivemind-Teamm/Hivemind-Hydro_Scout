@@ -33,8 +33,6 @@ const testEnv = await initializeTestEnvironment({
 
 await testEnv.withSecurityRulesDisabled(async (context) => {
   const db = context.firestore();
-  await db.doc('stations/STATION-A').set({ name: 'Station A', active: true, aorBarangays: ['Barangay Bagong Pag-asa', 'Barangay Bago Bantay'] });
-  await db.doc('stations/STATION-B').set({ name: 'Station B', active: true, aorBarangays: ['Barangay Holy Spirit'] });
 
   await db.doc("stations/STATION-A/accounts/station-a-user").set({
     uid: "station-a-user",
@@ -221,7 +219,7 @@ await check(
     .collection("hydrants")
     .doc("HYD-A")
     .update({
-      address: "Unauthorized address edit",
+      notes: "Unauthorized notes edit",
     }),
   false
 );
@@ -233,7 +231,7 @@ await check(
     .doc("HYD-A")
     .update({
       operationalStatus: "Reduced Pressure",
-      address: "Unauthorized address edit",
+      notes: "Unauthorized notes edit",
     }),
   false
 );
@@ -245,14 +243,14 @@ await check(
 console.log("\n=== Existing elevated permissions ===");
 
 await check(
-  "unassigned head cannot edit hydrants",
+  "head retains approved hydrant update permission",
   dbFor("head-user")
     .collection("hydrants")
     .doc("HYD-B")
     .update({
       operationalStatus: "Reduced Pressure",
     }),
-  false
+  true
 );
 
 await check(

@@ -2,7 +2,6 @@
 
 import { useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { useHydrantEditAccess } from '@/lib/use-hydrant-edit-access';
 import { useIsMobile } from '@/lib/use-media-query';
 import { type Hydrant, type HydrantStatus } from '../data/hydrants';
 import { updateHydrantStatus } from '../data/store';
@@ -29,7 +28,6 @@ const STATUS_OPTIONS: { value: HydrantStatus; label: string; color: string; bg: 
 
 export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: EditStatusPanelProps) {
   const { user, role, accountType } = useAuth();
-  const canEdit = useHydrantEditAccess(hydrant.barangay);
   const isMobile = useIsMobile();
   const [selectedStatus, setSelectedStatus] = useState<HydrantStatus>(hydrant.status);
   const [cleanliness, setCleanliness] = useState('');
@@ -80,7 +78,6 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   }
 
   async function handleSubmit() {
-    if (!canEdit) { setError('Editing is limited to your station’s assigned AoR.'); return; }
     if (!user) { setError('You must be signed in to edit a hydrant.'); return; }
     setSaving(true);
     setError(null);
@@ -267,7 +264,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!canEdit || saving || uploading}
+            disabled={saving || uploading}
             className="flex-1 rounded-lg bg-[#e0353b] py-2 text-sm font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.02] hover:shadow-[0_4px_14px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75 disabled:opacity-60 disabled:pointer-events-none"
           >
             {saving ? 'Saving…' : 'Submit'}

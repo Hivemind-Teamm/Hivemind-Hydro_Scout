@@ -66,7 +66,7 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
           </div>
 
           <div className="rounded-lg bg-neutral-50 border border-neutral-200 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400">
-            Full contact information is visible only to Admins and users with the Head role.
+            Full contact information is visible to Station Heads and Administrators only.
           </div>
 
           <button

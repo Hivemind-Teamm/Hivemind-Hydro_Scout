@@ -15,7 +15,7 @@ try {
       uid: 'admin', role: 'admin', accountType: 'person', displayName: 'Admin',
     });
     await db.doc('stations/DILIMAN-01').set({ name: 'Diliman Fire Station', active: true, createdAt: serverTimestamp() });
-    await db.doc('fireIncidents/abcdefghijklmnopqrst').set({ lat: 14.65, lng: 121.06, stationId: 'DILIMAN-01', status: 'active', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await db.doc('firePins/abcdefghijklmnopqrst').set({ lat: 14.65, lng: 121.06, stationId: 'DILIMAN-01', status: 'active', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     await db.doc('stations/DILIMAN-01/accounts/head-1').set({
       uid: 'head-1', accountType: 'station', stationId: 'DILIMAN-01',
       displayName: 'Diliman Fire Station',
@@ -50,7 +50,7 @@ try {
     createdAt: serverTimestamp(),
     lastLoginAt: serverTimestamp(),
   });
-  signup.set(newMemberDb.doc('stations/DILIMAN-01/joinRequests/new-member'), {
+  signup.set(newMemberDb.doc('stationJoinRequests/new-member'), {
     uid: 'new-member',
     displayName: 'New Member',
     email: 'new-member@example.test',
@@ -59,18 +59,7 @@ try {
     createdAt: serverTimestamp(),
   });
   await assertSucceeds(signup.commit());
-  const wrongParentDb = dbFor('wrong-parent');
-  const wrongParent = wrongParentDb.batch();
-  wrongParent.set(wrongParentDb.doc('users/wrong-parent'), {
-    email: 'wrong-parent@example.test', displayName: 'Wrong Parent', role: 'general', accountType: 'person',
-    stationMembershipStatus: 'pending', requestedStationId: 'DILIMAN-01', createdAt: serverTimestamp(), lastLoginAt: serverTimestamp(),
-  });
-  wrongParent.set(wrongParentDb.doc('stations/DILIMAN-02/joinRequests/wrong-parent'), {
-    uid: 'wrong-parent', displayName: 'Wrong Parent', email: 'wrong-parent@example.test',
-    stationId: 'DILIMAN-01', status: 'pending', createdAt: serverTimestamp(),
-  });
-  await assertFails(wrongParent.commit());
-  const pendingRequest = await headDb.doc('stations/DILIMAN-01/joinRequests/new-member').get();
+  const pendingRequest = await headDb.doc('stationJoinRequests/new-member').get();
   assert.equal(pendingRequest.data().status, 'pending');
   await assertFails(newMemberDb.doc('stations/DILIMAN-01/notifications/join-new-member').set({
     type: 'station-join-request',
@@ -80,11 +69,11 @@ try {
     createdAt: serverTimestamp(),
   }));
 
-  const pendingRequests = await headDb.collection('stations/DILIMAN-01/joinRequests')
-    .where('status', '==', 'pending').get();
+  const pendingRequests = await headDb.collection('stationJoinRequests')
+    .where('stationId', '==', 'DILIMAN-01').where('status', '==', 'pending').get();
   assert.equal(pendingRequests.size, 1);
   const approval = headDb.batch();
-  approval.update(headDb.doc('stations/DILIMAN-01/joinRequests/new-member'), {
+  approval.update(headDb.doc('stationJoinRequests/new-member'), {
     status: 'approved', reviewedAt: serverTimestamp(), reviewedBy: 'head-1',
   });
   approval.update(headDb.doc('users/new-member'), {
@@ -140,15 +129,15 @@ try {
   await assertFails(forgedAssignment.commit());
 
   const responseId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  const responsePath = `stations/DILIMAN-01/responses/${responseId}`;
+  const responsePath = `stationResponses/${responseId}`;
   const locationPath = `stations/DILIMAN-01/unitLocations/${responseId}`;
   const noticePath = `stations/DILIMAN-01/notifications/${responseId}_start`;
 
   const memberDb = dbFor('member-1');
-  const buildStart = (incident = {}, destination = responsePath) => {
+  const buildStart = (incident = {}) => {
   const start = memberDb.batch();
   start.update(memberDb.doc('users/member-1'), { activeResponseId: responseId });
-  start.set(memberDb.doc(destination), {
+  start.set(memberDb.doc(responsePath), {
     firePinId: 'abcdefghijklmnopqrst', incidentLat: 14.65, incidentLng: 121.06, ...incident,
     responseId,
     uid: 'member-1',
@@ -180,15 +169,11 @@ try {
   });
   return start;
   };
-  // Approved membership alone must not grant General accounts response privileges.
-  await assertFails(buildStart().commit());
-  await env.withSecurityRulesDisabled(context => context.firestore().doc('users/member-1').update({ role: 'authorized' }));
-  await assertFails(buildStart({}, `stations/DILIMAN-02/responses/${responseId}`).commit());
   await assertFails(buildStart({ firePinId: 'missingincidentpin00' }).commit());
   await assertFails(buildStart({ incidentLat: 10 }).commit());
-  await env.withSecurityRulesDisabled(context => context.firestore().doc('fireIncidents/abcdefghijklmnopqrst').update({ status: 'cleared' }));
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst').update({ status: 'cleared' }));
   await assertFails(buildStart().commit());
-  await env.withSecurityRulesDisabled(context => context.firestore().doc('fireIncidents/abcdefghijklmnopqrst').update({ status: 'active' }));
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst').update({ status: 'active' }));
   await assertSucceeds(buildStart().commit());
 
   const otherDb = dbFor('member-2');
@@ -201,7 +186,7 @@ try {
   assert.equal(publicLocations.size, 1);
   assert.equal(publicLocations.docs[0].id, responseId);
   await assertFails(otherDb.doc(noticePath).get());
-  await assertSucceeds(headDb.doc('stations/DILIMAN-01/joinRequests/new-member').get());
+  await assertSucceeds(headDb.doc('stationJoinRequests/new-member').get());
   await assertFails(otherDb.doc('stations/DILIMAN-01/unitLocations/not-a-real-response').set({
     responseId: 'not-a-real-response', stationId: 'DILIMAN-01', stationName: 'Diliman Fire Station',
     public: true, lat: 14.65, lng: 121.06, accuracy: 8, updatedAt: serverTimestamp(),
@@ -221,7 +206,6 @@ try {
     updatedAt: serverTimestamp(),
   }));
 
-  const buildEnd = () => {
   const end = memberDb.batch();
   end.update(memberDb.doc(responsePath), {
     status: 'ended',
@@ -240,14 +224,7 @@ try {
     message: 'Responder One ended responding.',
     createdAt: serverTimestamp(),
   });
-  return end;
-  };
-  await env.withSecurityRulesDisabled(context => context.firestore().doc('users/member-1').update({ role: 'general' }));
-  await assertFails(memberDb.doc(responsePath).update({ lastLocationAt: serverTimestamp() }));
-  await assertFails(memberDb.doc(locationPath).update({ lat: 14.67, updatedAt: serverTimestamp() }));
-  await assertFails(buildEnd().commit());
-  await env.withSecurityRulesDisabled(context => context.firestore().doc('users/member-1').update({ role: 'authorized' }));
-  await assertSucceeds(buildEnd().commit());
+  await assertSucceeds(end.commit());
   let endedLocation;
   await env.withSecurityRulesDisabled(async ctx => {
     endedLocation = await ctx.firestore().doc(locationPath).get();

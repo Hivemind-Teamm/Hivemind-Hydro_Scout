@@ -4,8 +4,8 @@ rules_version = '2';
 // index at stationAccountIndex/{uid} contains only stationId.
 //
 // F1 Station Accounts + AOR:
-// stations/{stationId}.aorBarangays defines the shared Area of Responsibility.
-// Non-admin hydrant edits require an active station and an eligible member.
+// Profile aorBarangays contains the assigned Area of Responsibility. An
+// authorized account may update only operationalStatus within that AOR.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -65,11 +65,9 @@ service cloud.firestore {
           && stationId in currentUserData().get('stationAccessIds', [])));
     }
 
-    // Personal response privileges require operational authorization, not just membership.
     function isApprovedStationMember(stationId) {
       return isSignedIn()
         && currentUserData().get('accountType', null) == 'person'
-        && userRole() in ['authorized', 'head']
         && currentUserData().get('stationMembershipStatus', null) == 'approved'
         && currentUserData().stationId == stationId;
     }
@@ -79,13 +77,13 @@ service cloud.firestore {
       let after = request.resource.data;
       return (after.activeResponseId is string
           && (!('activeResponseId' in before) || before.activeResponseId == null)
-          && getAfter(/databases/$(database)/documents/stations/$(after.stationId)/responses/$(after.activeResponseId)).data.uid == uid
-          && getAfter(/databases/$(database)/documents/stations/$(after.stationId)/responses/$(after.activeResponseId)).data.responseId == after.activeResponseId
-          && getAfter(/databases/$(database)/documents/stations/$(after.stationId)/responses/$(after.activeResponseId)).data.status == 'active')
+          && getAfter(/databases/$(database)/documents/stationResponses/$(after.activeResponseId)).data.uid == uid
+          && getAfter(/databases/$(database)/documents/stationResponses/$(after.activeResponseId)).data.responseId == after.activeResponseId
+          && getAfter(/databases/$(database)/documents/stationResponses/$(after.activeResponseId)).data.status == 'active')
         || (after.activeResponseId == null
           && before.activeResponseId is string
-          && getAfter(/databases/$(database)/documents/stations/$(before.stationId)/responses/$(before.activeResponseId)).data.uid == uid
-          && getAfter(/databases/$(database)/documents/stations/$(before.stationId)/responses/$(before.activeResponseId)).data.status == 'ended');
+          && getAfter(/databases/$(database)/documents/stationResponses/$(before.activeResponseId)).data.uid == uid
+          && getAfter(/databases/$(database)/documents/stationResponses/$(before.activeResponseId)).data.status == 'ended');
     }
 
     // Map activity is immutable, belongs to the actor's station, and discloses
@@ -104,11 +102,11 @@ service cloud.firestore {
         && data.lng is number && data.lng >= -180 && data.lng <= 180
         && ((data.type == 'fire-pinned'
             && !('hydrantId' in data)
-            && (!('firePinId' in data) || (data.firePinId is string && data.firePinId.matches('^([a-zA-Z0-9]{20}|FIRE-[0-9]{8}-[a-f0-9]{16})$')
-              && getAfter(/databases/$(database)/documents/fireIncidents/$(data.firePinId)).data.createdAt == request.time
-              && getAfter(/databases/$(database)/documents/fireIncidents/$(data.firePinId)).data.lat == data.lat
-              && getAfter(/databases/$(database)/documents/fireIncidents/$(data.firePinId)).data.lng == data.lng
-              && getAfter(/databases/$(database)/documents/fireIncidents/$(data.firePinId)/ownership/record).data.uid == request.auth.uid))
+            && (!('firePinId' in data) || (data.firePinId is string && data.firePinId.matches('^[a-zA-Z0-9]{20}$')
+              && getAfter(/databases/$(database)/documents/firePins/$(data.firePinId)).data.createdAt == request.time
+              && getAfter(/databases/$(database)/documents/firePins/$(data.firePinId)).data.lat == data.lat
+              && getAfter(/databases/$(database)/documents/firePins/$(data.firePinId)).data.lng == data.lng
+              && getAfter(/databases/$(database)/documents/firePinOwners/$(data.firePinId)).data.uid == request.auth.uid))
             && data.message == data.displayName + ' pinned a fire incident.')
           || (data.type in ['hydrant-pinned', 'hydrant-updated']
             && !('firePinId' in data)
@@ -156,22 +154,22 @@ service cloud.firestore {
               && data.displayName == currentUserData().displayName
               && data.responseId is string
               && notificationId == data.responseId + (data.type == 'response-started' ? '_start' : '_end')
-              && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.stationId == stationId
-              && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.uid == request.auth.uid
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.stationId == stationId
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.uid == request.auth.uid
               && ((data.type == 'response-started'
-                    && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.startedAt == request.time
-                    && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.status == 'active')
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.startedAt == request.time
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.status == 'active')
                 || (data.type == 'response-ended'
-                    && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.endedAt == request.time
-                    && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.status == 'ended'
-                    && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.endedByUid == request.auth.uid)))
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.endedAt == request.time
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.status == 'ended'
+                    && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.endedByUid == request.auth.uid)))
           || (data.type == 'station-response-closed'
               && canManageStation(stationId)
               && notificationId == data.responseId + '_closed'
-              && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.stationId == stationId
-              && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.status == 'ended'
-              && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.endedByUid == request.auth.uid
-              && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(data.responseId)).data.endReason == 'station-head')
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.stationId == stationId
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.status == 'ended'
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.endedByUid == request.auth.uid
+              && getAfter(/databases/$(database)/documents/stationResponses/$(data.responseId)).data.endReason == 'station-head')
           || (data.type == 'station-accessed'
               && data.uid == request.auth.uid
               && data.displayName == currentUserData().displayName
@@ -179,8 +177,8 @@ service cloud.firestore {
           || (data.type in ['membership-approved', 'membership-rejected']
               && canManageStation(stationId)
               && notificationId == 'join-review-' + data.uid + (data.type == 'membership-approved' ? '-approved' : '-rejected')
-              && getAfter(/databases/$(database)/documents/stations/$(stationId)/joinRequests/$(data.uid)).data.stationId == stationId
-              && getAfter(/databases/$(database)/documents/stations/$(stationId)/joinRequests/$(data.uid)).data.status == (data.type == 'membership-approved' ? 'approved' : 'rejected')
+              && getAfter(/databases/$(database)/documents/stationJoinRequests/$(data.uid)).data.stationId == stationId
+              && getAfter(/databases/$(database)/documents/stationJoinRequests/$(data.uid)).data.status == (data.type == 'membership-approved' ? 'approved' : 'rejected')
               && getAfter(/databases/$(database)/documents/users/$(data.uid)).data.stationMembershipStatus == (data.type == 'membership-approved' ? 'approved' : 'rejected')));
     }
 
@@ -188,24 +186,17 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
 
-    // Resolve AoR from the assigned station, never an account-supplied list.
+    // F1: true when the existing hydrant belongs to one of the
+    // barangays assigned to the signed-in user's Area of Responsibility.
     //
     // We deliberately check resource.data.barangay (the existing document),
     // not request.resource.data.barangay, so a client cannot move a hydrant
     // into its own AOR as part of an update.
     function hydrantIsInUserAor() {
-      let user = currentUserData();
-      let stationId = user.get('stationId', null);
-      let station = get(/databases/$(database)/documents/stations/$(stationId)).data;
       return isSignedIn()
-        && stationId is string
-        && (isStationAccount() || ((isHead() || isAuthorized())
-          && user.get('accountType', null) == 'person'
-          && user.get('stationMembershipStatus', null) == 'approved'))
-        && station.get('active', false) == true
         && resource.data.barangay is string
-        && station.get('aorBarangays', []) is list
-        && resource.data.barangay in station.get('aorBarangays', []);
+        && currentUserData().get('aorBarangays', []) is list
+        && resource.data.barangay in currentUserData().get('aorBarangays', []);
     }
 
     function isValidStationAccount(stationId, uid, allowLegacyRole) {
@@ -266,9 +257,9 @@ service cloud.firestore {
             && resource.data.activeResponseId is string
             && onlyChangedFields(['activeResponseId'])
             && request.resource.data.activeResponseId == null
-            && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/responses/$(resource.data.activeResponseId)).data.uid == uid
-            && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/responses/$(resource.data.activeResponseId)).data.status == 'ended'
-            && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/responses/$(resource.data.activeResponseId)).data.endReason == 'station-head');
+            && getAfter(/databases/$(database)/documents/stationResponses/$(resource.data.activeResponseId)).data.uid == uid
+            && getAfter(/databases/$(database)/documents/stationResponses/$(resource.data.activeResponseId)).data.status == 'ended'
+            && getAfter(/databases/$(database)/documents/stationResponses/$(resource.data.activeResponseId)).data.endReason == 'station-head');
 
       // New users can create their own document (signup flow).
       // Only admins can create documents for other users or delete any.
@@ -297,8 +288,8 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /stations/{stationId}/joinRequests/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || canManageStation(stationId));
+    match /stationJoinRequests/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || canManageStation(resource.data.stationId));
       allow create: if isSignedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['uid', 'displayName', 'email', 'stationId', 'status', 'createdAt'])
         && request.resource.data.uid == uid
@@ -306,13 +297,11 @@ service cloud.firestore {
         && request.resource.data.displayName.size() <= 120
         && request.resource.data.email is string && request.resource.data.email.size() <= 254
         && request.resource.data.stationId is string && request.resource.data.stationId.size() <= 128
-        && request.resource.data.stationId == stationId
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt is timestamp
         && getAfter(/databases/$(database)/documents/users/$(uid)).data.requestedStationId == request.resource.data.stationId
         && get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.active == true;
       allow update: if (isHeadForStation(resource.data.stationId) || isAdmin())
-        && resource.data.stationId == stationId
         && resource.data.status == 'pending'
         && onlyChangedFields(['status', 'reviewedAt', 'reviewedBy'])
         && request.resource.data.status in ['approved', 'rejected']
@@ -325,9 +314,6 @@ service cloud.firestore {
 
     // Active station directory fields are public to signed-out signup pages.
     match /stations/{stationId} {
-      allow update: if isAdmin() && onlyChangedFields(['aorBarangays'])
-        && request.resource.data.aorBarangays is list
-        && request.resource.data.aorBarangays.size() <= 100;
       allow read: if true;
       allow create: if isAdmin()
         && request.resource.data.keys().hasOnly(['name', 'active', 'createdAt'])
@@ -390,8 +376,8 @@ service cloud.firestore {
             && ((data.kind == 'activity'
                   && get(/databases/$(database)/documents/stations/$(stationId)/notifications/$(data.notificationId)).data.createdAt == data.eventCreatedAt)
               || (data.kind == 'member'
-                  && get(/databases/$(database)/documents/stations/$(stationId)/joinRequests/$(data.notificationId)).data.stationId == stationId
-                  && get(/databases/$(database)/documents/stations/$(stationId)/joinRequests/$(data.notificationId)).data.createdAt == data.eventCreatedAt));
+                  && get(/databases/$(database)/documents/stationJoinRequests/$(data.notificationId)).data.stationId == stationId
+                  && get(/databases/$(database)/documents/stationJoinRequests/$(data.notificationId)).data.createdAt == data.eventCreatedAt));
         }
         allow read: if ownsReadState();
         allow create, update: if ownsReadState() && validReadReceipt();
@@ -429,9 +415,9 @@ service cloud.firestore {
 
     // ---------- station response records and public map locations ----------
 
-    match /stations/{stationId}/responses/{responseId} {
+    match /stationResponses/{responseId} {
       allow read: if isSignedIn()
-        && (resource.data.uid == request.auth.uid || canManageStation(stationId));
+        && (resource.data.uid == request.auth.uid || canManageStation(resource.data.stationId));
       allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly([
           'responseId', 'uid', 'displayName', 'stationId', 'stationName', 'status', 'startedAt',
@@ -441,14 +427,13 @@ service cloud.firestore {
         && responseId.matches('^[a-f0-9-]{36}$')
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.firePinId is string
-        && request.resource.data.firePinId.matches('^([a-zA-Z0-9]{20}|FIRE-[0-9]{8}-[a-f0-9]{16})$')
-        && getAfter(/databases/$(database)/documents/fireIncidents/$(request.resource.data.firePinId)).data.status == 'active'
-        && request.resource.data.incidentLat == getAfter(/databases/$(database)/documents/fireIncidents/$(request.resource.data.firePinId)).data.lat
-        && request.resource.data.incidentLng == getAfter(/databases/$(database)/documents/fireIncidents/$(request.resource.data.firePinId)).data.lng
+        && request.resource.data.firePinId.matches('^[a-zA-Z0-9]{20}$')
+        && getAfter(/databases/$(database)/documents/firePins/$(request.resource.data.firePinId)).data.status == 'active'
+        && request.resource.data.incidentLat == getAfter(/databases/$(database)/documents/firePins/$(request.resource.data.firePinId)).data.lat
+        && request.resource.data.incidentLng == getAfter(/databases/$(database)/documents/firePins/$(request.resource.data.firePinId)).data.lng
         && request.resource.data.displayName == currentUserData().displayName
         && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 120
         && request.resource.data.stationId is string
-        && request.resource.data.stationId == stationId
         && isApprovedStationMember(request.resource.data.stationId)
         && request.resource.data.stationName == get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.name
         && request.resource.data.status == 'active'
@@ -470,7 +455,6 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid
         && resource.data.status == 'active'
         && request.resource.data.status == 'ended'
-        && userRole() in ['authorized', 'head']
         && onlyChangedFields(['status', 'endedAt', 'endedByUid', 'endedByName', 'endReason'])
         && request.resource.data.endedAt == request.time
         && request.resource.data.endedByUid == request.auth.uid
@@ -548,10 +532,10 @@ service cloud.firestore {
         && data.stationId is string && data.stationId.size() <= 128
         && data.stationId.matches('^[A-Za-z0-9_-]+$')
         && data.stationName is string && data.stationName.size() > 0 && data.stationName.size() <= 120
-        && data.stationName == getAfter(/databases/$(database)/documents/stations/$(data.stationId)/responses/$(responseId)).data.stationName
-        && getAfter(/databases/$(database)/documents/stations/$(data.stationId)/responses/$(responseId)).data.uid == request.auth.uid
-        && getAfter(/databases/$(database)/documents/stations/$(data.stationId)/responses/$(responseId)).data.status == 'active'
-        && getAfter(/databases/$(database)/documents/stations/$(data.stationId)/responses/$(responseId)).data.stationId == data.stationId
+        && data.stationName == getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.stationName
+        && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.status == 'active'
+        && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.stationId == data.stationId
         && data.lat is number && data.lat >= -90 && data.lat <= 90
         && data.lng is number && data.lng >= -180 && data.lng <= 180
         && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
@@ -560,7 +544,7 @@ service cloud.firestore {
 
     function isValidStationUnitLocation(stationId, responseId) {
       let data = request.resource.data;
-      let response = getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(responseId)).data;
+      let response = getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data;
       return data.keys().hasAll([
           'responseId',
           'stationId',
@@ -602,10 +586,10 @@ service cloud.firestore {
         && isValidUnitLocation(responseId);
       allow delete: if isSignedIn() && (
         isAdmin()
-        || (get(/databases/$(database)/documents/stations/$(resource.data.stationId)/responses/$(responseId)).data.uid == request.auth.uid
-          && get(/databases/$(database)/documents/stations/$(resource.data.stationId)/responses/$(responseId)).data.status == 'active')
+        || (get(/databases/$(database)/documents/stationResponses/$(responseId)).data.uid == request.auth.uid
+          && get(/databases/$(database)/documents/stationResponses/$(responseId)).data.status == 'active')
         || (canManageStation(resource.data.stationId)
-          && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/responses/$(responseId)).data.status == 'ended'));
+          && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.status == 'ended'));
     }
 
     // Legacy station-account locations retain their original private audience.
@@ -635,11 +619,11 @@ service cloud.firestore {
       );
       allow delete: if isSignedIn() && (
         isAdmin()
-        || (get(/databases/$(database)/documents/stations/$(stationId)/responses/$(reportId)).data.uid == request.auth.uid
-          && get(/databases/$(database)/documents/stations/$(stationId)/responses/$(reportId)).data.stationId == stationId
-          && get(/databases/$(database)/documents/stations/$(stationId)/responses/$(reportId)).data.status == 'active')
+        || (get(/databases/$(database)/documents/stationResponses/$(reportId)).data.uid == request.auth.uid
+          && get(/databases/$(database)/documents/stationResponses/$(reportId)).data.stationId == stationId
+          && get(/databases/$(database)/documents/stationResponses/$(reportId)).data.status == 'active')
         || (canManageStation(stationId)
-          && getAfter(/databases/$(database)/documents/stations/$(stationId)/responses/$(reportId)).data.status == 'ended')
+          && getAfter(/databases/$(database)/documents/stationResponses/$(reportId)).data.status == 'ended')
       );
     }
 
@@ -718,18 +702,7 @@ service cloud.firestore {
 
     // Private account presence. Separate sessions preserve multi-tab/device
     // status; presence is a UI signal, never an authorization grant.
-    match /accountPresence/{accountUid} {
-      allow read: if isSignedIn() && (isAdmin() || request.auth.uid == accountUid
-        || (resource.data.stationId is string && canManageStation(resource.data.stationId)));
-      allow create, update: if isSignedIn() && request.auth.uid == accountUid
-        && request.resource.data.keys().hasOnly(['uid', 'stationId', 'displayName'])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.stationId == currentUserData().get('stationId', null)
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 254;
-      allow delete: if false;
-    }
-    match /accountPresence/{accountUid}/presenceSessions/{sessionId} {
+    match /accountPresenceSessions/{sessionId} {
       function validPresence() {
         let data = request.resource.data;
         return data.keys().hasAll(['uid', 'stationId', 'lastSeenAt'])
@@ -741,27 +714,11 @@ service cloud.firestore {
           && data.stationId == currentUserData().get('stationId', null)
           && data.lastSeenAt is timestamp && data.lastSeenAt == request.time;
       }
-      allow read: if isSignedIn() && (isAdmin() || resource.data.get('uid', null) == request.auth.uid
-        || (resource.data.get('stationId', null) is string && canManageStation(resource.data.stationId)));
-      allow create: if isSignedIn() && accountUid == request.auth.uid && validPresence();
-      allow update: if isSignedIn() && accountUid == request.auth.uid
-        && resource.data.uid == request.auth.uid && validPresence();
+      allow read: if isSignedIn() && (isAdmin() || resource.data.uid == request.auth.uid
+        || (resource.data.stationId is string && canManageStation(resource.data.stationId)));
+      allow create: if isSignedIn() && validPresence();
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid && validPresence();
       allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-    }
-
-    // Collection-group reads used by the account directory and station roster.
-    // Writes remain restricted to the canonical accountPresence/{uid} parent.
-    match /{presencePath=**}/presenceSessions/{sessionId} {
-      allow read: if isSignedIn() && (isAdmin() || resource.data.get('uid', null) == request.auth.uid
-        || (resource.data.get('stationId', null) is string && canManageStation(resource.data.stationId)));
-    }
-
-    // A responder locates their active record across station subcollections.
-    // This recursive rule grants reads only; lifecycle writes use the canonical
-    // stations/{stationId}/responses/{responseId} rule above.
-    match /{responsePath=**}/responses/{responseId} {
-      allow read: if isSignedIn()
-        && (resource.data.uid == request.auth.uid || canManageStation(resource.data.stationId));
     }
 
     // Shared map pins are visible only to signed-in accounts. Ownership is
@@ -777,41 +734,32 @@ service cloud.firestore {
         && data.status in ['active', 'cleared'] && data.createdAt is timestamp
         && data.updatedAt == request.time;
     }
-    match /fireIncidents/{pinId} {
+    match /firePins/{pinId} {
       allow read: if isSignedIn();
-      allow create: if firePinWriter() && pinId.matches('^([a-zA-Z0-9]{20}|FIRE-[0-9]{8}-[a-f0-9]{16})$') && validFirePin() && request.resource.data.status == 'active'
+      allow create: if firePinWriter() && pinId.matches('^[a-zA-Z0-9]{20}$') && validFirePin() && request.resource.data.status == 'active'
         && request.resource.data.createdAt == request.time
         && request.resource.data.stationId == currentUserData().get('stationId', null)
-        && getAfter(/databases/$(database)/documents/fireIncidents/$(pinId)/ownership/record).data.uid == request.auth.uid
-        && getAfter(/databases/$(database)/documents/fireIncidents/$(pinId)/ownership/record).data.stationId == request.resource.data.stationId;
+        && getAfter(/databases/$(database)/documents/firePinOwners/$(pinId)).data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/firePinOwners/$(pinId)).data.stationId == request.resource.data.stationId;
       allow update: if firePinWriter() && validFirePin() && resource.data.status == 'active'
         && request.resource.data.stationId == resource.data.stationId && request.resource.data.createdAt == resource.data.createdAt
-        && (get(/databases/$(database)/documents/fireIncidents/$(pinId)/ownership/record).data.uid == request.auth.uid
+        && (get(/databases/$(database)/documents/firePinOwners/$(pinId)).data.uid == request.auth.uid
           || isAdmin() || (resource.data.stationId is string && canManageStation(resource.data.stationId)))
         // Clearing goes through the verified server action so responders end together.
         && request.resource.data.status == 'active';
       allow delete: if false;
     }
-    match /fireIncidents/{pinId}/ownership/{ownerId} {
+    match /firePinOwners/{pinId} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin()
         || (resource.data.stationId is string && canManageStation(resource.data.stationId)));
-      allow create: if firePinWriter() && ownerId == 'record'
-        && pinId.matches('^([a-zA-Z0-9]{20}|FIRE-[0-9]{8}-[a-f0-9]{16})$')
+      allow create: if firePinWriter() && pinId.matches('^[a-zA-Z0-9]{20}$')
         && request.resource.data.keys().hasAll(['uid', 'stationId', 'createdAt'])
         && request.resource.data.keys().hasOnly(['uid', 'stationId', 'createdAt'])
         && request.resource.data.uid == request.auth.uid && request.resource.data.createdAt == request.time
         && request.resource.data.stationId == currentUserData().get('stationId', null)
-        && getAfter(/databases/$(database)/documents/fireIncidents/$(pinId)).data.createdAt == request.time
-        && getAfter(/databases/$(database)/documents/fireIncidents/$(pinId)).data.stationId == request.resource.data.stationId;
+        && getAfter(/databases/$(database)/documents/firePins/$(pinId)).data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/firePins/$(pinId)).data.stationId == request.resource.data.stationId;
       allow update, delete: if false;
-    }
-
-    match /{ownerPath=**}/ownership/{ownerId} {
-      // Collection-group queries cannot prove a nested document ID filter.
-      // Writes remain restricted to the literal `record` document above.
-      allow read: if isSignedIn()
-        && (resource.data.uid == request.auth.uid || isAdmin()
-          || (resource.data.stationId is string && canManageStation(resource.data.stationId)));
     }
 
     // ---------- hydrants ----------
@@ -822,11 +770,17 @@ service cloud.firestore {
 
       allow create: if isAuthorized() || isHead() || isAdmin();
 
-      // Admins retain system-wide editing. Station accounts and approved
-      // authorized/head members can edit inspection/status fields only inside
-      // their active station's AoR. They cannot move or reassign the hydrant.
+      // Existing permissions:
+      //   - Admin may update the hydrant.
+      //   - Head may update the existing approved field set.
+      //
+      // F1 AOR permission:
+      //   - Authorized/station users may update ONLY operationalStatus.
+      //   - The existing hydrant's barangay must belong to their AOR.
+      //   - They cannot change barangay or combine the status update with
+      //     another field.
       allow update: if isAdmin()
-        || (hydrantIsInUserAor() && onlyChangedFields([
+        || (isHead() && onlyChangedFields([
               'operationalStatus',
               'pressureStatus',
               'waterCleanliness',
@@ -837,11 +791,12 @@ service cloud.firestore {
               'register',
               'lastMaintenanceDate',
               'nextMaintenanceDate',
-              'validated', 'validatedAt', 'validatedBy',
-              'flaggedForReinspection', 'flaggedAt', 'flaggedBy',
               'updatedBy',
               'updatedAt'
-            ]));
+            ]))
+        || (isAuthorized()
+            && hydrantIsInUserAor()
+            && onlyChangedFields(['operationalStatus']));
 
       allow delete: if isAdmin();
 
