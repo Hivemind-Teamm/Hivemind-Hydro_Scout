@@ -15,10 +15,9 @@ import {
 import { FiActivity, FiLogOut } from 'react-icons/fi';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
-import { useStations } from '../data/stations';
 import StationNotificationPanels from './StationNotificationPanels';
 import StationMembersPanel from './StationMembersPanel';
-import type { JoinRequest } from '@/lib/use-station-notifications';
+import type { JoinRequest, StationNotificationsFeed } from '@/lib/use-station-notifications';
 import { locationTimeoutMs } from '@/lib/unit-location-expiry';
 
 type ResponseRecord = {
@@ -42,17 +41,17 @@ function currentPosition(): Promise<GeolocationPosition> {
   }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 }));
 }
 
-export default function StationResponseControl({ fireIncident, actionContainer, onViewFireLocation }: {
+export default function StationResponseControl({ fireIncident, actionContainer, onViewFireLocation, notificationFeed }: {
   fireIncident: { id: string; lat: number; lng: number } | null;
   actionContainer: HTMLDivElement | null;
   onViewFireLocation: (lat: number, lng: number) => void;
+  notificationFeed: StationNotificationsFeed;
 }) {
   const {
-    user, role, accountType, stationId, stationMembershipStatus, stationAccessIds,
+    user, role, accountType, stationId, stationName, stationMembershipStatus, stationAccessIds,
     canUseDeviceLocation, openLocationConsent,
   } = useAuth();
-  const { stations } = useStations();
-  const station = stations.find(item => item.id === stationId);
+  const resolvedStationName = stationName ?? stationId;
   const canRespond = !!user && accountType === 'person' && !!stationId && stationMembershipStatus === 'approved';
   const canManage = !!user && !!stationId && (role === 'admin' || role === 'head' || stationAccessIds.includes(stationId));
   const canViewRoster = role === 'admin' || role === 'head';
@@ -79,7 +78,11 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
 
   useEffect(() => {
     if (!canManage || !stationId) return;
-    const active = onSnapshot(query(collection(db, 'stationResponses'), where('stationId', '==', stationId)), snapshot => {
+    const active = onSnapshot(query(
+      collection(db, 'stationResponses'),
+      where('stationId', '==', stationId),
+      where('status', '==', 'active'),
+    ), snapshot => {
       setResponseStation(stationId);
       setResponses(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as ResponseRecord))
         .sort((a, b) => ((b.startedAt?.toDate?.().getTime() ?? 0) - (a.startedAt?.toDate?.().getTime() ?? 0))));
@@ -128,7 +131,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       });
       return;
     }
-    if (!station) return;
+    if (!resolvedStationName) return;
     let stopped = false;
     let inFlight = false;
     const refresh = async () => {
@@ -141,7 +144,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         batch.set(doc(db, 'stations', stationId, 'unitLocations', response.id), {
           responseId: response.id,
           stationId,
-          stationName: station.name,
+          stationName: resolvedStationName,
           public: true,
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -169,7 +172,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       window.removeEventListener('focus', resume);
       window.removeEventListener('online', resume);
     };
-  }, [activeResponseId, canUseDeviceLocation, station, stationId]);
+  }, [activeResponseId, canUseDeviceLocation, resolvedStationName, stationId]);
 
   const staleAfterMs = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES);
 
@@ -207,7 +210,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   }, [role, responses, staleAfterMs, stationId, user]);
 
   async function startResponse() {
-    if (!user || !stationId || !station || !fireIncident) return;
+    if (!user || !stationId || !resolvedStationName || !fireIncident) return;
     setError(null);
     if (!canUseDeviceLocation) {
       openLocationConsent();
@@ -226,7 +229,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         uid: user.uid,
         displayName: user.displayName?.trim() || user.email || 'Responder',
         stationId,
-        stationName: station.name,
+        stationName: resolvedStationName,
         status: 'active',
         startedAt: serverTimestamp(),
         endedAt: null,
@@ -236,7 +239,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       batch.set(doc(db, 'stations', stationId, 'unitLocations', id), {
         responseId: id,
         stationId,
-        stationName: station.name,
+        stationName: resolvedStationName,
         public: true,
         lat: position.coords.latitude,
         lng: position.coords.longitude,
@@ -304,7 +307,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       batch.update(doc(db, 'users', request.uid), {
         stationMembershipStatus: approved ? 'approved' : 'rejected',
         stationId: approved ? stationId : null,
-        station: approved ? (station?.name ?? stationId) : 'Unassigned',
+        station: approved ? resolvedStationName : 'Unassigned',
         requestedStationId: null,
       });
       const notice = doc(db, 'stations', stationId, 'notifications', `join-review-${request.uid}-${approved ? 'approved' : 'rejected'}`);
@@ -346,12 +349,12 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         {hasPendingStationRequest && <span className="px-2 text-xs font-semibold text-amber-700">Station request pending approval</span>}
         {error && <span role="alert" className="max-w-56 text-xs text-red-600">{error}</span>}
       </div>}
-      <StationNotificationPanels key={user.uid + ':' + stationId} stationName={station?.name ?? stationId ?? 'Station'}
-        activityOpen={open} membersOpen={openMemberApprovals && canApprove}
+      <StationNotificationPanels key={user.uid + ':' + stationId} stationName={resolvedStationName ?? 'Station'}
+        notificationFeed={notificationFeed} activityOpen={open} membersOpen={openMemberApprovals && canApprove}
         closeActivity={() => setOpen(false)} closeMembers={() => setOpenMemberApprovals(false)}
         reviewRequest={reviewRequest} onViewFireLocation={onViewFireLocation} />
       {openRoster && canViewRoster && stationId && <StationMembersPanel key={`roster:${user.uid}:${stationId}`} stationId={stationId}
-        stationName={station?.name ?? stationId} onClose={() => setOpenRoster(false)}
+        stationName={resolvedStationName ?? stationId} onClose={() => setOpenRoster(false)}
         responsesReady={responseStation === stationId}
         respondingUids={new Set(responses.filter(response => responseStation === stationId && response.stationId === stationId && response.status === 'active').map(response => response.uid))} />}
     </>

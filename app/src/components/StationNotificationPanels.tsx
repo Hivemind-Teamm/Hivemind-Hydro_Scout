@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FiCheck, FiX } from 'react-icons/fi';
-import { useStationNotifications, type JoinRequest, type StationNotification } from '@/lib/use-station-notifications';
+import type { JoinRequest, StationNotification, StationNotificationsFeed } from '@/lib/use-station-notifications';
 import { responseDuration, stationNotificationCardKey } from '@/lib/station-notification-feed';
 import { getUserProfile } from '@/lib/user-profile';
 import UserProfileModal, { type ViewingUser } from './UserProfileModal';
@@ -38,13 +38,14 @@ function NotificationDialog({ title, children, onClose }: { title: string; child
   </dialog>;
 }
 
-export default function StationNotificationPanels({ stationName, activityOpen, membersOpen, closeActivity, closeMembers, reviewRequest, onViewFireLocation }: {
+export default function StationNotificationPanels({ stationName, activityOpen, membersOpen, closeActivity, closeMembers, reviewRequest, onViewFireLocation, notificationFeed }: {
   stationName: string; activityOpen: boolean; membersOpen: boolean;
   closeActivity: () => void; closeMembers: () => void;
   reviewRequest: (request: JoinRequest, approved: boolean) => Promise<void>;
   onViewFireLocation: (lat: number, lng: number) => void;
+  notificationFeed: StationNotificationsFeed;
 }) {
-  const { notifications, requests, error: notificationError, activityUnreadCount, isMemberUnread, readActivity, readMember, fullDetails } = useStationNotifications();
+  const { notifications, requests, error: notificationError, activityUnreadCount, isMemberUnread, readActivity, readMember, fullDetails } = notificationFeed;
   const [profile, setProfile] = useState<ViewingUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

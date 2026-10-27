@@ -13,6 +13,10 @@ interface FeedState {
   verifiedAt: number | null;
 }
 
+// Poll slowly while no response is assigned. As soon as a verified incident
+// exists, the controller returns to its five-second emergency refresh rate.
+const INCIDENT_FEED_IDLE_REFRESH_MS = 60_000;
+
 function emptyState(scope: string): FeedState {
   return {
     session: null,
@@ -64,6 +68,7 @@ export function useAssignedIncidents(
           error: next.error,
         });
       },
+      idleIntervalMs: INCIDENT_FEED_IDLE_REFRESH_MS,
     });
 
     controller.start();

@@ -17,6 +17,7 @@ import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
 import FireResponsePanel from './FireResponsePanel';
 import StationResponseControl from './StationResponseControl';
+import { useStationNotifications } from '@/lib/use-station-notifications';
 
 // The three heaviest, rarely-open surfaces are split out of the initial
 // bundle so the first load parses/executes less JS on phones. They're warmed
@@ -194,6 +195,9 @@ export default function HydroScoutDashboard() {
 
   const { user, role, aorBarangays, canUseDeviceLocation } = useAuth();
   const sharedFires = useSharedFirePins();
+  // One notification subscription feeds both header badges and panels.
+  // Mounting the hook in each child doubled every listener and API poll.
+  const stationNotifications = useStationNotifications();
   const { create: createSharedFirePin, move: moveSharedFirePin } = sharedFires;
   const fireIncident = sharedFires.pins.find(pin => pin.id === selectedFireId) ?? null;
   const userLocation = canUseDeviceLocation ? storedUserLocation : null;
@@ -1228,8 +1232,13 @@ export default function HydroScoutDashboard() {
         firePinMode={firePinMode}
         fireActive={false}
         onToggleFirePin={handleToggleFirePinMode}
+        unreadActivityCount={stationNotifications.unreadActivityCount}
+        unreadMemberCount={stationNotifications.unreadMemberCount}
+        canViewActivity={stationNotifications.canViewActivity}
+        canApproveMembers={stationNotifications.canApproveMembers}
       />
-      <StationResponseControl fireIncident={fireIncident} actionContainer={responseActionContainer} onViewFireLocation={handleViewFireNotification} />
+      <StationResponseControl fireIncident={fireIncident} actionContainer={responseActionContainer}
+        onViewFireLocation={handleViewFireNotification} notificationFeed={stationNotifications} />
       {sharedFires.error && <p role="alert" className="pointer-events-auto absolute bottom-24 left-4 right-20 z-[2400] max-w-sm rounded-lg bg-white/95 p-3 text-xs text-red-600 shadow dark:bg-neutral-900">{sharedFires.error}</p>}
 
       {/* Fire-pin mode hint. Bottom-center on desktop (clear of the search bar
