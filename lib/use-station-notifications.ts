@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './auth-context';
 import { notificationReadKey, parseReadNotifications } from './notification-read-state';
 import { dailyResponseNotifications, unreadActivityCount, stationNotificationFeed, type StationResponseSummary, type StationNotification } from './station-notification-feed';
 import { useLimitedNotifications } from './use-limited-notifications';
-import { recordFirestoreDiagnostic } from './firestore-diagnostics';
 export type { StationNotification } from './station-notification-feed';
 
 type NoticeTime = Timestamp | null;
@@ -16,10 +15,6 @@ export type JoinRequest = {
   stationId: string; status: string; createdAt?: NoticeTime;
 };
 const changeEvent = 'hydroscout:notification-read';
-const MAX_ACTIVITY_ITEMS = 100;
-const MAX_PENDING_REQUESTS = 100;
-const MAX_RESPONSE_ITEMS = 100;
-const MAX_READ_RECEIPTS = 200;
 function subscribe(callback: () => void) {
   window.addEventListener('storage', callback);
   window.addEventListener(changeEvent, callback);
@@ -35,9 +30,8 @@ function readStorage(key: string) {
 }
 
 function useManagementNotifications() {
-  const { user, role, accountType, stationId } = useAuth();
+  const { user, role, stationId } = useAuth();
   const canManage = !!user && !!stationId && (role === 'admin' || role === 'head');
-  const canApprove = canManage && accountType !== 'station';
   const scope = canManage ? `${user!.uid}:${stationId}` : null;
   const storageKey = `hydroscout:notification-reads:${scope}`;
   const [state, setState] = useState<{
@@ -85,49 +79,24 @@ function useManagementNotifications() {
       }
     };
     const fail = () => { error = 'Could not load station notifications. Please try again.'; publish(); };
-    recordFirestoreDiagnostic('listener:start', 'station-notifications');
-    const stopNotices = onSnapshot(query(
-      collection(db, 'stations', stationId, 'notifications'),
-      orderBy('createdAt', 'desc'),
-      limit(MAX_ACTIVITY_ITEMS),
-    ), snapshot => {
-      recordFirestoreDiagnostic('listener:snapshot', 'station-notifications', snapshot.size);
+    const stopNotices = onSnapshot(collection(db, 'stations', stationId, 'notifications'), snapshot => {
       notifications = snapshot.docs.map(record => ({ ...record.data(), id: record.id } as StationNotification))
         .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0));
       publish();
       syncLocalReads();
     }, fail);
-    const stopRequests = canApprove
-      ? onSnapshot(query(
-        collection(db, 'stationJoinRequests'),
-        where('stationId', '==', stationId),
-        where('status', '==', 'pending'),
-        limit(MAX_PENDING_REQUESTS),
-      ), snapshot => {
-        recordFirestoreDiagnostic('listener:snapshot', 'pending-station-requests', snapshot.size);
-        requests = snapshot.docs.map(record => ({ ...record.data(), id: record.id } as JoinRequest));
-        publish();
-        syncLocalReads();
-      }, fail)
-      : () => {};
-    const stopResponses = onSnapshot(query(
-      collection(db, 'stationResponses'),
-      where('stationId', '==', stationId),
-      orderBy('startedAt', 'desc'),
-      limit(MAX_RESPONSE_ITEMS),
-    ), snapshot => {
-      recordFirestoreDiagnostic('listener:snapshot', 'recent-station-responses', snapshot.size);
+    const stopRequests = onSnapshot(query(collection(db, 'stationJoinRequests'), where('stationId', '==', stationId), where('status', '==', 'pending')), snapshot => {
+      requests = snapshot.docs.map(record => ({ ...record.data(), id: record.id } as JoinRequest));
+      publish();
+      syncLocalReads();
+    }, fail);
+    const stopResponses = onSnapshot(query(collection(db, 'stationResponses'), where('stationId', '==', stationId)), snapshot => {
       responses = snapshot.docs.map(record => ({ ...record.data(), id: record.id } as StationResponseSummary));
       publish();
     }, responseError => {
       console.warn('Response details unavailable; using notification event history.', responseError);
     });
-    const stopReads = onSnapshot(query(
-      collection(db, 'stations', stationId, 'notificationReads', user!.uid, 'items'),
-      orderBy('readAt', 'desc'),
-      limit(MAX_READ_RECEIPTS),
-    ), { includeMetadataChanges: true }, snapshot => {
-      recordFirestoreDiagnostic('listener:snapshot', 'notification-read-receipts', snapshot.size);
+    const stopReads = onSnapshot(collection(db, 'stations', stationId, 'notificationReads', user!.uid, 'items'), { includeMetadataChanges: true }, snapshot => {
       readKeys = snapshot.docs.flatMap(record => {
         const data = record.data();
         return (data.kind === 'activity' || data.kind === 'member') && typeof data.notificationId === 'string'
@@ -142,12 +111,8 @@ function useManagementNotifications() {
       console.warn('Notification read history unavailable; using browser read state.', readError);
       publish();
     });
-    return () => {
-      active = false;
-      stopNotices(); stopRequests(); stopResponses(); stopReads();
-      recordFirestoreDiagnostic('listener:stop', 'station-notifications');
-    };
-  }, [scope, stationId, storageKey, user, canApprove]);
+    return () => { active = false; stopNotices(); stopRequests(); stopResponses(); stopReads(); };
+  }, [scope, stationId, storageKey, user]);
 
   const notifications = state.scope === scope && scope ? state.notifications : [];
   const requests = state.scope === scope && scope ? state.requests : [];
@@ -192,5 +157,3 @@ export function useStationNotifications() {
     canApproveMembers,
   };
 }
-
-export type StationNotificationsFeed = ReturnType<typeof useStationNotifications>;

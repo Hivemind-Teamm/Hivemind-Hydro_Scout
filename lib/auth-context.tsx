@@ -120,9 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [aorBarangays, setAorBarangays] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const sessionGeneration = useRef(0);
-  // The authenticated profile listener already owns the station assignment.
-  // Reuse it instead of opening a second listener to the same profile document.
-  const locationConsent = useLocationConsent(user?.uid, assignedStationId);
+  const locationConsent = useLocationConsent(user?.uid);
   const { stationId: consentStationId, granted: locationGranted } = locationConsent;
 
   function clearProfile() {
