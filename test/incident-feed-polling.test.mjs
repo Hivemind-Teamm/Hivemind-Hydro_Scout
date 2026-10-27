@@ -102,6 +102,31 @@ test("Publishes verified assignments and schedules another poll", async () => {
   assert.equal(clock.count(4000), 0);
 });
 
+test("Uses the idle interval when no incident is assigned and returns to the emergency interval", async () => {
+  const clock = fakeClock();
+  let incidents = [];
+
+  const controller = createIncidentFeedPollingController({
+    fetchFeed: async () => response(incidents),
+    onChange: () => {},
+    intervalMs: 5000,
+    idleIntervalMs: 60000,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+  });
+
+  controller.start();
+  await flush();
+  assert.equal(clock.count(60000), 1);
+
+  incidents = [incident];
+  clock.fire(60000);
+  await flush();
+  assert.equal(clock.count(5000), 1);
+
+  controller.stop();
+});
+
 test("Clears earlier assignments on server failure", async () => {
   const clock = fakeClock();
   const states = [];

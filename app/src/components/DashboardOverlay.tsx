@@ -1,7 +1,6 @@
 'use client';
 
 import { memo, useState, useEffect, useRef } from 'react';
-import { useStationNotifications } from '@/lib/use-station-notifications';
 import NotificationCountBadge from './NotificationCountBadge';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
@@ -53,6 +52,10 @@ interface DashboardOverlayProps {
   /** A fire is currently pinned on the map. */
   fireActive?: boolean;
   onToggleFirePin?: () => void;
+  unreadActivityCount: number;
+  unreadMemberCount: number;
+  canViewActivity: boolean;
+  canApproveMembers: boolean;
 }
 
 function DashboardOverlay({
@@ -87,9 +90,12 @@ function DashboardOverlay({
   firePinMode = false,
   fireActive = false,
   onToggleFirePin,
+  unreadActivityCount,
+  unreadMemberCount,
+  canViewActivity,
+  canApproveMembers,
 }: DashboardOverlayProps) {
   const { user, role, accountType, stationId, locationPrivacyAvailable, locationPrivacyGranted, openLocationConsent } = useAuth();
-  const { unreadActivityCount, unreadMemberCount, canViewActivity, canApproveMembers } = useStationNotifications();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
