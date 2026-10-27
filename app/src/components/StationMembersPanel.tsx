@@ -1,15 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, Timestamp, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { FiX } from 'react-icons/fi';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { stationMemberFromProfile, searchStationMembers, type StationMember } from '@/lib/station-members';
-import { accountIsPresent, PRESENCE_EXPIRY_MS, type PresenceRecord } from '@/lib/account-presence-state';
+import { accountIsPresent, type PresenceRecord } from '@/lib/account-presence-state';
 import { lastLoggedInLabel } from '@/lib/account-login-status';
 import { useLoginClock } from '@/lib/use-login-clock';
-import { recordFirestoreDiagnostic } from '@/lib/firestore-diagnostics';
 import UserProfileModal, { type ViewingUser } from './UserProfileModal';
 
 export default function StationMembersPanel({ stationId, stationName, respondingUids, responsesReady, onClose }: {
@@ -25,29 +24,17 @@ export default function StationMembersPanel({ stationId, stationName, responding
   const [profile, setProfile] = useState<ViewingUser | null>(null);
   useEffect(() => {
     if (!scope) return;
-    recordFirestoreDiagnostic('listener:start', 'station-roster');
     const stopMembers = onSnapshot(query(collection(db, 'users'), where('stationId', '==', stationId), where('accountType', '==', 'person')), snapshot => {
-      recordFirestoreDiagnostic('listener:snapshot', 'station-roster-members', snapshot.size);
       const members = snapshot.docs.flatMap(record => {
         const member = stationMemberFromProfile(record.id, record.data(), stationId);
         return member ? [member] : [];
       });
       setState({ scope, members, loading: false, error: null });
     }, () => setState({ scope, members: [], loading: false, error: 'Station members could not load. Check your connection and station access.' }));
-    // Exclude abandoned tab sessions at the query boundary. Without this,
-    // opening the roster rereads every stale presence document ever created.
-    const stopPresence = onSnapshot(query(
-      collection(db, 'accountPresenceSessions'),
-      where('stationId', '==', stationId),
-      where('lastSeenAt', '>', Timestamp.fromMillis(Date.now() - PRESENCE_EXPIRY_MS)),
-    ), snapshot => {
-      recordFirestoreDiagnostic('listener:snapshot', 'station-roster-presence', snapshot.size);
+    const stopPresence = onSnapshot(query(collection(db, 'accountPresenceSessions'), where('stationId', '==', stationId)), snapshot => {
       setPresence({ scope, records: snapshot.docs.map(record => record.data() as PresenceRecord), receivedAt: Date.now() });
     }, () => setPresence({ scope, records: [], receivedAt: 0 }));
-    return () => {
-      stopMembers(); stopPresence();
-      recordFirestoreDiagnostic('listener:stop', 'station-roster');
-    };
+    return () => { stopMembers(); stopPresence(); };
   }, [scope, stationId]);
   useEffect(() => {
     const dismiss = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
