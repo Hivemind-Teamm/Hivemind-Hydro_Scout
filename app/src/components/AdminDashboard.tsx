@@ -1,4 +1,6 @@
 'use client';
+import { lastLoggedInLabel } from '@/lib/account-login-status';
+import { sortAccountDirectory, type AccountSort } from '@/lib/account-directory-sort';
 
 // System Administration panel — admin-only.
 //
@@ -92,8 +94,12 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
 
       {/* ── Body — grows naturally, window scrolls ── */}
       <div className="flex flex-col gap-4 p-3 md:gap-5 md:p-6">
-        <BuildVersionLog adminNames={Object.fromEntries(users.map(account => [account.uid, account.displayName]))} />
-        <StationsCard users={users} usersLoading={loading} usersError={error} />
+        <div className="grid items-start gap-4 md:gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className="min-w-0">
+            <BuildVersionLog adminNames={Object.fromEntries(users.map(account => [account.uid, account.displayName]))} />
+          </div>
+          <StationsCard users={users} usersLoading={loading} usersError={error} />
+        </div>
         <ManageUsersCard
           users={users}
           loading={loading}
@@ -117,6 +123,21 @@ function StationsCard({
   const [submitting, setSubmitting] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [stationSearch, setStationSearch] = useState('');
+  const [stationSort, setStationSort] = useState<AccountSort>('name-asc');
+  const stationQuery = stationSearch.trim().toLowerCase();
+  const stationDates = new Map<string, { createdAt: Date | null; lastLoginAt: Date | null }>();
+  for (const account of users) {
+    if (account.accountType !== 'station' || !account.stationId) continue;
+    const dates = stationDates.get(account.stationId) ?? { createdAt: null, lastLoginAt: null };
+    if (account.createdAt && (!dates.createdAt || account.createdAt > dates.createdAt)) dates.createdAt = account.createdAt;
+    if (account.lastLoginAt && (!dates.lastLoginAt || account.lastLoginAt > dates.lastLoginAt)) dates.lastLoginAt = account.lastLoginAt;
+    stationDates.set(account.stationId, dates);
+  }
+  const visibleStations = sortAccountDirectory(stations
+    .filter(station => `${station.name} ${station.id}`.toLowerCase().includes(stationQuery))
+    .map(station => ({ ...station, uid: station.id, displayName: station.name, ...stationDates.get(station.id) })), stationSort);
   const stationAccounts = new Map(
     users
       .flatMap(account => account.accountType === 'station' && account.stationId
@@ -162,9 +183,22 @@ function StationsCard({
   }
 
   return (
-    <section className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 md:p-6">
-      <h2 className="text-base font-extrabold text-neutral-800 dark:text-neutral-100">Station Directory</h2>
-      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Add a station and create its sign-in account using the station email and password. Station IDs cannot be changed after creation.</p>
+    <section className="min-w-0 w-full rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 md:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-extrabold text-neutral-800 dark:text-neutral-100">Station Directory
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">{stations.length}</span>
+          </h2>
+          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Find an existing station and its Station ID.</p>
+        </div>
+        <button type="button" onClick={() => setShowCreate(current => !current)} aria-expanded={showCreate} aria-controls="station-create-form"
+          className="shrink-0 rounded-lg border border-neutral-200 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800">
+          {showCreate ? 'Close form' : '+ Add station'}
+        </button>
+      </div>
+      <div id="station-create-form" hidden={!showCreate} className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50/60 p-3 dark:border-neutral-700 dark:bg-neutral-800/30">
+      <h3 className="text-sm font-bold text-neutral-700 dark:text-neutral-200">New station and sign-in account</h3>
+      <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Station IDs cannot be changed after creation.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
           Station name
@@ -191,30 +225,52 @@ function StationsCard({
       </button>
       {message && <p role="status" className="mt-2 text-xs text-neutral-600 dark:text-neutral-300">{message}</p>}
       {actionError && <p role="alert" className="mt-2 text-xs text-red-600">{actionError}</p>}
+      </div>
       {error && <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>}
-      <div className="mt-4 divide-y divide-neutral-100 dark:divide-neutral-800">
-        {loading ? <p className="py-3 text-sm text-neutral-400">Loading stations…</p> : stations.map(station => (
-          <div key={station.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+      <label className="mt-4 block text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+        Search stations
+        <input type="search" value={stationSearch} onChange={event => setStationSearch(event.target.value)} placeholder="Station name or Station ID" className="admin-input mt-1 w-full" />
+      </label>
+      <label className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+        Sort stations
+        <select value={stationSort} onChange={event => setStationSort(event.target.value as AccountSort)} className="min-w-0 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200">
+          <option value="name-asc">Station name: A–Z</option><option value="name-desc">Station name: Z–A</option>
+          <option value="last-login">Last logged in: newest first</option><option value="created">Latest created account</option>
+        </select>
+      </label>
+      <div className="mt-3 overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
+        <div className="hidden grid-cols-[minmax(0,1fr)_minmax(10rem,0.7fr)] gap-4 bg-neutral-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:bg-neutral-800/50 dark:text-neutral-500 sm:grid">
+          <span>Station</span><span>Station ID</span>
+        </div>
+      <div className="max-h-80 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
+        {loading ? <p className="px-3 py-3 text-sm text-neutral-400">Loading stations…</p> : visibleStations.map(station => (
+          <div key={station.id} className="grid items-center gap-1.5 px-3 py-3 text-sm hover:bg-neutral-50/70 dark:hover:bg-neutral-800/30 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,0.7fr)] sm:gap-4">
             <div className="min-w-0">
-              <span className="font-semibold text-neutral-700 dark:text-neutral-200">{station.name}</span>
-              <code className="ml-2 text-xs text-neutral-400">{station.id}</code>
-            </div>
-            <span className="shrink-0 text-right text-xs text-neutral-500 dark:text-neutral-400">
+              <p className="break-words font-semibold text-neutral-800 dark:text-neutral-100">{station.name}</p>
+            <span className="mt-0.5 block text-[10px] text-neutral-400 dark:text-neutral-500">
               {usersLoading
                 ? 'Loading account date…'
                 : usersError
                   ? 'Account date unavailable'
-                  : stationAccounts.get(station.id)?.createdAt
-                    ? <>Account created {stationAccounts.get(station.id)?.createdAt?.toLocaleDateString('en-US', {
+                  : stationDates.get(station.id)?.createdAt
+                    ? <>Account created {stationDates.get(station.id)?.createdAt?.toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
                       })}</>
                     : 'No station account'}
             </span>
+              {!usersLoading && !usersError && stationAccounts.has(station.id) && <span className="mt-0.5 block text-[10px] text-neutral-400 dark:text-neutral-500">{lastLoggedInLabel(stationDates.get(station.id)?.lastLoginAt)}</span>}
+            </div>
+            <div className="min-w-0">
+              <span className="mr-1.5 text-[10px] font-semibold text-neutral-400 sm:hidden">Station ID</span>
+              <code className="inline-block max-w-full break-all rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">{station.id}</code>
+            </div>
           </div>
         ))}
         {!loading && stations.length === 0 && <p className="py-3 text-sm text-neutral-400">No active stations yet.</p>}
+        {!loading && stations.length > 0 && visibleStations.length === 0 && <p className="px-3 py-5 text-center text-xs text-neutral-400">No matching stations.</p>}
+      </div>
       </div>
     </section>
   );
@@ -232,19 +288,20 @@ function ManageUsersCard({
 }) {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'station' | UserRole>('all');
+  const [accountSort, setAccountSort] = useState<AccountSort>('name-asc');
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
   const [removing, setRemoving] = useState<AppUser | null>(null);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return users.filter((u) => {
+    return sortAccountDirectory(users.filter((u) => {
       if (roleFilter === 'station' && u.accountType !== 'station') return false;
       if (roleFilter !== 'all' && roleFilter !== 'station' && u.role !== roleFilter) return false;
       if (!q) return true;
       return u.displayName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
-    });
-  }, [users, search, roleFilter]);
+    }), accountSort);
+  }, [users, search, roleFilter, accountSort]);
 
   const FILTERS: { key: 'all' | 'station' | UserRole; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -304,6 +361,14 @@ function ManageUsersCard({
         </div>
       </div>
 
+      <label className="flex flex-wrap items-center gap-2 px-4 pb-3 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 md:px-6">
+        Sort accounts
+        <select value={accountSort} onChange={event => setAccountSort(event.target.value as AccountSort)} className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200">
+          <option value="name-asc">Name: A–Z</option><option value="name-desc">Name: Z–A</option>
+          <option value="tier-asc">Access tier: low to high</option><option value="tier-desc">Access tier: high to low</option>
+          <option value="last-login">Last logged in: newest first</option><option value="created">Latest created account</option>
+        </select>
+      </label>
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] border-collapse">
@@ -395,7 +460,7 @@ function UserRow({
           {user.accountType === 'station' ? 'Station account' : 'Personal account'}
         </span>
       </td>
-      {/* Status — text color matches the status (green = active, gray = invited). */}
+      {/* Online sessions are active; offline accounts show their last login. */}
       <td className="px-3 py-3">
         <span
           className={`flex items-center gap-1.5 text-xs font-semibold ${user.active ? '' : 'text-neutral-500 dark:text-neutral-400'}`}
@@ -405,7 +470,7 @@ function UserRow({
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ background: user.active ? '#2fbf4f' : '#cbd5e1' }}
           />
-          {user.active ? user.lastLoginLabel : 'Invited'}
+          {user.active ? 'Active now' : lastLoggedInLabel(user.lastLoginAt)}
         </span>
       </td>
       {/* Actions */}

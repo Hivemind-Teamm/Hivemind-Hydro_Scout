@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "accountPresenceSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "stationId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "reports",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -10,6 +18,15 @@
     }
   ],
   "fieldOverrides": [
+    {
+      "collectionGroup": "unitLocations",
+      "fieldPath": "public",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
     {
       "collectionGroup": "reports",
       "fieldPath": "reporterUid",

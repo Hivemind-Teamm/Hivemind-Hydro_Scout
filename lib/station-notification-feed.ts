@@ -9,8 +9,10 @@ export type StationNotification = {
   lat?: number;
   lng?: number;
   response?: StationResponseSummary;
+  responseGroup?: { day: string; entries: StationNotification[]; activeCount: number; peopleCount: number };
 };
 export type StationResponseSummary = {
+  firePinId?: string; incidentLat?: number; incidentLng?: number;
   id: string; uid: string; displayName: string; stationId: string; stationName?: string;
   status: 'active' | 'ended'; startedAt?: Timestamp | null; endedAt?: Timestamp | null;
   endedByUid?: string; endedByName?: string; endReason?: string;
@@ -46,6 +48,7 @@ export function stationNotificationFeed(events: StationNotification[], responses
       endedByName: record?.endedByName ?? (ending?.type === 'station-response-closed' ? ending.displayName : undefined),
       endReason: record?.endReason ?? (ending?.type === 'station-response-closed' ? 'station-head' : undefined),
       lastLocationAt: record?.lastLocationAt,
+      firePinId: record?.firePinId, incidentLat: record?.incidentLat, incidentLng: record?.incidentLng,
     };
     feed.push({ ...latest, responseId, uid: response.uid, displayName: name, response,
       message: `${name} ${ended ? 'ended' : 'started'} response.` });
@@ -54,7 +57,47 @@ export function stationNotificationFeed(events: StationNotification[], responses
 }
 
 export function stationNotificationCardKey(notification: StationNotification) {
+  if (notification.responseGroup) return notification.id;
   return notification.responseId && notification.response ? `response:${notification.responseId}` : `activity:${notification.id}`;
+}
+
+const philippineDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+/** Presentation-only grouping: children keep their original event/read identities. */
+export function dailyResponseNotifications(feed: StationNotification[], stationId: string | null) {
+  const groups = new Map<string, { day: string; entries: StationNotification[] }>();
+  const result: StationNotification[] = [];
+  for (const item of feed) {
+    if (!item.response) { result.push(item); continue; }
+    const started = item.response.startedAt ?? item.createdAt;
+    // Never invent a calendar day for historical records missing timestamps.
+    if (!started) { result.push(item); continue; }
+    const day = philippineDay.format(started.toDate());
+    const key = `response-day:${item.response.stationId || stationId || 'station'}:${day}`;
+    const group = groups.get(key) ?? { day, entries: [] };
+    group.entries.push(item);
+    groups.set(key, group);
+  }
+  for (const [id, { day, entries }] of groups) {
+    entries.sort((a, b) => millis(a.response?.startedAt ?? a.createdAt) - millis(b.response?.startedAt ?? b.createdAt)
+      || a.id.localeCompare(b.id));
+    const limited = entries.every(item => item.limited);
+    const people = [...new Map(entries.map(item => [item.uid || item.responseId || item.id, item.displayName || item.response?.displayName || 'Responder'])).values()];
+    const names = people.length === 1 ? people[0] : people.length === 2 ? `${people[0]} and ${people[1]}` : `${people[0]} and ${people.length - 1} others`;
+    const activeCount = entries.filter(item => item.response?.status === 'active').length;
+    const action = activeCount === entries.length ? 'started response' : activeCount === 0 ? 'ended response' : 'updated their response status';
+    const latest = [...entries].sort((a, b) => millis(b.createdAt) - millis(a.createdAt))[0];
+    result.push({ id, type: activeCount > 0 ? 'response-started' : 'response-ended', limited,
+      message: limited ? `${entries.length} station ${entries.length === 1 ? 'response' : 'responses'} updated.` : `${names} ${action}.`,
+      createdAt: latest.createdAt,
+      responseGroup: { day, entries, activeCount, peopleCount: people.length },
+    });
+  }
+  return result.sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
+}
+
+export function unreadActivityCount(item: StationNotification, unread: (entry: StationNotification) => boolean): number {
+  return item.responseGroup ? item.responseGroup.entries.reduce((sum, entry) => sum + unreadActivityCount(entry, unread), 0) : Number(unread(item));
 }
 
 export function responseDuration(response: StationResponseSummary, now: number) {

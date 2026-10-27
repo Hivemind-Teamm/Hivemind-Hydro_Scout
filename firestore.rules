@@ -91,7 +91,7 @@ service cloud.firestore {
     function isValidMapNotification(stationId) {
       let data = request.resource.data;
       return data.keys().hasAll(['type', 'uid', 'displayName', 'message', 'createdAt', 'lat', 'lng'])
-        && data.keys().hasOnly(['type', 'uid', 'displayName', 'message', 'createdAt', 'lat', 'lng', 'hydrantId'])
+        && data.keys().hasOnly(['type', 'uid', 'displayName', 'message', 'createdAt', 'lat', 'lng', 'hydrantId', 'firePinId'])
         && (isAuthorized() || isHead() || isAdmin())
         && currentUserData().stationId == stationId
         && data.uid == request.auth.uid
@@ -102,8 +102,14 @@ service cloud.firestore {
         && data.lng is number && data.lng >= -180 && data.lng <= 180
         && ((data.type == 'fire-pinned'
             && !('hydrantId' in data)
+            && (!('firePinId' in data) || (data.firePinId is string && data.firePinId.matches('^[a-zA-Z0-9]{20}$')
+              && getAfter(/databases/$(database)/documents/firePins/$(data.firePinId)).data.createdAt == request.time
+              && getAfter(/databases/$(database)/documents/firePins/$(data.firePinId)).data.lat == data.lat
+              && getAfter(/databases/$(database)/documents/firePins/$(data.firePinId)).data.lng == data.lng
+              && getAfter(/databases/$(database)/documents/firePinOwners/$(data.firePinId)).data.uid == request.auth.uid))
             && data.message == data.displayName + ' pinned a fire incident.')
           || (data.type in ['hydrant-pinned', 'hydrant-updated']
+            && !('firePinId' in data)
             && data.hydrantId is string && data.hydrantId.matches('^HYD-[0-9]{3}$')
             && ((data.type == 'hydrant-pinned'
                 && !exists(/databases/$(database)/documents/hydrants/$(data.hydrantId))
@@ -415,11 +421,16 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly([
           'responseId', 'uid', 'displayName', 'stationId', 'stationName', 'status', 'startedAt',
-          'endedAt', 'lastLocationAt'
+          'endedAt', 'lastLocationAt', 'firePinId', 'incidentLat', 'incidentLng'
         ])
         && request.resource.data.responseId == responseId
         && responseId.matches('^[a-f0-9-]{36}$')
         && request.resource.data.uid == request.auth.uid
+        && request.resource.data.firePinId is string
+        && request.resource.data.firePinId.matches('^[a-zA-Z0-9]{20}$')
+        && getAfter(/databases/$(database)/documents/firePins/$(request.resource.data.firePinId)).data.status == 'active'
+        && request.resource.data.incidentLat == getAfter(/databases/$(database)/documents/firePins/$(request.resource.data.firePinId)).data.lat
+        && request.resource.data.incidentLng == getAfter(/databases/$(database)/documents/firePins/$(request.resource.data.firePinId)).data.lng
         && request.resource.data.displayName == currentUserData().displayName
         && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 120
         && request.resource.data.stationId is string
@@ -429,6 +440,7 @@ service cloud.firestore {
         && request.resource.data.startedAt == request.time
         && request.resource.data.endedAt == null
         && request.resource.data.lastLocationAt == request.time
+        && currentUserData().get('activeResponseId', null) == null
         && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.activeResponseId == responseId
         && (getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/unitLocations/$(responseId)).data.responseId == responseId
           || getAfter(/databases/$(database)/documents/responseLocations/$(responseId)).data.responseId == responseId)
@@ -686,6 +698,68 @@ service cloud.firestore {
       allow delete: if isAdmin()
         || (ownsIncidentLocation(locationId)
           && resource.data.get('updatedBy', null) == request.auth.uid);
+    }
+
+    // Private account presence. Separate sessions preserve multi-tab/device
+    // status; presence is a UI signal, never an authorization grant.
+    match /accountPresenceSessions/{sessionId} {
+      function validPresence() {
+        let data = request.resource.data;
+        return data.keys().hasAll(['uid', 'stationId', 'lastSeenAt'])
+          && data.keys().hasOnly(['uid', 'stationId', 'lastSeenAt'])
+          && sessionId.matches('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
+          && data.uid == request.auth.uid
+          && isAnyRole()
+          && (data.stationId == null || (data.stationId is string && data.stationId.size() <= 128))
+          && data.stationId == currentUserData().get('stationId', null)
+          && data.lastSeenAt is timestamp && data.lastSeenAt == request.time;
+      }
+      allow read: if isSignedIn() && (isAdmin() || resource.data.uid == request.auth.uid
+        || (resource.data.stationId is string && canManageStation(resource.data.stationId)));
+      allow create: if isSignedIn() && validPresence();
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid && validPresence();
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // Shared map pins are visible only to signed-in accounts. Ownership is
+    // separate so map readers never receive creator identities.
+    function firePinWriter() { return isSignedIn() && (isAuthorized() || isHead() || isAdmin()); }
+    function validFirePin() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['lat', 'lng', 'stationId', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['lat', 'lng', 'stationId', 'status', 'createdAt', 'updatedAt'])
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && (data.stationId == null || (data.stationId is string && data.stationId.size() <= 128))
+        && data.status in ['active', 'cleared'] && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+    match /firePins/{pinId} {
+      allow read: if isSignedIn();
+      allow create: if firePinWriter() && pinId.matches('^[a-zA-Z0-9]{20}$') && validFirePin() && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.stationId == currentUserData().get('stationId', null)
+        && getAfter(/databases/$(database)/documents/firePinOwners/$(pinId)).data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/firePinOwners/$(pinId)).data.stationId == request.resource.data.stationId;
+      allow update: if firePinWriter() && validFirePin() && resource.data.status == 'active'
+        && request.resource.data.stationId == resource.data.stationId && request.resource.data.createdAt == resource.data.createdAt
+        && (get(/databases/$(database)/documents/firePinOwners/$(pinId)).data.uid == request.auth.uid
+          || isAdmin() || (resource.data.stationId is string && canManageStation(resource.data.stationId)))
+        // Clearing goes through the verified server action so responders end together.
+        && request.resource.data.status == 'active';
+      allow delete: if false;
+    }
+    match /firePinOwners/{pinId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin()
+        || (resource.data.stationId is string && canManageStation(resource.data.stationId)));
+      allow create: if firePinWriter() && pinId.matches('^[a-zA-Z0-9]{20}$')
+        && request.resource.data.keys().hasAll(['uid', 'stationId', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'stationId', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid && request.resource.data.createdAt == request.time
+        && request.resource.data.stationId == currentUserData().get('stationId', null)
+        && getAfter(/databases/$(database)/documents/firePins/$(pinId)).data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/firePins/$(pinId)).data.stationId == request.resource.data.stationId;
+      allow update, delete: if false;
     }
 
     // ---------- hydrants ----------

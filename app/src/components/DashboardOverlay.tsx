@@ -2,6 +2,7 @@
 
 import { memo, useState, useEffect, useRef } from 'react';
 import { useStationNotifications } from '@/lib/use-station-notifications';
+import NotificationCountBadge from './NotificationCountBadge';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -14,7 +15,7 @@ import {
 import { HYDRANT_PIN_FILTER } from './hydrantIcon';
 import OtwHazardPanel from './OtwHazardPanel';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
-import { FiAlertTriangle, FiBell, FiUsers } from 'react-icons/fi';
+import { FiAlertTriangle, FiBell, FiUsers, FiUserCheck } from 'react-icons/fi';
 import { MdLocalFireDepartment } from 'react-icons/md';
 
 interface DashboardOverlayProps {
@@ -88,12 +89,13 @@ function DashboardOverlay({
   onToggleFirePin,
 }: DashboardOverlayProps) {
   const { user, role, accountType, stationId, locationPrivacyAvailable, locationPrivacyGranted, openLocationConsent } = useAuth();
-  const { hasUnreadActivity, hasUnreadMembers, canViewActivity, canApproveMembers } = useStationNotifications();
+  const { unreadActivityCount, unreadMemberCount, canViewActivity, canApproveMembers } = useStationNotifications();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const canViewDashboard = role === 'head' || role === 'admin';
   const canManageStation = canViewActivity;
   const canApproveStationMembers = canApproveMembers;
+  const canViewStationMembers = !!user && !!stationId && (role === 'head' || role === 'admin');
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   // Fire response planning is for responders — the same roles that can route.
   const canPinFire = role === 'authorized' || role === 'head' || role === 'admin';
@@ -123,13 +125,14 @@ function DashboardOverlay({
         {/* Slim top bar */}
         <header className="pointer-events-auto absolute inset-x-0 top-0 z-[1000]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex h-14 items-center justify-between bg-neutral-600/60 px-3 [backdrop-filter:blur(4px)] dark:bg-black/55">
-            <div className="flex items-center gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/Hydro-Scout%20Logo.png" alt="" className="h-9 w-9 object-contain dark:drop-shadow-[0_0_8px_rgba(224,53,59,0.7)]" />
-              <span className="text-lg font-extrabold tracking-tight text-white">Hydro-<span className="text-[#e0353b]">Scout</span></span>
+              <span className="truncate text-lg font-extrabold tracking-tight text-white">Hydro-<span className="text-[#e0353b]">Scout</span></span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${loading ? 'bg-amber-400' : 'bg-[#2fbf4f]'}`} />
+            <div className="flex shrink-0 items-center gap-2">
+              {canViewStationMembers && <button type="button" onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-roster'))}
+                aria-label="Station members" title="Station members" className="flex h-9 w-9 items-center justify-center rounded-lg text-white hover:bg-white/10 active:scale-90"><FiUsers size={17} /></button>}
               {canApproveStationMembers && (
                 <button
                   type="button"
@@ -138,8 +141,8 @@ function DashboardOverlay({
                   title="Station member approvals"
                   className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
                 >
-                  <FiUsers size={17} />
-                  {hasUnreadMembers && <span role="img" aria-label="Unread member approvals" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
+                  <FiUserCheck size={17} />
+                  <NotificationCountBadge count={unreadMemberCount} label="unread member approvals" className="absolute -right-1 -top-1 ring-2 ring-neutral-700" />
                 </button>
               )}
               {canManageStation && (
@@ -151,7 +154,7 @@ function DashboardOverlay({
                   className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
                 >
                   <FiBell size={17} />
-                  {hasUnreadActivity && <span role="img" aria-label="Unread station activity" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
+                  <NotificationCountBadge count={unreadActivityCount} label="unread activity updates" className="absolute -right-1 -top-1 ring-2 ring-neutral-700" />
                 </button>
               )}
               <button
@@ -495,6 +498,10 @@ function DashboardOverlay({
               </div>
             )}
 
+            {canViewStationMembers && <div className="flex items-center border-l border-white/15 px-2">
+              <button type="button" onClick={() => window.dispatchEvent(new Event('hydroscout:toggle-station-roster'))}
+                aria-label="Station members" title="Station members" className="flex h-10 w-10 items-center justify-center rounded-lg text-white hover:bg-white/10 active:scale-90"><FiUsers size={18} /></button>
+            </div>}
             {canApproveStationMembers && (
               <div className="flex items-center border-l border-white/15 px-3">
                 <button
@@ -504,8 +511,8 @@ function DashboardOverlay({
                   title="Station member approvals"
                   className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
                 >
-                  <FiUsers size={18} />
-                  {hasUnreadMembers && <span role="img" aria-label="Unread member approvals" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
+                  <FiUserCheck size={18} />
+                  <NotificationCountBadge count={unreadMemberCount} label="unread member approvals" className="absolute -right-1 -top-1 ring-2 ring-neutral-700" />
                 </button>
               </div>
             )}
@@ -520,7 +527,7 @@ function DashboardOverlay({
                   className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:scale-90"
                 >
                   <FiBell size={18} />
-                  {hasUnreadActivity && <span role="img" aria-label="Unread station activity" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#e0353b] ring-2 ring-neutral-700" />}
+                  <NotificationCountBadge count={unreadActivityCount} label="unread activity updates" className="absolute -right-1 -top-1 ring-2 ring-neutral-700" />
                 </button>
               </div>
             )}

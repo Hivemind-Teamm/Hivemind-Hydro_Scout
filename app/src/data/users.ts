@@ -33,8 +33,13 @@ import {
   serverTimestamp,
   type DocumentData,
   type Unsubscribe,
+  Timestamp,
 } from 'firebase/firestore';
 import { db, firebaseConfig } from '@/lib/firebase';
+import { accountLoginStatus } from '@/lib/account-login-status';
+import { useLoginClock } from '@/lib/use-login-clock';
+import { useAuth } from '@/lib/auth-context';
+import { accountIsPresent, PRESENCE_EXPIRY_MS, type PresenceRecord } from '@/lib/account-presence-state';
 import {
   getUserProfile,
   stationAccountIndexRef,
@@ -105,9 +110,10 @@ export interface AppUser {
 
   initials: string;
 
-  /** false until the account has logged in at least once */
+  /** True while at least one signed-in session has fresh presence. */
   active: boolean;
-
+  lastLoginAt: Date | null;
+  activityLabel: string;
   lastLoginLabel: string;
 }
 
@@ -151,37 +157,6 @@ function toDate(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function relativeLabel(d: Date | null): string {
-  if (!d) return 'Never signed in';
-
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-
-  if (mins < 1) return 'Active now';
-
-  if (mins < 60) {
-    return `${mins} min ago`;
-  }
-
-  const hrs = Math.floor(mins / 60);
-
-  if (hrs < 24) {
-    return `${hrs} hr${hrs === 1 ? '' : 's'} ago`;
-  }
-
-  const days = Math.floor(hrs / 24);
-
-  if (days < 30) {
-    return `${days} day${days === 1 ? '' : 's'} ago`;
-  }
-
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
 function readAorBarangays(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -210,7 +185,7 @@ export function userFromDoc(
       ? d.email.split('@')[0]
       : 'Unknown User');
 
-  const lastLogin = toDate(d.lastLoginAt);
+  const login = accountLoginStatus(d.lastLoginAt);
 
   const stationId =
     typeof d.stationId === 'string' &&
@@ -244,9 +219,10 @@ export function userFromDoc(
 
     initials: initialsOf(displayName),
 
-    active: !!lastLogin,
-
-    lastLoginLabel: relativeLabel(lastLogin),
+    active: false,
+    lastLoginAt: login.lastLoginAt,
+    activityLabel: login.label,
+    lastLoginLabel: login.lastLoginLabel,
   };
 }
 
@@ -261,6 +237,16 @@ export interface UsersState {
  * Only resolves for admins according to Firestore rules.
  */
 export function useUsers(): UsersState {
+  const now = useLoginClock();
+  const { user: viewer, role } = useAuth();
+  const presenceScope = role === 'admin' ? viewer?.uid : undefined;
+  const [presence, setPresence] = useState<{ scope?: string; records: PresenceRecord[]; checkedAt?: number }>({ records: [] });
+  useEffect(() => {
+    if (!presenceScope) return;
+    return onSnapshot(query(collection(db, 'accountPresenceSessions'), where('lastSeenAt', '>', Timestamp.fromMillis(now - PRESENCE_EXPIRY_MS))), snapshot => {
+      setPresence({ scope: presenceScope, records: snapshot.docs.map(record => record.data() as PresenceRecord), checkedAt: Date.now() });
+    }, () => setPresence({ scope: presenceScope, records: [] }));
+  }, [presenceScope, now]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] =
@@ -351,7 +337,12 @@ export function useUsers(): UsersState {
   }, []);
 
   return {
-    users,
+    users: users.map(user => {
+      const login = accountLoginStatus(user.lastLoginAt, now);
+      const active = !!presenceScope && (user.uid === presenceScope
+        || (presence.scope === presenceScope && accountIsPresent(presence.records, user.uid, Math.max(now, presence.checkedAt ?? now))));
+      return { ...user, active, activityLabel: active ? 'Active now' : login.label, lastLoginLabel: login.lastLoginLabel };
+    }),
     loading,
     error,
   };

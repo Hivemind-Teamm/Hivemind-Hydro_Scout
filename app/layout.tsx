@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/lib/theme-context";
 
 import ScrollBehavior from "./src/components/ScrollBehavior";
 import ServiceWorkerRegister from "./src/components/ServiceWorkerRegister";
+import AccountPresenceReporter from './src/components/AccountPresenceReporter';
 
 // Runs before first paint to set the `.dark` class from the stored choice
 // or the OS/default preference, preventing a flash of the wrong theme.
@@ -92,6 +93,7 @@ export default function RootLayout({
           <ServiceWorkerRegister />
 
           <AuthProvider>
+            <AccountPresenceReporter />
             {children}
           </AuthProvider>
         </ThemeProvider>

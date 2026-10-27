@@ -8,6 +8,14 @@ const start = { id: 'r1_start', responseId: 'r1', type: 'response-started', uid:
 const end = { ...start, id: 'r1_end', type: 'response-ended', message: 'Ended', createdAt: stamp(61000) };
 const record = { id: 'r1', uid: 'responder', displayName: 'Responder One', stationId: 'station-one', stationName: 'Station One', status: 'active', startedAt: stamp(1000), endedAt: null };
 
+test('response history retains fire coordinates and incident link after clearing', () => {
+  const [item] = stationNotificationFeed([start, end], [{ ...record, status: 'ended', firePinId: 'fire-one', incidentLat: 14.65, incidentLng: 121.06, endReason: 'incident-cleared' }]);
+  assert.equal(item.response.firePinId, 'fire-one');
+  assert.equal(item.response.incidentLat, 14.65);
+  assert.equal(item.response.incidentLng, 121.06);
+  assert.equal(item.response.endReason, 'incident-cleared');
+});
+
 test('start and end update one stable response card with authoritative timestamps', () => {
   const [active] = stationNotificationFeed([start], [record]);
   const endedRecord = { ...record, status: 'ended', endedAt: stamp(61000), endedByUid: 'responder' };

@@ -1,5 +1,7 @@
 'use client';
 import StationUnitIcon from './StationUnitIcon';
+import SharedFirePinMarker from './SharedFirePinMarker';
+import type { MapFirePin } from '@/lib/use-shared-fire-pins';
 
 // MapLibre mirror of DilimanMap (the Mapbox provider). Same DOM-marker hydrant
 // pins, Supercluster CSS-glide clustering, eased wheel/button zoom, globe,
@@ -133,6 +135,8 @@ interface MapLibreMapProps {
   isDark?: boolean;
   onMapMove?: () => void;
   firePinMode?: boolean;
+  sharedFirePins?: MapFirePin[];
+  onSelectFire?: (id: string) => void;
   fire?: FireOverlay | null;
   onFirePin?: (lat: number, lng: number) => void;
   onFireMove?: (lat: number, lng: number) => void;
@@ -448,7 +452,7 @@ export default function MapLibreMap({
   unitLocations = [],
   hydrants, aorBarangays, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
-  firePinMode = false, fire = null, onFirePin, onFireMove,
+  firePinMode = false, fire = null, onFirePin, onFireMove, sharedFirePins = [], onSelectFire,
 }: MapLibreMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const otwAnimRef = useRef<number | null>(null);
@@ -994,12 +998,12 @@ export default function MapLibreMap({
           longitude={fire.lng}
           latitude={fire.lat}
           anchor="center"
-          draggable
+          draggable={!!onFireMove}
           onDragEnd={(p) => onFireMove?.(p.lat, p.lng)}
           // Don't let a tap on the pin read as a background tap (closes panels).
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="fire-pin" title="Fire location — drag to adjust">
+          <div className="fire-pin" title={onFireMove ? 'Fire location — drag to adjust' : 'Fire location'}>
             <span className="fire-pin-pulse" />
             <span className="fire-pin-pulse fire-pin-pulse-late" />
             <span className="fire-pin-core">
@@ -1009,6 +1013,9 @@ export default function MapLibreMap({
         </MapMarker>
       )}
 
+      {map && sharedFirePins.map(pin => <MapMarker key={`fire-${pin.id}`} map={map} longitude={pin.lng} latitude={pin.lat} anchor="center">
+        <SharedFirePinMarker arrivalAt={pin.arrivalAt} onSelect={() => onSelectFire?.(pin.id)} />
+      </MapMarker>)}
       {map && unitLocations.map(location => (
         <MapMarker key={location.id} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
           <StationUnitIcon location={location} selected={selectedStationId === location.stationId}

@@ -93,16 +93,18 @@ necessary before considering this an operational incident workflow.
   receive only their own membership/report outcomes.
   Station access logs are restricted to heads and administrators.
 - Activity and member approval lists use Reports Register-style cards, clickable
-  account profiles and unread dots on rows and their main icons. Opening a linked
+  account profiles and numbered unread badges on activity rows and main icons. Opening a linked
   profile marks that row read; opening the list alone does not. Read state is
   saved per account/station in Firestore, so it survives logout and synchronizes
   across devices once the updated read-receipt rules are deployed. Browser storage
   remains an immediate fallback; existing local read choices are migrated.
-- Each response has one live notification card. It glows yellow while active,
-  changes its title from started to ended when the response finishes, and shows
-  station, start/end dates and times, and duration. Cards open details; profile
-  links and member approval controls remain separate actions. Immutable lifecycle
-  events remain stored as history and are combined by response ID in the feed.
+- Responses share one live daily card per station using the Philippine start
+  date, including overnight responses. Titles name one/two people or the first
+  person plus N others; mixed active/ended groups say their status was updated.
+  Cards glow while any response remains active. Opening a group reveals personnel
+  entries with status, timestamps and duration; expanding each entry marks only
+  that update read and reduces the group/main icon counts. Immutable lifecycle
+  events and existing per-account read receipts remain unchanged.
 - Notifications are in-app only. Users must open Hydro-Scout to review activity
   and member approval updates; the app does not send browser or device alerts.
 - Access-log paths and permissions exist, but the current UI does not write an
@@ -194,6 +196,9 @@ npx.cmd eslint app/src/components/StationResponseControl.tsx lib/auth-context.ts
 
 The emulator suite covers station membership signup and approval, response
 start/end batches, cross-station map visibility, and responder-name privacy.
+The live map also requires the `unitLocations.public` ascending collection-group
+index declared in `firestore.indexes.json`. Deploy the indexes and wait for the
+index to finish building; emulator tests do not detect a missing production index.
 For notification read-state checks, see the
 [station testing guide](station-location-testing/README.md). These commands do not by themselves
 confirm the currently deployed application or rules.

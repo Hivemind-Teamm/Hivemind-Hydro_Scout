@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './auth-context';
 import { notificationReadKey, parseReadNotifications } from './notification-read-state';
-import { stationNotificationFeed, type StationResponseSummary, type StationNotification } from './station-notification-feed';
+import { dailyResponseNotifications, unreadActivityCount, stationNotificationFeed, type StationResponseSummary, type StationNotification } from './station-notification-feed';
 import { useLimitedNotifications } from './use-limited-notifications';
 export type { StationNotification } from './station-notification-feed';
 
@@ -137,12 +137,23 @@ function useManagementNotifications() {
 }
 
 export function useStationNotifications() {
-  const { user, role, stationId, stationMembershipStatus } = useAuth();
+  const { user, role, accountType, stationId, stationMembershipStatus } = useAuth();
   const fullDetails = role === 'admin' || role === 'head';
+  const canApproveMembers = !!user && !!stationId && fullDetails && accountType !== 'station';
   const management = useManagementNotifications();
   const limited = useLimitedNotifications(user && !fullDetails ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
-  return { ...(fullDetails ? management : limited), fullDetails,
+  const feed = fullDetails ? management : limited;
+  const notifications = useMemo(() => dailyResponseNotifications(feed.notifications, stationId), [feed.notifications, stationId]);
+  const activityUnreadCount = (item: StationNotification) => unreadActivityCount(item, feed.isActivityUnread);
+  const unreadActivities = notifications.reduce((sum, item) => sum + activityUnreadCount(item), 0);
+  const unreadMembers = management.requests.filter(item => management.isMemberUnread(item)).length;
+  return { ...feed, notifications, fullDetails, activityUnreadCount,
+    unreadActivityCount: unreadActivities, unreadMemberCount: canApproveMembers ? unreadMembers : 0,
+    hasUnreadMembers: canApproveMembers && unreadMembers > 0,
+    hasUnreadActivity: unreadActivities > 0,
+    isActivityUnread: (item: StationNotification) => activityUnreadCount(item) > 0,
+    readActivity: (item: StationNotification) => { if (!item.responseGroup) feed.readActivity(item); },
     canViewActivity: !!user,
-    canApproveMembers: !!user && !!stationId && fullDetails,
+    canApproveMembers,
   };
 }
