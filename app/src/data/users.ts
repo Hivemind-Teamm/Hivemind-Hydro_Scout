@@ -21,7 +21,7 @@ import {
   updateProfile,
   signOut as secondarySignOut,
 } from 'firebase/auth';
-import { collectionGroup,
+import {
   collection,
   doc,
   getDoc,
@@ -243,7 +243,7 @@ export function useUsers(): UsersState {
   const [presence, setPresence] = useState<{ scope?: string; records: PresenceRecord[]; checkedAt?: number }>({ records: [] });
   useEffect(() => {
     if (!presenceScope) return;
-    return onSnapshot(query(collectionGroup(db, 'presenceSessions'), where('lastSeenAt', '>', Timestamp.fromMillis(now - PRESENCE_EXPIRY_MS))), snapshot => {
+    return onSnapshot(query(collection(db, 'accountPresenceSessions'), where('lastSeenAt', '>', Timestamp.fromMillis(now - PRESENCE_EXPIRY_MS))), snapshot => {
       setPresence({ scope: presenceScope, records: snapshot.docs.map(record => record.data() as PresenceRecord), checkedAt: Date.now() });
     }, () => setPresence({ scope: presenceScope, records: [] }));
   }, [presenceScope, now]);

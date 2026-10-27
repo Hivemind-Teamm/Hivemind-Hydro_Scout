@@ -1,17 +1,16 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { collection, collectionGroup, doc, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { useAuth } from './auth-context';
 import { db } from './firebase';
 import { getUserProfile } from './user-profile';
 import { firePinArrivalTracker } from './fire-pin-arrivals';
 import { playHazardChime, prepareNotificationAudio } from './chime';
-import { newFireIncidentId } from './firestore-layout.mjs';
 
 export type SharedFirePin = { id: string; lat: number; lng: number; stationId: string | null; pinnedAt: number; arrivalAt?: number };
 export type MapFirePin = Pick<SharedFirePin, 'id' | 'lat' | 'lng' | 'arrivalAt'>;
 const movePin = (id: string, lat: number, lng: number) => Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
-  ? updateDoc(doc(db, 'fireIncidents', id), { lat, lng, updatedAt: serverTimestamp() }) : Promise.reject(new Error('Invalid fire coordinates.'));
+  ? updateDoc(doc(db, 'firePins', id), { lat, lng, updatedAt: serverTimestamp() }) : Promise.reject(new Error('Invalid fire coordinates.'));
 const clearPin = async (id: string) => {
   const result = await fetch('/api/fire-pins/clear', { method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
@@ -32,14 +31,10 @@ export function useSharedFirePins() {
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
     let pins: SharedFirePin[] = [];
+    let owned: string[] = [];
     let error: string | null = null;
-    const publish = () => setState(current => ({
-      uid,
-      pins,
-      owned: current.uid === uid ? current.owned : [],
-      error,
-    }));
-    const stopPins = onSnapshot(query(collection(db, 'fireIncidents'), where('status', '==', 'active')), { includeMetadataChanges: true }, snapshot => {
+    const publish = () => setState({ uid, pins, owned, error });
+    const stopPins = onSnapshot(query(collection(db, 'firePins'), where('status', '==', 'active')), { includeMetadataChanges: true }, snapshot => {
       const incoming = trackArrivals(snapshot.docs.map(record => ({ id: record.id, pending: record.metadata.hasPendingWrites })), snapshot.metadata.fromCache, local);
       if (incoming.length) {
         const now = Date.now();
@@ -53,18 +48,13 @@ export function useSharedFirePins() {
         .sort((a, b) => b.pinnedAt - a.pinnedAt);
       error = null; publish();
     }, () => { pins = []; error = 'Shared fire incidents could not load. Check your connection and deployed Firestore rules.'; publish(); });
-    return () => { stopPins(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
+    const stopOwners = onSnapshot(query(collection(db, 'firePinOwners'), where('uid', '==', uid)), snapshot => {
+      owned = snapshot.docs.map(record => record.id); publish();
+    }, () => { owned = []; publish(); });
+    return () => { stopPins(); stopOwners(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
   }, [uid]);
   const pins = uid && state.uid === uid ? state.pins : [];
   const owned = uid && state.uid === uid ? state.owned : [];
-  useEffect(() => {
-    if (!uid) return;
-    return onSnapshot(query(collectionGroup(db, 'ownership'), where('uid', '==', uid)), snapshot => {
-      const owned = snapshot.docs.flatMap(record => record.id === 'record' && record.ref.parent.parent
-        ? [record.ref.parent.parent.id] : []);
-      setState(current => current.uid === uid ? { ...current, owned } : current);
-    }, () => setState(current => current.uid === uid ? { ...current, owned: [] } : current));
-  }, [uid]);
   const canEdit = (pin: SharedFirePin) => !!uid && (role === 'admin' || owned.includes(pin.id)
     || (!!pin.stationId && ((role === 'head' && stationId === pin.stationId) || stationAccessIds.includes(pin.stationId))));
   const create = useCallback(async (lat: number, lng: number) => {
@@ -72,12 +62,12 @@ export function useSharedFirePins() {
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new Error('Invalid fire coordinates.');
       const { data } = await getUserProfile(uid);
       const assigned = typeof data?.stationId === 'string' ? data.stationId : null;
-      const pin = doc(db, 'fireIncidents', newFireIncidentId());
+      const pin = doc(collection(db, 'firePins'));
       const local = localCreations.current.get(uid) ?? new Set<string>();
       local.add(pin.id); localCreations.current.set(uid, local);
       const batch = writeBatch(db);
       batch.set(pin, { lat, lng, stationId: assigned, status: 'active', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      batch.set(doc(db, 'fireIncidents', pin.id, 'ownership', 'record'), { uid, stationId: assigned, createdAt: serverTimestamp() });
+      batch.set(doc(db, 'firePinOwners', pin.id), { uid, stationId: assigned, createdAt: serverTimestamp() });
       if (assigned) {
         const displayName = data?.displayName || 'Responder';
         batch.set(doc(collection(db, 'stations', assigned, 'notifications')), {

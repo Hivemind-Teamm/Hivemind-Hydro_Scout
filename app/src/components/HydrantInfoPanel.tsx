@@ -1,7 +1,6 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
-import { useHydrantEditAccess } from '@/lib/use-hydrant-edit-access';
 import { useIsMobile } from '@/lib/use-media-query';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
@@ -40,7 +39,7 @@ export default function HydrantInfoPanel({
   const { role } = useAuth();
   const isMobile = useIsMobile();
   const meta = STATUS_META[hydrant.status];
-  const canEdit = useHydrantEditAccess(hydrant.barangay);
+  const canEdit   = role === 'head' || role === 'admin';
   const canReport = role === 'authorized' || role === 'head' || role === 'admin';
   // General users (and guests) are view-only — no routing.
   const canRoute  = role === 'authorized' || role === 'head' || role === 'admin';

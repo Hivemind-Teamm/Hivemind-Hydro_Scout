@@ -16,9 +16,7 @@ import UserProfileModal, { type ViewingUser } from './UserProfileModal';
 import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
 import FireResponsePanel from './FireResponsePanel';
-import FireIncidentDetailsPanel from './FireIncidentDetailsPanel';
 import StationResponseControl from './StationResponseControl';
-import { useStations } from '../data/stations';
 
 // The three heaviest, rarely-open surfaces are split out of the initial
 // bundle so the first load parses/executes less JS on phones. They're warmed
@@ -194,9 +192,7 @@ export default function HydroScoutDashboard() {
   const [mapReady, setMapReady] = useState(false);
   const splashStartedRef = useRef(false);
 
-  const { user, role, stationId, canUseDeviceLocation } = useAuth();
-  const { stations: aorStations } = useStations();
-  const stationAor = aorStations.find(station => station.id === stationId)?.aorBarangays ?? [];
+  const { user, role, aorBarangays, canUseDeviceLocation } = useAuth();
   const sharedFires = useSharedFirePins();
   const { create: createSharedFirePin, move: moveSharedFirePin } = sharedFires;
   const fireIncident = sharedFires.pins.find(pin => pin.id === selectedFireId) ?? null;
@@ -1125,7 +1121,7 @@ export default function HydroScoutDashboard() {
         <MapView
           provider={provider}
           hydrants={visibleHydrants}
-          aorBarangays={role !== 'admin' ? stationAor : []}
+          aorBarangays={role === 'authorized' ? aorBarangays : []}
           selectedHydrantId={selectedHydrant?.id ?? null}
           onMapboxError={handleMapboxError}
           onMapReady={handleMapReady}
@@ -1234,8 +1230,6 @@ export default function HydroScoutDashboard() {
         onToggleFirePin={handleToggleFirePinMode}
       />
       <StationResponseControl fireIncident={fireIncident} actionContainer={responseActionContainer} onViewFireLocation={handleViewFireNotification} />
-      {user && role === 'general' && selectedFireId && <FireIncidentDetailsPanel key={`${user.uid}:${selectedFireId}`} incidentId={selectedFireId}
-        onClose={() => setSelectedFireId(null)} onViewMap={(lat, lng) => controllerRef.current?.flyTo(lat, lng, 17)} />}
       {sharedFires.error && <p role="alert" className="pointer-events-auto absolute bottom-24 left-4 right-20 z-[2400] max-w-sm rounded-lg bg-white/95 p-3 text-xs text-red-600 shadow dark:bg-neutral-900">{sharedFires.error}</p>}
 
       {/* Fire-pin mode hint. Bottom-center on desktop (clear of the search bar

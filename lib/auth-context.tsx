@@ -267,7 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       lastLoginAt: serverTimestamp(),
     });
     if (stationId) {
-      batch.set(doc(db, "stations", stationId!, "joinRequests", credential.user.uid), {
+      batch.set(doc(db, "stationJoinRequests", credential.user.uid), {
         uid: credential.user.uid,
         displayName,
         email,

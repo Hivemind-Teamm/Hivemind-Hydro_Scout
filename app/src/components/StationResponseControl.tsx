@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { collectionGroup,
+import {
   collection,
   deleteDoc,
   doc,
@@ -20,7 +20,6 @@ import StationNotificationPanels from './StationNotificationPanels';
 import StationMembersPanel from './StationMembersPanel';
 import type { JoinRequest } from '@/lib/use-station-notifications';
 import { locationTimeoutMs } from '@/lib/unit-location-expiry';
-import { canStartStationResponse } from '@/lib/response-access';
 
 type ResponseRecord = {
   firePinId?: string;
@@ -54,13 +53,12 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   } = useAuth();
   const { stations } = useStations();
   const station = stations.find(item => item.id === stationId);
-  const canRespond = !!user && canStartStationResponse({ role, accountType, stationId, stationMembershipStatus });
+  const canRespond = !!user && accountType === 'person' && !!stationId && stationMembershipStatus === 'approved';
   const canManage = !!user && !!stationId && (role === 'admin' || role === 'head' || stationAccessIds.includes(stationId));
   const canViewRoster = role === 'admin' || role === 'head';
   const canApprove = canViewRoster && accountType !== 'station';
   const [activeResponses, setActiveResponses] = useState<ResponseRecord[]>([]);
   const activeResponseId = activeResponses[0]?.id;
-  const activeResponseStationId = activeResponses[0]?.stationId;
   const [responses, setResponses] = useState<ResponseRecord[]>([]);
   const [responseStation, setResponseStation] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -71,7 +69,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
 
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(query(collectionGroup(db, 'responses'), where('uid', '==', user.uid), where('status', '==', 'active')), snapshot => {
+    return onSnapshot(query(collection(db, 'stationResponses'), where('uid', '==', user.uid), where('status', '==', 'active')), snapshot => {
       setActiveResponses(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as ResponseRecord)));
     }, err => {
       console.error('Failed to load your active responses:', err);
@@ -81,7 +79,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
 
   useEffect(() => {
     if (!canManage || !stationId) return;
-    const active = onSnapshot(collection(db, 'stations', stationId, 'responses'), snapshot => {
+    const active = onSnapshot(query(collection(db, 'stationResponses'), where('stationId', '==', stationId)), snapshot => {
       setResponseStation(stationId);
       setResponses(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as ResponseRecord))
         .sort((a, b) => ((b.startedAt?.toDate?.().getTime() ?? 0) - (a.startedAt?.toDate?.().getTime() ?? 0))));
@@ -119,9 +117,9 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   }, [canViewRoster, stationId]);
 
   useEffect(() => {
-    if (!activeResponseId || !activeResponseStationId || !stationId) return;
-    const response = { id: activeResponseId, stationId: activeResponseStationId };
-    if (!canUseDeviceLocation || !canRespond) {
+    if (!activeResponseId || !stationId) return;
+    const response = { id: activeResponseId };
+    if (!canUseDeviceLocation) {
       void deleteDoc(doc(db, 'stations', stationId, 'unitLocations', response.id)).catch(err => {
         console.error('Could not remove the location after consent withdrawal:', err);
       });
@@ -150,7 +148,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
           accuracy: position.coords.accuracy,
           updatedAt: serverTimestamp(),
         });
-        batch.update(doc(db, 'stations', response.stationId, 'responses', response.id), { lastLocationAt: serverTimestamp() });
+        batch.update(doc(db, 'stationResponses', response.id), { lastLocationAt: serverTimestamp() });
         await batch.commit();
       } catch (err) {
         console.warn('Active response location was not updated:', err);
@@ -171,7 +169,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       window.removeEventListener('focus', resume);
       window.removeEventListener('online', resume);
     };
-  }, [activeResponseId, activeResponseStationId, canUseDeviceLocation, canRespond, station, stationId]);
+  }, [activeResponseId, canUseDeviceLocation, station, stationId]);
 
   const staleAfterMs = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES);
 
@@ -183,7 +181,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
     if (!stale.length) return;
     const batch = writeBatch(db);
     for (const response of stale) {
-      batch.update(doc(db, 'stations', response.stationId, 'responses', response.id), {
+      batch.update(doc(db, 'stationResponses', response.id), {
         status: 'ended',
         endedAt: serverTimestamp(),
         endedByUid: user.uid,
@@ -209,7 +207,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   }, [role, responses, staleAfterMs, stationId, user]);
 
   async function startResponse() {
-    if (!canRespond || !user || !stationId || !station || !fireIncident) return;
+    if (!user || !stationId || !station || !fireIncident) return;
     setError(null);
     if (!canUseDeviceLocation) {
       openLocationConsent();
@@ -220,7 +218,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       const position = await currentPosition();
       const id = crypto.randomUUID();
       const batch = writeBatch(db);
-      batch.set(doc(db, 'stations', stationId, 'responses', id), {
+      batch.set(doc(db, 'stationResponses', id), {
         firePinId: fireIncident.id,
         incidentLat: fireIncident.lat,
         incidentLng: fireIncident.lng,
@@ -264,12 +262,12 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   }
 
   async function endResponse(response: ResponseRecord) {
-    if (!canRespond || !user || !stationId) return;
+    if (!user || !stationId) return;
     setError(null);
     setBusy(true);
     try {
       const batch = writeBatch(db);
-      batch.update(doc(db, 'stations', response.stationId, 'responses', response.id), {
+      batch.update(doc(db, 'stationResponses', response.id), {
         status: 'ended',
         endedAt: serverTimestamp(),
         endedByUid: user.uid,
@@ -302,7 +300,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
     setError(null);
     try {
       const batch = writeBatch(db);
-      batch.update(doc(db, 'stations', stationId, 'joinRequests', request.id), { status: approved ? 'approved' : 'rejected', reviewedAt: serverTimestamp(), reviewedBy: user?.uid });
+      batch.update(doc(db, 'stationJoinRequests', request.id), { status: approved ? 'approved' : 'rejected', reviewedAt: serverTimestamp(), reviewedBy: user?.uid });
       batch.update(doc(db, 'users', request.uid), {
         stationMembershipStatus: approved ? 'approved' : 'rejected',
         stationId: approved ? stationId : null,

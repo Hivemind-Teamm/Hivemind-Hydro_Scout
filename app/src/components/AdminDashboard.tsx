@@ -29,7 +29,7 @@ import { useHydrants, createHydrant } from '../data/store';
 import { type HydrantStatus } from '../data/hydrants';
 import PillBadge from './PillBadge';
 import BuildVersionLog from './BuildVersionLog';
-import { useStations, updateStationAor, type Station } from '../data/stations';
+import { useStations, type Station } from '../data/stations';
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
@@ -126,9 +126,6 @@ function StationsCard({
   const [showCreate, setShowCreate] = useState(false);
   const [stationSearch, setStationSearch] = useState('');
   const [stationSort, setStationSort] = useState<AccountSort>('name-asc');
-  const [aorEditor, setAorEditor] = useState<{ id: string; text: string } | null>(null);
-  const [savingAor, setSavingAor] = useState(false);
-  const [aorError, setAorError] = useState<string | null>(null);
   const stationQuery = stationSearch.trim().toLowerCase();
   const stationDates = new Map<string, { createdAt: Date | null; lastLoginAt: Date | null }>();
   for (const account of users) {
@@ -250,22 +247,6 @@ function StationsCard({
           <div key={station.id} className="grid items-center gap-1.5 px-3 py-3 text-sm hover:bg-neutral-50/70 dark:hover:bg-neutral-800/30 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,0.7fr)] sm:gap-4">
             <div className="min-w-0">
               <p className="break-words font-semibold text-neutral-800 dark:text-neutral-100">{station.name}</p>
-              <p className="mt-1 text-[10px] text-neutral-500">AoR: {station.aorBarangays?.join(', ') || 'Not configured — editing disabled'}</p>
-              <button type="button" className="mt-1 text-[11px] font-semibold text-[#e0353b] hover:underline" onClick={() => { setAorError(null); setAorEditor({ id: station.id, text: station.aorBarangays?.join(', ') || '' }); }}>Edit AoR</button>
-              {aorEditor?.id === station.id && <div className="mt-2 space-y-2">
-                <label className="block text-[11px]">Barangay names, separated by commas
-                  <textarea className="admin-input mt-1 w-full" value={aorEditor.text} onChange={event => setAorEditor({ id: station.id, text: event.target.value })} />
-                </label>
-                <p className="text-[10px] text-neutral-500">Use the exact barangay names recorded on hydrants. Applies to all approved station members.</p>
-                <button type="button" disabled={savingAor} className="mr-3 text-xs font-semibold text-[#e0353b] disabled:opacity-50" onClick={async () => {
-                  setSavingAor(true); setAorError(null);
-                  try { await updateStationAor(station.id, aorEditor.text); setAorEditor(null); }
-                  catch (error) { setAorError(error instanceof Error ? error.message : 'Could not save AoR.'); }
-                  finally { setSavingAor(false); }
-                }}>{savingAor ? 'Saving…' : 'Save AoR'}</button>
-                <button type="button" disabled={savingAor} className="text-xs" onClick={() => setAorEditor(null)}>Cancel</button>
-                {aorError && <p role="alert" className="text-xs text-red-600">{aorError}</p>}
-              </div>}
             <span className="mt-0.5 block text-[10px] text-neutral-400 dark:text-neutral-500">
               {usersLoading
                 ? 'Loading account date…'

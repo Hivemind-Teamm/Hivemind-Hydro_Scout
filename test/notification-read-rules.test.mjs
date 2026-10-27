@@ -15,8 +15,8 @@ try {
       await db.doc(`users/${uid}`).set({ role, accountType: 'person', stationId: station, stationAccessIds: [] });
     }
     await db.doc(`stations/${stationId}/notifications/notice-one`).set({ createdAt: eventCreatedAt });
-    await db.doc(`stations/${stationId}/joinRequests/member`).set({ stationId, createdAt: eventCreatedAt, status: 'pending' });
-    await db.doc('stations/station-two/joinRequests/other-member').set({ stationId: 'station-two', createdAt: eventCreatedAt });
+    await db.doc('stationJoinRequests/member').set({ stationId, createdAt: eventCreatedAt, status: 'pending' });
+    await db.doc('stationJoinRequests/other-member').set({ stationId: 'station-two', createdAt: eventCreatedAt });
   });
   const dbFor = uid => uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore();
   const path = `stations/${stationId}/notificationReads/head/items/activity_notice-one`;
@@ -58,7 +58,7 @@ try {
   const memberPath = `stations/${stationId}/notificationReads/head/items/member_member`;
   await assertSucceeds(relogged.doc(memberPath).set({ ...receipt(), kind: 'member', notificationId: 'member' }));
   await env.withSecurityRulesDisabled(async context => {
-    assert.equal((await context.firestore().doc(`stations/${stationId}/joinRequests/member`).get()).data().status, 'pending');
+    assert.equal((await context.firestore().doc('stationJoinRequests/member').get()).data().status, 'pending');
   });
   await assertFails(relogged.doc(`stations/${stationId}/notificationReads/head/items/member_other-member`).set({ ...receipt(), kind: 'member', notificationId: 'other-member' }));
 
