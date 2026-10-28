@@ -243,10 +243,14 @@ export function useUsers(): UsersState {
   const [presence, setPresence] = useState<{ scope?: string; records: PresenceRecord[]; checkedAt?: number }>({ records: [] });
   useEffect(() => {
     if (!presenceScope) return;
-    return onSnapshot(query(collection(db, 'accountPresenceSessions'), where('lastSeenAt', '>', Timestamp.fromMillis(now - PRESENCE_EXPIRY_MS))), snapshot => {
+    // Keep one listener for the page lifetime. A cutoff derived from the ticking
+    // clock re-created the query every minute and re-read every live session;
+    // accountIsPresent applies expiry against `now` on the client instead.
+    const cutoff = Timestamp.fromMillis(Date.now() - PRESENCE_EXPIRY_MS);
+    return onSnapshot(query(collection(db, 'accountPresenceSessions'), where('lastSeenAt', '>', cutoff)), snapshot => {
       setPresence({ scope: presenceScope, records: snapshot.docs.map(record => record.data() as PresenceRecord), checkedAt: Date.now() });
     }, () => setPresence({ scope: presenceScope, records: [] }));
-  }, [presenceScope, now]);
+  }, [presenceScope]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] =

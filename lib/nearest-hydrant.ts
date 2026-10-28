@@ -4,7 +4,7 @@
  * Uses your project's existing Hydrant type from app/src/data/hydrants.
  */
 
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromCache } from 'firebase/firestore';
 import { db } from './firebase';
 import { hydrantFromDoc, type Hydrant } from '../app/src/data/hydrants';
 
@@ -106,7 +106,11 @@ function isPointInIsochrone(point: [number, number], feature: IsochroneFeature):
 // ─── Firestore Query ──────────────────────────────────────────────────────────
 
 async function fetchOperationalHydrants(): Promise<Hydrant[]> {
-  const snap = await getDocs(collection(db, 'hydrants'));
+  // The dashboard's live hydrant listener keeps this query's cache current;
+  // getDocs alone would re-read the whole collection from the server per search.
+  const hydrants = collection(db, 'hydrants');
+  const cached = await getDocsFromCache(hydrants).catch(() => null);
+  const snap = cached && !cached.empty ? cached : await getDocs(hydrants);
   return snap.docs
     .map((doc) => hydrantFromDoc(doc.id, doc.data()))
     .filter((h) => h.status === 'operational');

@@ -1,4 +1,6 @@
-export const PRESENCE_HEARTBEAT_MS = 60_000;
+// Each heartbeat is one write plus ~2 billed security-rule reads and one read
+// per listener watching it; two minutes halves that cost per open tab.
+export const PRESENCE_HEARTBEAT_MS = 2 * 60_000;
 export const PRESENCE_EXPIRY_MS = 3 * PRESENCE_HEARTBEAT_MS;
 
 export type PresenceRecord = { uid: string; lastSeenAt?: { toMillis?: () => number } | null };

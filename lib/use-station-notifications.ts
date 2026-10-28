@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, where } from 'firebase/firestore';
+import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './auth-context';
 import { notificationReadKey, parseReadNotifications } from './notification-read-state';
@@ -15,6 +15,10 @@ export type JoinRequest = {
   stationId: string; status: string; createdAt?: NoticeTime;
 };
 const changeEvent = 'hydroscout:notification-read';
+// Bounded like the server-built limited feed: every cold listen bills one read
+// per returned document, and both collections only ever grow.
+const NOTIFICATION_LIMIT = 100;
+const READ_RECEIPT_LIMIT = 300;
 function subscribe(callback: () => void) {
   window.addEventListener('storage', callback);
   window.addEventListener(changeEvent, callback);
@@ -79,7 +83,7 @@ function useManagementNotifications() {
       }
     };
     const fail = () => { error = 'Could not load station notifications. Please try again.'; publish(); };
-    const stopNotices = onSnapshot(collection(db, 'stations', stationId, 'notifications'), snapshot => {
+    const stopNotices = onSnapshot(query(collection(db, 'stations', stationId, 'notifications'), orderBy('createdAt', 'desc'), limit(NOTIFICATION_LIMIT)), snapshot => {
       notifications = snapshot.docs.map(record => ({ ...record.data(), id: record.id } as StationNotification))
         .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0));
       publish();
@@ -96,7 +100,7 @@ function useManagementNotifications() {
     }, responseError => {
       console.warn('Response details unavailable; using notification event history.', responseError);
     });
-    const stopReads = onSnapshot(collection(db, 'stations', stationId, 'notificationReads', user!.uid, 'items'), { includeMetadataChanges: true }, snapshot => {
+    const stopReads = onSnapshot(query(collection(db, 'stations', stationId, 'notificationReads', user!.uid, 'items'), orderBy('readAt', 'desc'), limit(READ_RECEIPT_LIMIT)), { includeMetadataChanges: true }, snapshot => {
       readKeys = snapshot.docs.flatMap(record => {
         const data = record.data();
         return (data.kind === 'activity' || data.kind === 'member') && typeof data.notificationId === 'string'
