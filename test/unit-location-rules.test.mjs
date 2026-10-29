@@ -9,6 +9,7 @@ const env = await initializeTestEnvironment({
   firestore: { rules: readFileSync('firestore.rules', 'utf8') },
 });
 try {
+  await env.clearFirestore();
   const profiles = {
     station: { role: 'authorized', accountType: 'station', stationId: 'station-1' },
     head: { role: 'head', accountType: 'station', stationId: 'station-1' },
@@ -49,6 +50,18 @@ try {
     ...payload('other'), deviceId: otherDevice, stationId: 'station-2',
   }));
   assert.equal((await db('station').collection('stations/station-1/unitLocations').get()).size, 3);
+  // A station-scoped Sub Admin must never delete another station's location.
+  await assertFails(
+    db('station')
+      .doc(`stations/station-2/unitLocations/${otherReportId}`)
+      .delete()
+  );
+  assert.equal(
+    (await db('other')
+      .doc(`stations/station-2/unitLocations/${otherReportId}`)
+      .get()).exists,
+    true
+  );
   await assertSucceeds(ref('station').set(payload('station')));
   for (const uid of [null, 'general', 'firefighter', 'invalidStation', 'missing', 'admin', 'unknown', 'invalidRole']) {
     await assertFails(ref(uid).set(payload(uid ?? 'anonymous')));
