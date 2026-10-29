@@ -24,6 +24,11 @@ try {
       aorBarangays: ["Barangay Laging Handa"],
     });
 
+    // The AOR is defined on the station, not on the account profile.
+    await db.collection("stations").doc("STATION-LAGING-HANDA").set({
+      name: "Laging Handa", active: true, aorBarangays: ["Barangay Laging Handa"],
+    });
+
     await db.collection("hydrants").doc("HYD-LAGING-HANDA").set({
       barangay: "Barangay Laging Handa",
       operationalStatus: "Operational",

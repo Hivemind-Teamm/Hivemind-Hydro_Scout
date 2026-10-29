@@ -33,7 +33,7 @@ interface FullDetailsPanelProps {
 type PhotoMenu = { url: string; x: number; y: number; confirming: boolean } | null;
 
 export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo, distanceM, isOtw, linkedReports = [] }: FullDetailsPanelProps) {
-  const { role } = useAuth();
+  const { role, canWriteInAor } = useAuth();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab>('quick');
   const [photoMenu, setPhotoMenu] = useState<PhotoMenu>(null);
@@ -45,6 +45,8 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
   const isAdmin       = role === 'admin';
   const isHeadOrAdmin = role === 'head' || role === 'admin';
   const canAnnotate   = role === 'authorized' || role === 'head' || role === 'admin';
+  // Photo edits are hydrant writes, so they follow the station AOR like the rules.
+  const canEditPhotos = isHeadOrAdmin && canWriteInAor(hydrant.barangay);
   // General users (and not-signed-in guests) get the restricted, view-only,
   // anonymized version of the panel.
   const isGeneralView = !canAnnotate;
@@ -166,7 +168,7 @@ export default function FullDetailsPanel({ hydrant, onClose, onViewUser, onFlyTo
       {/* ── Tab content ── */}
       <div className="scroll-fade min-h-0 flex-1 overflow-y-auto">
         {activeTab === 'quick'   && <QuickTab   hydrant={hydrant} meta={meta} distanceM={distanceM} isOtw={isOtw} />}
-        {activeTab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} isHeadOrAdmin={isHeadOrAdmin} isGeneralView={isGeneralView} onPhotoContextMenu={handlePhotoContextMenu} onViewPhoto={setLightbox} />}
+        {activeTab === 'details' && <DetailsTab hydrant={hydrant} onViewUser={onViewUser} canAnnotate={canAnnotate} canEditPhotos={canEditPhotos} isGeneralView={isGeneralView} onPhotoContextMenu={handlePhotoContextMenu} onViewPhoto={setLightbox} />}
         {activeTab === 'log'     && <MaintenanceTab hydrant={hydrant} linkedReports={linkedReports} onViewUser={onViewUser} />}
         {activeTab === 'admin'   && <AdminTab   hydrant={hydrant} isHeadOrAdmin={isHeadOrAdmin} onClose={onClose} />}
       </div>
@@ -288,11 +290,11 @@ function QuickTab({ hydrant, meta, distanceM, isOtw }: { hydrant: Hydrant; meta:
 }
 
 /* ──────────────────────── DETAILS ──────────────────────── */
-function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, isGeneralView, onPhotoContextMenu, onViewPhoto }: {
+function DetailsTab({ hydrant, onViewUser, canAnnotate, canEditPhotos, isGeneralView, onPhotoContextMenu, onViewPhoto }: {
   hydrant: Hydrant;
   onViewUser: (name: string, role: string) => void;
   canAnnotate: boolean;
-  isHeadOrAdmin: boolean;
+  canEditPhotos: boolean;
   isGeneralView: boolean;
   onPhotoContextMenu: (e: React.MouseEvent, url: string) => void;
   onViewPhoto: (url: string) => void;
@@ -320,8 +322,8 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, isHeadOrAdmin, isGeneral
                 key={url}
                 className="relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-neutral-200 transition-all duration-150 ease-out hover:scale-[1.04] hover:shadow-md hover:z-10 active:scale-[0.97] active:duration-75 dark:border-neutral-700"
                 onClick={() => onViewPhoto(url)}
-                onContextMenu={isHeadOrAdmin ? (e) => onPhotoContextMenu(e, url) : undefined}
-                title={isHeadOrAdmin ? 'Click to view · Right-click for options' : 'Click to view'}
+                onContextMenu={canEditPhotos ? (e) => onPhotoContextMenu(e, url) : undefined}
+                title={canEditPhotos ? 'Click to view · Right-click for options' : 'Click to view'}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={proxiedPhotoUrl(url, 320)} alt={`${hydrant.name} photo ${i + 1}`} loading="lazy" decoding="async" className="h-full w-full object-cover" />

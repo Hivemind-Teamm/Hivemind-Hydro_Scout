@@ -7,8 +7,10 @@ const env = await initializeTestEnvironment({ projectId: 'demo-map-activity', fi
 try {
   await env.withSecurityRulesDisabled(async context => {
     for (const [uid, role, stationId] of [['head', 'head', 'one'], ['member', 'general', 'one'], ['outsider', 'head', 'two']]) {
-      await context.firestore().doc(`users/${uid}`).set({ accountType: 'person', displayName: uid, role, stationId });
+      await context.firestore().doc(`users/${uid}`).set({ accountType: 'person', displayName: uid, role, stationId, stationMembershipStatus: 'approved' });
     }
+    // Hydrant edits and reports are limited to the station AOR.
+    await context.firestore().doc('stations/one').set({ name: 'One', active: true, aorBarangays: ['Central'] });
     await context.firestore().doc('users/delegate').set({ accountType: 'person', displayName: 'Delegate', role: 'authorized', stationId: 'one', stationMembershipStatus: 'approved', stationAccessIds: ['one'] });
   });
   const db = env.authenticatedContext('head').firestore();
@@ -33,10 +35,15 @@ try {
   }
   const pin = notice({ type: 'hydrant-pinned', hydrantId: 'HYD-001', message: 'head pinned hydrant HYD-001.' });
   await assertFails(db.collection('stations/one/notifications').add(pin));
+  // Hydrant creation is server-only (POST /api/hydrants writes the hydrant and
+  // its pin notice together), so a client-side create batch is rejected.
   const batch = db.batch();
   batch.set(db.doc('hydrants/HYD-001'), { location: new GeoPoint(14.65, 121.06), createdAt: serverTimestamp() });
   batch.set(db.doc('stations/one/notifications/hydrant'), pin);
-  await assertSucceeds(batch.commit());
+  await assertFails(batch.commit());
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('hydrants/HYD-001').set({
+    location: new GeoPoint(14.65, 121.06), barangay: 'Central', createdAt: new Date(),
+  }));
   const update = notice({ type: 'hydrant-updated', hydrantId: 'HYD-001', message: 'head updated hydrant HYD-001.' });
   await assertFails(db.collection('stations/one/notifications').add(update));
   const edit = db.batch();

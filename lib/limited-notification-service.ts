@@ -2,21 +2,10 @@ import { createHash } from 'node:crypto';
 import type { Firestore, DocumentData } from 'firebase-admin/firestore';
 import { notificationAccess, limitedOperationalNotification } from './notification-access';
 import { stationNotificationFeed, type StationNotification, type StationResponseSummary } from './station-notification-feed';
+export { verifiedProfile as notificationProfile } from './server-profile';
 
 const token = (source: string, version: number) => createHash('sha256').update(`${source}:${version}`).digest('hex');
 const millis = (value: { toMillis?: () => number } | null | undefined) => value?.toMillis?.() ?? 0;
-
-export async function notificationProfile(db: Firestore, uid: string): Promise<DocumentData> {
-  const index = await db.doc(`stationAccountIndex/${uid}`).get();
-  if (!index.exists) return (await db.doc(`users/${uid}`).get()).data() ?? {};
-  const stationId = index.data()?.stationId;
-  if (typeof stationId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(stationId)) return {};
-  const [account, station] = await Promise.all([
-    db.doc(`stations/${stationId}/accounts/${uid}`).get(), db.doc(`stations/${stationId}`).get(),
-  ]);
-  const profile = account.data();
-  return station.data()?.active === true && profile?.uid === uid && profile?.accountType === 'station' && profile?.stationId === stationId ? profile : {};
-}
 
 /** All reads are selected from the verified viewer's profile/UID, never request input. */
 export async function limitedNotificationFeed(db: Firestore, uid: string, profile: DocumentData) {

@@ -1121,7 +1121,7 @@ export default function HydroScoutDashboard() {
         <MapView
           provider={provider}
           hydrants={visibleHydrants}
-          aorBarangays={role === 'authorized' ? aorBarangays : []}
+          aorBarangays={role === 'admin' ? [] : aorBarangays}
           selectedHydrantId={selectedHydrant?.id ?? null}
           onMapboxError={handleMapboxError}
           onMapReady={handleMapReady}

@@ -29,6 +29,7 @@ import { useHydrants, createHydrant } from '../data/store';
 import { type HydrantStatus } from '../data/hydrants';
 import PillBadge from './PillBadge';
 import BuildVersionLog from './BuildVersionLog';
+import StationAorCard from './StationAorCard';
 import { useStations, type Station } from '../data/stations';
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
@@ -100,6 +101,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
           </div>
           <StationsCard users={users} usersLoading={loading} usersError={error} />
         </div>
+        <StationAorCard hydrants={hydrants} />
         <ManageUsersCard
           users={users}
           loading={loading}
@@ -539,7 +541,6 @@ function CreateAccountModal({ onClose, initialStation }: { onClose: () => void; 
   const [password, setPassword] = useState('');
   const [station, setStation] = useState(initialStation?.name ?? '');
   const [stationId, setStationId] = useState(initialStation?.id ?? '');
-  const [aorBarangaysText, setAorBarangaysText] = useState('');
   const [role, setRole] = useState<UserRole>('general');
   const [accountType, setAccountType] = useState<'person' | 'station'>(initialStation ? 'station' : 'person');
   const [submitting, setSubmitting] = useState(false);
@@ -557,11 +558,6 @@ function CreateAccountModal({ onClose, initialStation }: { onClose: () => void; 
       setError('Choose a valid Station ID from the station directory.');
       return;
     }
-    const aorBarangays = aorBarangaysText
-      .split(',')
-      .map((barangay) => barangay.trim())
-      .filter(Boolean);
-
     setSubmitting(true);
     try {
       await createUserAccount({
@@ -572,7 +568,8 @@ function CreateAccountModal({ onClose, initialStation }: { onClose: () => void; 
         accountType,
         station,
         stationId,
-        aorBarangays,
+        // Hydrant access follows the station AOR (Areas of Responsibility card).
+        aorBarangays: [],
       });
       onClose();
     } catch (e: unknown) {
@@ -673,18 +670,6 @@ function CreateAccountModal({ onClose, initialStation }: { onClose: () => void; 
             <option value="">No station assignment</option>
             {stations.map(item => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
           </select>
-        </Field>}
-
-        {accountType === 'person' && <Field label="AOR Barangays">
-          <input
-            value={aorBarangaysText}
-            onChange={(e) => setAorBarangaysText(e.target.value)}
-            placeholder="e.g. Laging Handa, Sacred Heart, South Triangle"
-            className="admin-input"
-          />
-          <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
-            Separate multiple barangays with commas.
-          </span>
         </Field>}
 
         {accountType === 'person' && <Field label="Role">

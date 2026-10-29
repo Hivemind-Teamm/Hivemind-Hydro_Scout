@@ -21,7 +21,6 @@ import {
   arrayRemove,
   query,
   orderBy,
-  GeoPoint,
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { mapActivityActor } from '@/lib/map-activity';
@@ -280,63 +279,36 @@ export interface CreateHydrantInput {
   photos?: string[];
 }
 
-export async function createHydrant(input: CreateHydrantInput): Promise<void> {
-  const dateStr = new Date().toISOString().slice(0, 10);
-  const actor = await mapActivityActor();
-  // Allocate once so transaction retries cannot produce duplicate notices.
-  const notice = actor ? doc(collection(db, 'stations', actor.stationId, 'notifications')) : null;
-
-  await runTransaction(db, async (tx) => {
-    // Scan from HYD-001 upward and take the first unoccupied slot.
-    // This naturally fills gaps left by deleted hydrants.
-    let hydrantRef!: ReturnType<typeof doc>;
-    for (let i = 1; i <= 500; i++) {
-      const id = `HYD-${String(i).padStart(3, '0')}`;
-      hydrantRef = doc(db, 'hydrants', id);
-      const snap = await tx.get(hydrantRef);
-      if (!snap.exists()) break;
-    }
-
-    tx.set(hydrantRef, {
-      location: new GeoPoint(input.lat, input.lng),
-      address: input.address,
-      operationalStatus: toOperationalStatus(input.status),
-      pressureStatus: statusToPressureStatus(input.status),
-      waterCleanliness: input.waterCleanliness || '',
-      hazards: input.hazard ? input.hazard.split(',').map(h => h.trim()).filter(Boolean) : [],
-      inspector: input.by,
-      notes: input.note || '',
-      fieldNotes: input.note ? [{
-        user: input.by,
-        initials: input.by.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase(),
-        text: input.note,
-        date: dateStr,
-      }] : [],
-      register: [{
-        statusColor: STATUS_META[input.status].color,
-        action: `Hydrant pinned as ${toOperationalStatus(input.status)}`,
-        by: input.by,
-        role: input.role,
-        date: dateStr,
-      }],
-      sourceType: input.type || 'Pillar',
-      mounting: input.mounting || 'Above Ground',
-      keyWrench: input.keyWrench || 'None',
-      outletCount: input.outlets || 2,
-      hydrantColor: input.color || 'Red',
-      ownershipJurisdiction: input.concessionaire || 'MWSS',
-      nearestLandmark: input.landmark || '',
-      photos: input.photos ?? [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      updatedBy: input.by,
-    });
-    if (actor && notice) tx.set(notice, {
-      type: 'hydrant-pinned', uid: actor.uid, displayName: actor.displayName,
-      hydrantId: hydrantRef.id, lat: input.lat, lng: input.lng,
-      message: `${actor.displayName} pinned hydrant ${hydrantRef.id}.`, createdAt: serverTimestamp(),
-    });
+// Created server-side (POST /api/hydrants): the server derives the barangay
+// from the coordinates and enforces the creator's station AOR. `by`/`role` are
+// taken from the verified profile there, not from this input.
+export async function createHydrant(input: CreateHydrantInput): Promise<{ id: string; barangay: string | null }> {
+  const response = await fetch('/api/hydrants', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
   });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(typeof data.error === 'string' ? data.error : 'Could not save the hydrant.');
+    logFirestoreError('create:hydrant', error);
+    throw error;
+  }
+  return data;
+}
+
+// Admin-only (firestore.rules): store GPS-derived barangays so AOR rules can
+// match hydrants to stations. Batched under Firestore's 500-write limit.
+export async function assignHydrantBarangays(updates: { id: string; barangay: string }[]): Promise<void> {
+  for (let i = 0; i < updates.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const { id, barangay } of updates.slice(i, i + 400)) {
+      // No updatedAt: this is a metadata backfill, not a field inspection.
+      batch.update(doc(db, 'hydrants', id), { barangay });
+    }
+    await batch.commit();
+  }
 }
 
 // Removes a single photo URL from a hydrant's photo array (head / admin only).

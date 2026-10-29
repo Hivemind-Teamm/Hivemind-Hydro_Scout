@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { readAorBarangays } from '@/lib/station-aor';
 
 export interface Station {
   id: string;
   name: string;
   active: boolean;
+  /** Barangays in this station's Area of Responsibility (lib/qc-barangays.json names). */
+  aorBarangays: string[];
 }
 
 export function useStations() {
@@ -22,6 +25,7 @@ export function useStations() {
         id: record.id,
         name: typeof record.data().name === 'string' ? record.data().name : record.id,
         active: true,
+        aorBarangays: readAorBarangays(record.data().aorBarangays),
       })).sort((a, b) => a.name.localeCompare(b.name)));
       setError(null);
       setLoading(false);
@@ -45,5 +49,13 @@ export async function createStation(idInput: string, nameInput: string) {
     const stationRef = doc(db, 'stations', id);
     if ((await transaction.get(stationRef)).exists()) throw new Error('That Station ID already exists.');
     transaction.set(stationRef, { name, active: true, createdAt: serverTimestamp() });
+  });
+}
+
+/** Admin-only (firestore.rules): replace a station's Area of Responsibility. */
+export async function updateStationAor(stationId: string, barangays: string[]) {
+  await updateDoc(doc(db, 'stations', stationId), {
+    aorBarangays: [...new Set(barangays)].sort((a, b) => a.localeCompare(b)),
+    aorUpdatedAt: serverTimestamp(),
   });
 }

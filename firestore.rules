@@ -3,9 +3,12 @@ rules_version = '2';
 // Station profiles live at stations/{stationId}/accounts/{uid}; their lookup
 // index at stationAccountIndex/{uid} contains only stationId.
 //
-// F1 Station Accounts + AOR:
-// Profile aorBarangays contains the assigned Area of Responsibility. An
-// authorized account may update only operationalStatus within that AOR.
+// Station AOR (Area of Responsibility):
+// stations/{stationId}.aorBarangays lists the barangays a station covers.
+// Hydrant writes by non-admins are limited to hydrants whose barangay is in
+// the AOR of the account's own station (station accounts, or approved
+// members). hydrants/{id}.barangay is derived from GPS by POST /api/hydrants
+// and is immutable to non-admins, so it can be trusted here.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -186,17 +189,55 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
 
-    // F1: true when the existing hydrant belongs to one of the
-    // barangays assigned to the signed-in user's Area of Responsibility.
-    //
-    // We deliberately check resource.data.barangay (the existing document),
-    // not request.resource.data.barangay, so a client cannot move a hydrant
-    // into its own AOR as part of an update.
-    function hydrantIsInUserAor() {
-      return isSignedIn()
-        && resource.data.barangay is string
-        && currentUserData().get('aorBarangays', []) is list
-        && resource.data.barangay in currentUserData().get('aorBarangays', []);
+    // Hydrant write tier for the caller on a hydrant in `barangay`:
+    //   'admin'      anywhere;
+    //   'head'       station accounts and heads, inside their station's AOR;
+    //   'authorized' authorized members, inside their station's AOR;
+    //   'none'       otherwise.
+    // The AOR station is the account's own station (station accounts) or its
+    // station once membership is approved. Callers pass the EXISTING hydrant's
+    // barangay, never request data, so a client cannot move a hydrant into its
+    // own AOR. The profile and station are read once: batched writes (hydrant
+    // edit + activity notice) share Firestore's 1,000-expression budget.
+    function hydrantAccess(barangay) {
+      let profile = currentUserData();
+      let isStation = profile.get('accountType', null) == 'station';
+      let role = profile.get('role', null);
+      let stationId = profile.get('stationId', null);
+      let hasStation = stationId is string
+        && (isStation || profile.get('stationMembershipStatus', null) == 'approved');
+      let station = hasStation ? get(/databases/$(database)/documents/stations/$(stationId)).data : {};
+      let inAor = hasStation && barangay is string
+        && station.get('active', false) == true
+        && barangay in station.get('aorBarangays', []);
+      return !isStation && role == 'admin' ? 'admin'
+        : inAor && (isStation || role == 'head') ? 'head'
+        : inAor && role == 'authorized' ? 'authorized'
+        : 'none';
+    }
+
+    function canUpdateHydrant() {
+      let access = hydrantAccess(resource.data.get('barangay', null));
+      return access == 'admin'
+        || (access == 'head' && onlyChangedFields([
+              'operationalStatus',
+              'pressureStatus',
+              'waterCleanliness',
+              'hazards',
+              'photos',
+              'notes',
+              'fieldNotes',
+              'register',
+              'lastMaintenanceDate',
+              'nextMaintenanceDate',
+              'updatedBy',
+              'updatedAt'
+            ]))
+        || (access == 'authorized' && onlyChangedFields(['operationalStatus']));
+    }
+
+    function hydrantBarangay(hydrantId) {
+      return get(/databases/$(database)/documents/hydrants/$(hydrantId)).data.get('barangay', null);
     }
 
     function isValidStationAccount(stationId, uid, allowLegacyRole) {
@@ -315,17 +356,26 @@ service cloud.firestore {
     // Active station directory fields are public to signed-out signup pages.
     match /stations/{stationId} {
       allow read: if true;
+      function validStationAor() {
+        let data = request.resource.data;
+        return (!('aorBarangays' in data)
+            || (data.aorBarangays is list && data.aorBarangays.size() <= 60))
+          && (!('aorUpdatedAt' in data) || data.aorUpdatedAt is timestamp);
+      }
       allow create: if isAdmin()
-        && request.resource.data.keys().hasOnly(['name', 'active', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['name', 'active', 'createdAt', 'aorBarangays', 'aorUpdatedAt'])
         && request.resource.data.name is string && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
         && request.resource.data.active == true
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+        && validStationAor();
+      // Diff-based so stations seeded with extra legacy fields stay editable.
       allow update: if isAdmin()
-        && request.resource.data.keys().hasOnly(['name', 'active', 'createdAt'])
+        && onlyChangedFields(['name', 'active', 'aorBarangays', 'aorUpdatedAt'])
         && request.resource.data.name is string && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
-        && request.resource.data.active is bool;
+        && request.resource.data.active is bool
+        && validStationAor();
       allow delete: if isAdmin();
 
       match /accounts/{uid} {
@@ -768,46 +818,28 @@ service cloud.firestore {
       // Public landing page: anyone can VIEW hydrants without signing in.
       allow read: if true;
 
-      allow create: if isAuthorized() || isHead() || isAdmin();
+      // Server-only (POST /api/hydrants): the barangay must be derived from the
+      // coordinates and checked against the creator's station AOR, which rules
+      // cannot do. Clients could otherwise self-declare an in-AOR barangay.
+      allow create: if false;
 
-      // Existing permissions:
-      //   - Admin may update the hydrant.
-      //   - Head may update the existing approved field set.
-      //
-      // F1 AOR permission:
-      //   - Authorized/station users may update ONLY operationalStatus.
-      //   - The existing hydrant's barangay must belong to their AOR.
-      //   - They cannot change barangay or combine the status update with
-      //     another field.
-      allow update: if isAdmin()
-        || (isHead() && onlyChangedFields([
-              'operationalStatus',
-              'pressureStatus',
-              'waterCleanliness',
-              'hazards',
-              'photos',
-              'notes',
-              'fieldNotes',
-              'register',
-              'lastMaintenanceDate',
-              'nextMaintenanceDate',
-              'updatedBy',
-              'updatedAt'
-            ]))
-        || (isAuthorized()
-            && hydrantIsInUserAor()
-            && onlyChangedFields(['operationalStatus']));
+      // Admin may update anything. Heads and station accounts may update the
+      // approved field set, and authorized members only operationalStatus,
+      // both only inside their station's AOR (hydrantAccess). barangay and
+      // location are in neither list, so non-admins never move hydrants.
+      allow update: if canUpdateHydrant();
 
       allow delete: if isAdmin();
 
       match /reports/{reportId} {
         // Direct-path access (read a hydrant's own reports, file new ones).
         allow read: if true;
-        allow create: if (isAuthorized() || isHead() || isAdmin())
+        // Filing and managing reports follow the hydrant's AOR, like edits.
+        allow create: if hydrantAccess(hydrantBarangay(hydrantId)) in ['admin', 'head', 'authorized']
           && (!('reporterUid' in request.resource.data) || request.resource.data.reporterUid == request.auth.uid);
-        allow update: if (isHead() || isAdmin())
+        allow update: if hydrantAccess(hydrantBarangay(hydrantId)) in ['admin', 'head']
           && request.resource.data.get('reporterUid', null) == resource.data.get('reporterUid', null);
-        allow delete: if isHead() || isAdmin();
+        allow delete: if hydrantAccess(hydrantBarangay(hydrantId)) in ['admin', 'head'];
       }
     }
 

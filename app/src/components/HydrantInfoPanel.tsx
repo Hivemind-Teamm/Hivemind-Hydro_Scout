@@ -36,11 +36,16 @@ export default function HydrantInfoPanel({
   hydrant, onClose, onOpenFullDetails, onEdit, onReport,
   onFlyTo, onRoute, onRouteDismiss, isOtw, routeCalculating = false, scrollRef,
 }: HydrantInfoPanelProps) {
-  const { role } = useAuth();
+  const { role, canWriteInAor } = useAuth();
   const isMobile = useIsMobile();
   const meta = STATUS_META[hydrant.status];
-  const canEdit   = role === 'head' || role === 'admin';
-  const canReport = role === 'authorized' || role === 'head' || role === 'admin';
+  // Editing and reporting are limited to the station's Area of Responsibility.
+  const inAor     = canWriteInAor(hydrant.barangay);
+  const editRole  = role === 'head' || role === 'admin';
+  const reportRole = role === 'authorized' || role === 'head' || role === 'admin';
+  const canEdit   = editRole && inAor;
+  const canReport = reportRole && inAor;
+  const outsideAor = (editRole || reportRole) && !inAor;
   // General users (and guests) are view-only — no routing.
   const canRoute  = role === 'authorized' || role === 'head' || role === 'admin';
 
@@ -295,6 +300,14 @@ export default function HydrantInfoPanel({
               </button>
             )}
           </div>
+          )}
+
+          {outsideAor && (
+            <p className="mt-2 rounded-lg bg-neutral-100 px-3 py-2 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+              {hydrant.barangay && hydrant.barangay !== 'Unassigned'
+                ? `Barangay ${hydrant.barangay} is outside your station's area of responsibility. Editing and reports are disabled.`
+                : 'This hydrant has no barangay assigned yet, so only an admin can edit it.'}
+            </p>
           )}
 
           {routeCalculating && (

@@ -10,6 +10,7 @@ import { type HydrantStatus } from '../data/hydrants';
 import { createHydrant } from '../data/store';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { useStorageConsent } from '@/lib/use-storage-consent';
+import { barangayAt, loadBarangayBoundaries, type BarangayCollection } from '@/lib/barangay-boundaries';
 import StorageConsentModal from './StorageConsentModal';
 import { FiX, FiLock } from 'react-icons/fi';
 
@@ -40,7 +41,7 @@ interface PinHydrantModalProps {
 }
 
 export default function PinHydrantModal({ onClose, initialLat, initialLng, initialAddress }: PinHydrantModalProps) {
-  const { user, role, accountType } = useAuth();
+  const { user, role, accountType, canWriteInAor } = useAuth();
   const isMobile = useIsMobile();
 
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
@@ -100,6 +101,16 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
   const lng = parseFloat(lngStr);
   const hasValidCoords = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
 
+  // Preview the barangay and AOR check; the server re-derives and enforces both.
+  const [boundaries, setBoundaries] = useState<BarangayCollection | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadBarangayBoundaries().then(data => { if (!cancelled) setBoundaries(data); }).catch(() => { /* server still checks */ });
+    return () => { cancelled = true; };
+  }, []);
+  const barangay = boundaries && hasValidCoords ? barangayAt(boundaries, lat, lng) : null;
+  const outsideAor = !!boundaries && hasValidCoords && !canWriteInAor(barangay);
+
   async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -128,6 +139,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
     if (!user) { setError('You must be signed in to pin a hydrant.'); return; }
     if (!hasValidCoords) { setError('Please enter valid latitude and longitude.'); return; }
     if (!address.trim()) { setError('Address / Location name is required.'); return; }
+    if (outsideAor) { setError('This location is outside your station\'s area of responsibility.'); return; }
 
     setSaving(true);
     setError(null);
@@ -220,7 +232,18 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                   <span>Longitude</span>
                   <span className="font-bold text-neutral-800 dark:text-neutral-100">{hasValidCoords ? lng.toFixed(6) : '—'}</span>
                 </div>
+                <div className="flex justify-between gap-2">
+                  <span>Barangay</span>
+                  <span className="text-right font-bold text-neutral-800 dark:text-neutral-100">
+                    {!hasValidCoords ? '—' : !boundaries ? 'Checking…' : barangay ?? 'Outside Quezon City'}
+                  </span>
+                </div>
               </div>
+              {outsideAor && (
+                <p role="alert" className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 font-semibold text-[#e0353b] dark:bg-red-950/30">
+                  {barangay ? `Barangay ${barangay}` : 'This location'} is outside your station&apos;s area of responsibility. Only that area&apos;s station or an admin can pin it.
+                </p>
+              )}
             </div>
 
             {/* Guidelines */}
@@ -446,7 +469,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={saving || uploading}
+                  disabled={saving || uploading || outsideAor}
                   className="flex-1 rounded-xl bg-[#e0353b] py-3 text-sm font-bold text-white transition-all duration-150 ease-out hover:bg-[#c42d32] hover:scale-[1.02] hover:shadow-[0_4px_14px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75 disabled:opacity-60 disabled:pointer-events-none"
                 >
                   {saving ? 'Pinning…' : 'Pin Hydrant'}

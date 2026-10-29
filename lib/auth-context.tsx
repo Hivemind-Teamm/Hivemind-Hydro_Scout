@@ -16,11 +16,12 @@ import {
   updateProfile,
   type User,
 } from "firebase/auth";
-import { doc, getDoc, updateDoc, serverTimestamp, writeBatch, type DocumentData } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp, writeBatch, type DocumentData } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import { auth, db } from "./firebase";
 import { getUserProfile, watchUserProfile } from "./user-profile";
 import { useLocationConsent } from "./use-location-consent";
+import { aorStationIdForProfile, canWriteInAor, readAorBarangays } from "./station-aor";
 import LocationConsentNotice from "@/app/src/components/LocationConsentNotice";
 import { getExistingIncidentDeviceId } from "./incident-device-id";
 import { deleteIncidentDeviceLocation } from "./incident-device-location-cleanup";
@@ -62,7 +63,10 @@ interface AuthContextValue {
   accountType: AccountType;
   stationId: string | null;
   stationName: string | null;
+  /** Barangays in the AOR of the account's station (empty without an approved, active station). */
   aorBarangays: string[];
+  /** Same decision as firestore.rules: may this account edit hydrants in this barangay? */
+  canWriteInAor: (barangay: string | null | undefined) => boolean;
   stationMembershipStatus: MembershipStatus;
   stationAccessIds: string[];
   loading: boolean;
@@ -75,6 +79,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const STATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const NO_BARANGAYS: string[] = [];
 
 function roleForProfile(data: DocumentData | null | undefined): Role {
   if (data?.accountType === "station") return "head";
@@ -117,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [stationName, setStationName] = useState<string | null>(null);
   const [stationMembershipStatus, setStationMembershipStatus] = useState<MembershipStatus>("none");
   const [stationAccessIds, setStationAccessIds] = useState<string[]>([]);
-  const [aorBarangays, setAorBarangays] = useState<string[]>([]);
+  const [stationAor, setStationAor] = useState<{ stationId: string | null; barangays: string[] }>({ stationId: null, barangays: NO_BARANGAYS });
   const [loading, setLoading] = useState(true);
   const sessionGeneration = useRef(0);
   const locationConsent = useLocationConsent(user?.uid);
@@ -130,7 +135,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStationName(null);
     setStationMembershipStatus("none");
     setStationAccessIds([]);
-    setAorBarangays([]);
   }
 
   function applyProfile(data: DocumentData | null | undefined) {
@@ -147,9 +151,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
     setStationAccessIds(Array.isArray(data?.stationAccessIds)
       ? data.stationAccessIds.filter((value: unknown): value is string => typeof value === "string")
-      : []);
-    setAorBarangays(Array.isArray(data?.aorBarangays)
-      ? data.aorBarangays.filter((value: unknown): value is string => typeof value === "string")
       : []);
   }
 
@@ -227,6 +228,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearProfile(); // Fail closed if profile authorization cannot be verified.
     });
   }, [user]);
+
+  // Hydrant access follows the station's AOR, not a per-account list.
+  const aorStationId = aorStationIdForProfile({ accountType, stationId: assignedStationId, stationMembershipStatus });
+  useEffect(() => {
+    if (!aorStationId) return;
+    return onSnapshot(doc(db, "stations", aorStationId), snapshot => {
+      const station = snapshot.data();
+      setStationAor({ stationId: aorStationId, barangays: station?.active === true ? readAorBarangays(station.aorBarangays) : NO_BARANGAYS });
+    }, error => {
+      console.error("Failed to load the station area of responsibility:", error);
+      setStationAor({ stationId: aorStationId, barangays: NO_BARANGAYS });
+    });
+  }, [aorStationId]);
+  const aorBarangays = aorStationId && stationAor.stationId === aorStationId ? stationAor.barangays : NO_BARANGAYS;
 
   async function login(email: string, password: string) {
     let credential;
@@ -317,6 +332,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, role, accountType, stationId: assignedStationId, stationName,
       aorBarangays, stationMembershipStatus, stationAccessIds, loading,
+      canWriteInAor: barangay => canWriteInAor(role, aorBarangays, barangay),
       login, logout, signup, refreshSession,
       openLocationConsent: locationConsent.openNotice,
       canUseDeviceLocation: locationConsent.canUseDeviceLocation,

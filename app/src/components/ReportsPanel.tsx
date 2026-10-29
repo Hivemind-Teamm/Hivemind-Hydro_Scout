@@ -19,9 +19,11 @@ interface ReportsPanelProps {
 }
 
 export default function ReportsPanel({ reports, hydrants, loading, onViewUser }: ReportsPanelProps) {
-  const { role } = useAuth();
+  const { role, canWriteInAor } = useAuth();
   const isMobile = useIsMobile();
-  const canResolve = role === 'head' || role === 'admin';
+  // Resolving/denying writes the hydrant, so it follows the hydrant's AOR.
+  const resolveRole = role === 'head' || role === 'admin';
+  const barangayOf = new Map(hydrants.map(hydrant => [hydrant.id, hydrant.barangay]));
   const [filter, setFilter] = useState<Filter>('all');
 
   if (role !== 'authorized' && role !== 'head' && role !== 'admin') return null;
@@ -80,7 +82,7 @@ export default function ReportsPanel({ reports, hydrants, loading, onViewUser }:
       {/* Report list */}
       <div className="scroll-fade min-h-0 flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
         {visible.map(item => item.kind === 'report' ? (
-          <ReportCard key={item.key} report={item.report} onViewUser={onViewUser} canResolve={canResolve} />
+          <ReportCard key={item.key} report={item.report} onViewUser={onViewUser} canResolve={resolveRole && canWriteInAor(barangayOf.get(item.report.hydrantId))} />
         ) : (
           <HydrantUpdateCard key={item.key} item={item} onViewUser={onViewUser} />
         ))}

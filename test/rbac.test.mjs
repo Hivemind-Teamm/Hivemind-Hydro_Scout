@@ -37,8 +37,9 @@ await testEnv.withSecurityRulesDisabled(async (context) => {
 
   const users = [
     { uid: "sample-general", role: "general" },
-    { uid: "sample-authorized", role: "authorized", aorBarangays: ["Barangay Laging Handa"] },
-    { uid: "sample-head", role: "head" },
+    // Hydrant write access follows the AOR of the account's approved station.
+    { uid: "sample-authorized", role: "authorized", stationId: "STATION-LH" },
+    { uid: "sample-head", role: "head", stationId: "STATION-LH" },
     { uid: "sample-admin", role: "admin" },
   ];
   for (const u of users) {
@@ -46,9 +47,12 @@ await testEnv.withSecurityRulesDisabled(async (context) => {
       uid: u.uid,
       role: u.role,
       email: `${u.uid}@example.com`,
-      ...(u.aorBarangays ? { aorBarangays: u.aorBarangays } : {}),
+      ...(u.stationId ? { stationId: u.stationId, stationMembershipStatus: "approved" } : {}),
     });
   }
+  await db.collection("stations").doc("STATION-LH").set({
+    name: "Laging Handa", active: true, aorBarangays: ["Barangay Laging Handa"],
+  });
 
   await db.collection("hydrants").doc("HYD-001").set({
     lat: 14.653,
@@ -125,20 +129,22 @@ await check(
   ctxFor("sample-general").firestore().collection("hydrants").doc("TEST-001").set({ lat: 0, lng: 0 }),
   false
 );
+// Creation is server-only (POST /api/hydrants derives the barangay from GPS
+// and checks the creator's station AOR), so every direct client create fails.
 await check(
-  "authorized CAN create hydrant",
+  "authorized cannot create hydrant directly",
   ctxFor("sample-authorized").firestore().collection("hydrants").doc("TEST-002").set({ lat: 0, lng: 0 }),
-  true
+  false
 );
 await check(
-  "head CAN create hydrant",
+  "head cannot create hydrant directly",
   ctxFor("sample-head").firestore().collection("hydrants").doc("TEST-003").set({ lat: 0, lng: 0 }),
-  true
+  false
 );
 await check(
-  "admin CAN create hydrant",
+  "admin cannot create hydrant directly",
   ctxFor("sample-admin").firestore().collection("hydrants").doc("TEST-004").set({ lat: 0, lng: 0 }),
-  true
+  false
 );
 
 console.log("\n=== Section 3: Updating status (Authorized's scope) ===");
@@ -204,24 +210,26 @@ for (const [uid, expect] of [
 }
 
 console.log("\n=== Section 7: Reports subcollection ===");
+// Section 6 deleted HYD-001; report rules read the parent hydrant's AOR.
+const reportHydrant = await freshHydrant();
 await check(
   "general can read reports",
-  ctxFor("sample-general").firestore().collection("hydrants").doc("HYD-001").collection("reports").doc("r1").get(),
+  ctxFor("sample-general").firestore().collection("hydrants").doc(reportHydrant).collection("reports").doc("r1").get(),
   true
 );
 await check(
   "authorized CAN create report",
-  ctxFor("sample-authorized").firestore().collection("hydrants").doc("HYD-001").collection("reports").doc("r1").set({ note: "x" }),
+  ctxFor("sample-authorized").firestore().collection("hydrants").doc(reportHydrant).collection("reports").doc("r1").set({ note: "x" }),
   true
 );
 await check(
   "head CAN create report",
-  ctxFor("sample-head").firestore().collection("hydrants").doc("HYD-001").collection("reports").doc("r2").set({ note: "x" }),
+  ctxFor("sample-head").firestore().collection("hydrants").doc(reportHydrant).collection("reports").doc("r2").set({ note: "x" }),
   true
 );
 await check(
   "admin CAN create report",
-  ctxFor("sample-admin").firestore().collection("hydrants").doc("HYD-001").collection("reports").doc("r3").set({ note: "x" }),
+  ctxFor("sample-admin").firestore().collection("hydrants").doc(reportHydrant).collection("reports").doc("r3").set({ note: "x" }),
   true
 );
 

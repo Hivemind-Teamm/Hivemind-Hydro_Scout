@@ -34,34 +34,28 @@ const testEnv = await initializeTestEnvironment({
 await testEnv.withSecurityRulesDisabled(async (context) => {
   const db = context.firestore();
 
-  await db.doc("stations/STATION-A/accounts/station-a-user").set({
-    uid: "station-a-user",
-    role: "authorized",
-    accountType: "station",
-    stationId: "STATION-A",
-    aorBarangays: [
-      "Barangay Bagong Pag-asa",
-      "Barangay Bago Bantay",
-    ],
+  // The AOR is defined on each station. Station-a/b users are authorized
+  // members (operationalStatus only); the head belongs to Station B.
+  await db.doc("stations/STATION-A").set({
+    name: "Station A", active: true,
+    aorBarangays: ["Barangay Bagong Pag-asa", "Barangay Bago Bantay"],
   });
-  await db.doc("stationAccountIndex/station-a-user").set({ stationId: "STATION-A" });
+  await db.doc("stations/STATION-B").set({
+    name: "Station B", active: true, aorBarangays: ["Barangay Holy Spirit"],
+  });
 
-  await db.doc("stations/STATION-B/accounts/station-b-user").set({
-    uid: "station-b-user",
-    role: "authorized",
-    accountType: "station",
-    stationId: "STATION-B",
-    aorBarangays: [
-      "Barangay Holy Spirit",
-    ],
-  });
-  await db.doc("stationAccountIndex/station-b-user").set({ stationId: "STATION-B" });
+  for (const [uid, stationId] of [["station-a-user", "STATION-A"], ["station-b-user", "STATION-B"]]) {
+    await db.collection("users").doc(uid).set({
+      uid, role: "authorized", accountType: "person", stationId, stationMembershipStatus: "approved",
+    });
+  }
 
   await db.collection("users").doc("head-user").set({
     uid: "head-user",
     role: "head",
-    stationId: null,
-    aorBarangays: [],
+    accountType: "person",
+    stationId: "STATION-B",
+    stationMembershipStatus: "approved",
   });
 
   await db.collection("users").doc("admin-user").set({
@@ -251,6 +245,17 @@ await check(
       operationalStatus: "Reduced Pressure",
     }),
   true
+);
+
+await check(
+  "head is blocked outside its station AOR",
+  dbFor("head-user")
+    .collection("hydrants")
+    .doc("HYD-A")
+    .update({
+      operationalStatus: "Reduced Pressure",
+    }),
+  false
 );
 
 await check(
