@@ -16,9 +16,14 @@ export async function GET() {
     await import('firebase-admin/firestore');
     checks.adminModules = true;
 
-    const { adminApp } = await import('@/lib/firebase-admin');
-    // Emulator-mode apps have no credential; production apps always do.
-    await adminApp().options.credential?.getAccessToken();
+    const { adminApp, isFirebaseEmulatorMode } = await import('@/lib/firebase-admin');
+    const app = adminApp();
+
+    // The local demo emulators deliberately have no service-account
+    // credential. Every other environment must prove its Admin credential.
+    if (!isFirebaseEmulatorMode()) {
+      await app.options.credential?.getAccessToken();
+    }
     checks.credential = true;
   } catch (err) {
     console.error('[health] Firebase Admin check failed:', err);

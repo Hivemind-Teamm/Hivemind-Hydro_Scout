@@ -7,6 +7,18 @@
 
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 
+// Credential-free initialization is permitted only for the complete local
+// emulator setup. Keeping this predicate strict prevents production from ever
+// bypassing its Firebase Admin service-account credential.
+export function isFirebaseEmulatorMode(): boolean {
+  return (
+    process.env.FIREBASE_AUTH_EMULATOR_HOST === "127.0.0.1:9099" &&
+    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8080" &&
+    process.env.GCLOUD_PROJECT === "demo-hydro-scout-api" &&
+    process.env.NODE_ENV !== "production"
+  );
+}
+
 export function adminApp(): App {
   const existing = getApps();
   if (existing.length) return existing[0];
@@ -14,13 +26,7 @@ export function adminApp(): App {
   // Allow credential-free initialization ONLY against both local emulators
   // using a Firebase demo project. Never enable this for production.
   const projectId = process.env.GCLOUD_PROJECT;
-  const emulatorMode =
-    process.env.FIREBASE_AUTH_EMULATOR_HOST === "127.0.0.1:9099" &&
-    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8080" &&
-    projectId === "demo-hydro-scout-api" &&
-    process.env.NODE_ENV !== "production";
-
-  if (emulatorMode) {
+  if (isFirebaseEmulatorMode()) {
     return initializeApp({ projectId });
   }
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
