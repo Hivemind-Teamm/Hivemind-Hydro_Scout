@@ -658,7 +658,7 @@ function CreateAccountModal({ onClose, initialStation }: { onClose: () => void; 
           )}
         </Field>
 
-        {accountType === 'person' && <Field label="Station assignment">
+        {accountType === 'person' && role !== 'admin' && <Field label="Station assignment">
           <select
             value={stationId}
             onChange={(e) => {
@@ -681,7 +681,13 @@ function CreateAccountModal({ onClose, initialStation }: { onClose: () => void; 
                 <button
                   key={r}
                   type="button"
-                  onClick={() => setRole(r)}
+                  onClick={() => {
+                    setRole(r);
+                    if (r === 'admin') {
+                      setStationId('');
+                      setStation('');
+                    }
+                  }}
                   className={`flex-1 rounded-lg border px-2 py-2 text-xs font-bold transition-all ${
                     active ? 'text-white' : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600'
                   }`}
@@ -784,7 +790,7 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
           )}
         </Field>
 
-        <Field label={accountType === 'station' ? 'Station name' : 'Station assignment'}>
+        {!(accountType === 'person' && role === 'admin') && <Field label={accountType === 'station' ? 'Station name' : 'Station assignment'}>
           <select
             value={stationId}
             onChange={(e) => setStationId(e.target.value)}
@@ -794,7 +800,7 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
             {!stations.some(item => item.id === stationId) && stationId && <option value={stationId}>{user.station} ({stationId}) · existing</option>}
             {stations.map(item => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
           </select>
-        </Field>
+        </Field>}
 
         {accountType === 'person' && <Field label="Role">
           <div className="grid grid-cols-2 gap-2">
@@ -805,7 +811,10 @@ function EditUserModal({ user, onClose }: { user: AppUser; onClose: () => void }
                 <button
                   key={r}
                   type="button"
-                  onClick={() => setRole(r)}
+                  onClick={() => {
+                    setRole(r);
+                    if (r === 'admin') setStationId('');
+                  }}
                   className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-xs font-bold transition-all ${
                     active ? 'border-transparent ring-2' : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600'
                   }`}

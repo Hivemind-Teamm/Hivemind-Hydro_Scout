@@ -35,7 +35,7 @@ function readStorage(key: string) {
 
 function useManagementNotifications() {
   const { user, role, stationId } = useAuth();
-  const canManage = !!user && !!stationId && (role === 'admin' || role === 'head');
+  const canManage = !!user && !!stationId && role === 'head';
   const scope = canManage ? `${user!.uid}:${stationId}` : null;
   const storageKey = `hydroscout:notification-reads:${scope}`;
   const [state, setState] = useState<{
@@ -142,10 +142,10 @@ function useManagementNotifications() {
 
 export function useStationNotifications() {
   const { user, role, accountType, stationId, stationMembershipStatus } = useAuth();
-  const fullDetails = role === 'admin' || role === 'head';
-  const canApproveMembers = !!user && !!stationId && fullDetails && accountType !== 'station';
+  const fullDetails = role === 'head';
+  const canApproveMembers = !!user && !!stationId && role === 'head' && accountType !== 'station';
   const management = useManagementNotifications();
-  const limited = useLimitedNotifications(user && !fullDetails ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
+  const limited = useLimitedNotifications(user && role !== 'admin' && !fullDetails ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
   const feed = fullDetails ? management : limited;
   const notifications = useMemo(() => dailyResponseNotifications(feed.notifications, stationId), [feed.notifications, stationId]);
   const activityUnreadCount = (item: StationNotification) => unreadActivityCount(item, feed.isActivityUnread);
@@ -157,7 +157,7 @@ export function useStationNotifications() {
     hasUnreadActivity: unreadActivities > 0,
     isActivityUnread: (item: StationNotification) => activityUnreadCount(item) > 0,
     readActivity: (item: StationNotification) => { if (!item.responseGroup) feed.readActivity(item); },
-    canViewActivity: !!user,
+    canViewActivity: !!user && role !== 'admin',
     canApproveMembers,
   };
 }

@@ -95,7 +95,7 @@ function DashboardOverlay({
   const canViewDashboard = role === 'head' || role === 'admin';
   const canManageStation = canViewActivity;
   const canApproveStationMembers = canApproveMembers;
-  const canViewStationMembers = !!user && !!stationId && (role === 'head' || role === 'admin');
+  const canViewStationMembers = !!user && (role === 'admin' || (role === 'head' && !!stationId));
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
   // Fire response planning is for responders — the same roles that can route.
   const canPinFire = role === 'authorized' || role === 'head' || role === 'admin';

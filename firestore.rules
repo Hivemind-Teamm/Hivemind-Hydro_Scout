@@ -62,6 +62,16 @@ service cloud.firestore {
         && currentUserData().stationId == stationId;
     }
 
+    // Membership approval is an operational responsibility of a personal
+    // station head. Station logins and global technical administrators must
+    // not review or approve personnel membership requests.
+    function isPersonalHeadForStation(stationId) {
+      return isSignedIn()
+        && !isStationAccount()
+        && userRole() == 'head'
+        && currentUserData().stationId == stationId;
+    }
+
     function canManageStation(stationId) {
       return isSignedIn() && (isAdmin() || isHeadForStation(stationId)
         || (currentUserData().get('stationAccessIds', []) is list
@@ -180,7 +190,7 @@ service cloud.firestore {
               && data.displayName == currentUserData().displayName
               && canManageStation(stationId))
           || (data.type in ['membership-approved', 'membership-rejected']
-              && canManageStation(stationId)
+              && isPersonalHeadForStation(stationId)
               && notificationId == 'join-review-' + data.uid + (data.type == 'membership-approved' ? '-approved' : '-rejected')
               && getAfter(/databases/$(database)/documents/stationJoinRequests/$(data.uid)).data.stationId == stationId
               && getAfter(/databases/$(database)/documents/stationJoinRequests/$(data.uid)).data.status == (data.type == 'membership-approved' ? 'approved' : 'rejected')
@@ -342,7 +352,7 @@ service cloud.firestore {
     }
 
     match /stationJoinRequests/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || canManageStation(resource.data.stationId));
+      allow read: if isSignedIn() && (request.auth.uid == uid || isPersonalHeadForStation(resource.data.stationId));
       allow create: if isSignedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['uid', 'displayName', 'email', 'stationId', 'status', 'createdAt'])
         && request.resource.data.uid == uid
@@ -354,7 +364,7 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp
         && getAfter(/databases/$(database)/documents/users/$(uid)).data.requestedStationId == request.resource.data.stationId
         && get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.active == true;
-      allow update: if (isHeadForStation(resource.data.stationId) || isAdmin())
+      allow update: if isPersonalHeadForStation(resource.data.stationId)
         && resource.data.status == 'pending'
         && onlyChangedFields(['status', 'reviewedAt', 'reviewedBy'])
         && request.resource.data.status in ['approved', 'rejected']
@@ -362,7 +372,9 @@ service cloud.firestore {
         && request.resource.data.reviewedAt == request.time
         && getAfter(/databases/$(database)/documents/users/$(uid)).data.stationMembershipStatus == request.resource.data.status
         && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/notifications/$(('join-review-' + uid + (request.resource.data.status == 'approved' ? '-approved' : '-rejected')))).data.uid == uid;
-      allow delete: if isAdmin();
+      // Join requests are retained as an approval record. Administrators do
+      // not manage personnel approvals, and no role may remove this record.
+      allow delete: if false;
     }
 
     // Active station directory fields are public to signed-out signup pages.
@@ -438,6 +450,7 @@ service cloud.firestore {
             && ((data.kind == 'activity'
                   && get(/databases/$(database)/documents/stations/$(stationId)/notifications/$(data.notificationId)).data.createdAt == data.eventCreatedAt)
               || (data.kind == 'member'
+                  && isPersonalHeadForStation(stationId)
                   && get(/databases/$(database)/documents/stationJoinRequests/$(data.notificationId)).data.stationId == stationId
                   && get(/databases/$(database)/documents/stationJoinRequests/$(data.notificationId)).data.createdAt == data.eventCreatedAt));
         }

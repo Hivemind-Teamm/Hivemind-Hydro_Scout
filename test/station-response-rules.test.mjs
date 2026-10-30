@@ -16,11 +16,10 @@ try {
     });
     await db.doc('stations/DILIMAN-01').set({ name: 'Diliman Fire Station', active: true, createdAt: serverTimestamp() });
     await db.doc('firePins/abcdefghijklmnopqrst').set({ lat: 14.65, lng: 121.06, stationId: 'DILIMAN-01', status: 'active', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    await db.doc('stations/DILIMAN-01/accounts/head-1').set({
-      uid: 'head-1', accountType: 'station', stationId: 'DILIMAN-01',
-      displayName: 'Diliman Fire Station',
+    await db.doc('users/head-1').set({
+      uid: 'head-1', role: 'head', accountType: 'person', stationId: 'DILIMAN-01',
+      stationMembershipStatus: 'approved', displayName: 'Station Head',
     });
-    await db.doc('stationAccountIndex/head-1').set({ stationId: 'DILIMAN-01' });
     await db.doc('users/member-1').set({
       role: 'general', accountType: 'person', stationId: 'DILIMAN-01',
       stationMembershipStatus: 'approved', displayName: 'Responder One', activeResponseId: null,
@@ -59,6 +58,7 @@ try {
     createdAt: serverTimestamp(),
   });
   await assertSucceeds(signup.commit());
+  await assertFails(adminDb.doc('stationJoinRequests/new-member').get());
   const pendingRequest = await headDb.doc('stationJoinRequests/new-member').get();
   assert.equal(pendingRequest.data().status, 'pending');
   await assertFails(newMemberDb.doc('stations/DILIMAN-01/notifications/join-new-member').set({

@@ -363,7 +363,8 @@ export async function updateUserAccount(
   stationId: string,
   admin: { uid: string; email: string; displayName: string },
 ): Promise<void> {
-  const assignedStationId = stationId.trim() || null;
+  const isGlobalAdmin = accountType === 'person' && role === 'admin';
+  const assignedStationId = isGlobalAdmin ? null : stationId.trim() || null;
   if (assignedStationId && !/^[A-Za-z0-9_-]{1,128}$/.test(assignedStationId)) {
     throw new Error('Choose a valid Station ID from the station directory.');
   }
@@ -425,10 +426,18 @@ export async function updateUserAccount(
 
     profile.uid = uid;
     profile.accountType = accountType;
-    profile.stationId = assignedStationId;
-    profile.station = stationSnapshot?.exists()
-      ? String(stationSnapshot.data().name ?? 'Unassigned')
-      : 'Unassigned';
+    if (isGlobalAdmin) {
+      delete profile.stationId;
+      delete profile.station;
+      delete profile.aorBarangays;
+      delete profile.stationMembershipStatus;
+      delete profile.requestedStationId;
+    } else {
+      profile.stationId = assignedStationId;
+      profile.station = stationSnapshot?.exists()
+        ? String(stationSnapshot.data().name ?? 'Unassigned')
+        : 'Unassigned';
+    }
 
     if (accountType === 'station') {
       profile.displayName = profile.station;
@@ -442,8 +451,10 @@ export async function updateUserAccount(
         profile.displayName = typeof profile.email === 'string' ? profile.email : '';
       }
       profile.role = role;
-      profile.stationMembershipStatus = assignedStationId ? 'approved' : 'none';
-      delete profile.requestedStationId;
+      if (!isGlobalAdmin) {
+        profile.stationMembershipStatus = assignedStationId ? 'approved' : 'none';
+        delete profile.requestedStationId;
+      }
     }
 
     transaction.set(targetRef, profile);
@@ -540,8 +551,10 @@ export async function createUserAccount(
     || !newStation.name || newStation.name.length > 120)) {
     throw new Error('Enter a valid station name and Station ID.');
   }
-  const stationId =
-    newStation?.id ?? (typeof input.stationId === 'string' && input.stationId.trim()
+  const isGlobalAdmin = input.accountType === 'person' && input.role === 'admin';
+  const stationId = isGlobalAdmin
+    ? null
+    : newStation?.id ?? (typeof input.stationId === 'string' && input.stationId.trim()
       ? input.stationId.trim()
       : null);
   if (stationId && !/^[A-Za-z0-9_-]{1,128}$/.test(stationId)) {
@@ -608,16 +621,17 @@ export async function createUserAccount(
       accountType: input.accountType,
       ...(input.accountType === 'person' ? { role: input.role } : {}),
 
-      station: stationName
-        || input.station.trim()
-        || 'Unassigned',
-
-      // F1 Station Accounts + AOR.
-      stationId,
-      ...(input.accountType === 'person'
-        ? { stationMembershipStatus: stationId ? 'approved' : 'none' }
-        : {}),
-      aorBarangays: input.accountType === 'station' ? [] : aorBarangays,
+      ...(!isGlobalAdmin ? {
+        station: stationName
+          || input.station.trim()
+          || 'Unassigned',
+        // F1 Station Accounts + AOR.
+        stationId,
+        ...(input.accountType === 'person'
+          ? { stationMembershipStatus: stationId ? 'approved' : 'none' }
+          : {}),
+        aorBarangays: input.accountType === 'station' ? [] : aorBarangays,
+      } : {}),
 
       createdAt:
         serverTimestamp(),

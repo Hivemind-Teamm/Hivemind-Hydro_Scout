@@ -48,15 +48,15 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   onViewFireLocation: (lat: number, lng: number) => void;
 }) {
   const {
-    user, role, accountType, stationId, stationMembershipStatus, stationAccessIds,
+    user, role, accountType, stationId, stationMembershipStatus,
     canUseDeviceLocation, openLocationConsent,
   } = useAuth();
   const { stations } = useStations();
   const station = stations.find(item => item.id === stationId);
+  const isGlobalAdmin = role === 'admin';
   const canRespond = !!user && accountType === 'person' && !!stationId && stationMembershipStatus === 'approved';
-  const canManage = !!user && !!stationId && (role === 'admin' || role === 'head' || stationAccessIds.includes(stationId));
-  const canViewRoster = role === 'admin' || role === 'head';
-  const canApprove = canViewRoster && accountType !== 'station';
+  const canViewRoster = isGlobalAdmin || (role === 'head' && !!stationId);
+  const canApprove = role === 'head' && !!stationId && accountType !== 'station';
   const [activeResponses, setActiveResponses] = useState<ResponseRecord[]>([]);
   const activeResponseId = activeResponses[0]?.id;
   const [responses, setResponses] = useState<ResponseRecord[]>([]);
@@ -78,14 +78,17 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   }, [user]);
 
   useEffect(() => {
-    if (!canManage || !stationId) return;
-    const active = onSnapshot(query(collection(db, 'stationResponses'), where('stationId', '==', stationId)), snapshot => {
-      setResponseStation(stationId);
+    if (!canViewRoster || (!isGlobalAdmin && !stationId)) return;
+    const responseQuery = isGlobalAdmin
+      ? query(collection(db, 'stationResponses'), where('status', '==', 'active'))
+      : query(collection(db, 'stationResponses'), where('stationId', '==', stationId));
+    const active = onSnapshot(responseQuery, snapshot => {
+      setResponseStation(isGlobalAdmin ? 'all-stations' : stationId);
       setResponses(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as ResponseRecord))
         .sort((a, b) => ((b.startedAt?.toDate?.().getTime() ?? 0) - (a.startedAt?.toDate?.().getTime() ?? 0))));
     }, err => { setResponseStation(null); console.error('Failed to load station response history:', err); setError('Could not load station response history.'); });
     return () => { active(); };
-  }, [canManage, stationId]);
+  }, [canViewRoster, isGlobalAdmin, stationId]);
 
   useEffect(() => {
     if (!user) return;
@@ -110,11 +113,11 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   }, [canApprove, stationId]);
 
   useEffect(() => {
-    if (!canViewRoster || !stationId) return;
+    if (!canViewRoster || (!isGlobalAdmin && !stationId)) return;
     const toggle = () => { setOpen(false); setOpenMemberApprovals(false); setOpenRoster(current => !current); };
     window.addEventListener('hydroscout:toggle-station-roster', toggle);
     return () => window.removeEventListener('hydroscout:toggle-station-roster', toggle);
-  }, [canViewRoster, stationId]);
+  }, [canViewRoster, isGlobalAdmin, stationId]);
 
   useEffect(() => {
     if (!activeResponseId || !stationId) return;
@@ -350,10 +353,10 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         activityOpen={open} membersOpen={openMemberApprovals && canApprove}
         closeActivity={() => setOpen(false)} closeMembers={() => setOpenMemberApprovals(false)}
         reviewRequest={reviewRequest} onViewFireLocation={onViewFireLocation} />
-      {openRoster && canViewRoster && stationId && <StationMembersPanel key={`roster:${user.uid}:${stationId}`} stationId={stationId}
-        stationName={station?.name ?? stationId} onClose={() => setOpenRoster(false)}
-        responsesReady={responseStation === stationId}
-        respondingUids={new Set(responses.filter(response => responseStation === stationId && response.stationId === stationId && response.status === 'active').map(response => response.uid))} />}
+      {openRoster && canViewRoster && (isGlobalAdmin || stationId) && <StationMembersPanel key={`roster:${user.uid}:${isGlobalAdmin ? 'all-stations' : stationId}`} stationId={isGlobalAdmin ? null : stationId}
+        stationName={isGlobalAdmin ? 'All stations' : station?.name ?? stationId ?? ''} allStations={isGlobalAdmin} onClose={() => setOpenRoster(false)}
+        responsesReady={responseStation === (isGlobalAdmin ? 'all-stations' : stationId)}
+        respondingUids={new Set(responses.filter(response => responseStation === (isGlobalAdmin ? 'all-stations' : stationId) && (isGlobalAdmin || response.stationId === stationId) && response.status === 'active').map(response => response.uid))} />}
     </>
   );
 }

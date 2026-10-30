@@ -93,6 +93,9 @@ function accountTypeForProfile(data: DocumentData | null | undefined): AccountTy
 }
 
 function stationIdForProfile(data: DocumentData | null | undefined): string | null {
+  // Administrators are global technical accounts. A legacy profile can still
+  // contain an old station assignment, but it must never scope admin access.
+  if (data?.accountType === "person" && data?.role === "admin") return null;
   return typeof data?.stationId === "string" && STATION_ID_PATTERN.test(data.stationId)
     ? data.stationId
     : null;
