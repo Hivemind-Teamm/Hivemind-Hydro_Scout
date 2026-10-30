@@ -40,6 +40,8 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { requestConsent, modalOpen: consentOpen, handleAllow, handleDecline } = useStorageConsent();
 
+  // Firestore rules limit authorized members to the operational status.
+  const statusOnly = role === 'authorized';
   const displayName = user?.email ? user.email.split('@')[0] : 'Unknown';
   const roleLabel = accountType === 'station'
     ? 'Station Account'
@@ -82,15 +84,17 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
     setSaving(true);
     setError(null);
     try {
-      await updateHydrantStatus(hydrant.id, {
-        status: selectedStatus,
-        waterCleanliness: cleanliness,
-        hazard,
-        note,
-        by: displayName,
-        role: roleLabel,
-        photos,
-      });
+      await updateHydrantStatus(hydrant.id, statusOnly
+        ? { status: selectedStatus, by: displayName, role: roleLabel }
+        : {
+          status: selectedStatus,
+          waterCleanliness: cleanliness,
+          hazard,
+          note,
+          by: displayName,
+          role: roleLabel,
+          photos,
+        });
       onClose();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -149,6 +153,12 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
           </div>
         </section>
 
+        {statusOnly ? (
+          <p className="rounded-lg bg-neutral-50 px-3 py-2 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+            Authorized accounts can update the operational status. Notes, hazards and photos are added by a station head.
+          </p>
+        ) : (
+        <>
         {/* Condition / Obstruction */}
         <section>
           <p className="mb-2 text-xs font-bold text-[#e0353b]">Condition / Obstruction</p>
@@ -227,6 +237,8 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
           </div>
           {uploading && <p className="mt-1.5 text-[10px] text-neutral-400 dark:text-neutral-500">Uploading…</p>}
         </section>
+        </>
+        )}
 
         {/* Will be signed */}
         <div className="rounded-lg bg-neutral-50 dark:bg-neutral-800 px-4 py-3 text-[11px] text-neutral-500 dark:text-neutral-400">
@@ -236,7 +248,7 @@ export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: Edi
               <button onClick={onOpenAccount} className="font-bold text-[#e0353b] dark:text-[#e0353b] hover:underline text-left">
                 {displayName}
               </button>
-              <p className="text-neutral-500 dark:text-neutral-400">(Authorized)</p>
+              <p className="text-neutral-500 dark:text-neutral-400">({roleLabel})</p>
             </div>
             <div>
               <p className="font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wide text-[10px]">&nbsp;</p>

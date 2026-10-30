@@ -10,7 +10,7 @@ The AOR station is the account's own station (station accounts) or its assigned 
 |---|---|---|---|---|
 | View hydrants | Anywhere | Anywhere | Anywhere | Anywhere |
 | Pin a new hydrant | Anywhere | Own AOR | Own AOR | No |
-| Edit status, pressure, photos, notes, maintenance | Anywhere | Own AOR | `operationalStatus` only, own AOR | No |
+| Edit status, pressure, photos, notes, maintenance | Anywhere | Own AOR | Operational status only (plus its pressure and history entry), own AOR | No |
 | File a damage report | Anywhere | Own AOR | Own AOR | No |
 | Resolve, deny or delete a report | Anywhere | Own AOR | No | No |
 | Change a hydrant's barangay or location | Yes | No | No | No |

@@ -156,3 +156,34 @@ test('a station account can run the app report-resolution batch in its AOR only'
   await assertSucceeds(resolveReport('knl-station', 'HYD-101', 'r-101'));
   await assertFails(resolveReport('knl-station', 'HYD-102', 'r-102'));
 });
+
+// EditStatusPanel's status-only save for authorized members.
+const authorizedStatusEdit = (hydrantId, lat, lng, extra = {}) => {
+  const uid = 'knl-authorized';
+  const db = as(uid);
+  return runTransaction(db, async tx => {
+    const ref = doc(db, 'hydrants', hydrantId);
+    await tx.get(ref);
+    tx.update(ref, {
+      operationalStatus: 'Out of Service', pressureStatus: 'None', updatedBy: uid, updatedAt: serverTimestamp(),
+      register: arrayUnion({ statusColor: '#9aa0a6', action: 'Status set to Out of Service', by: uid, role: 'Authorized', date: '2026-10-30' }),
+      ...extra,
+    });
+    tx.set(doc(collection(db, 'stations', 'KNL', 'notifications')), {
+      type: 'hydrant-updated', uid, displayName: uid, hydrantId, lat, lng,
+      message: `${uid} updated hydrant ${hydrantId}.`, createdAt: serverTimestamp(),
+    });
+  });
+};
+
+test('authorized members can save a status edit in their AOR, but nothing beyond status', async () => {
+  await assertSucceeds(authorizedStatusEdit('HYD-101', 14.65595, 121.06322));
+  await assertFails(authorizedStatusEdit('HYD-102', 14.63371, 121.03454));
+  await assertFails(authorizedStatusEdit('HYD-101', 14.65595, 121.06322, { notes: 'not in authorized scope' }));
+  await assertFails(authorizedStatusEdit('HYD-101', 14.65595, 121.06322, { photos: arrayUnion('https://res.cloudinary.com/authorized.jpg') }));
+  // The status history is append-only for authorized members.
+  await assertFails(updateDoc(doc(as('knl-authorized'), 'hydrants', 'HYD-101'), { register: [] }));
+  await assertFails(updateDoc(doc(as('knl-authorized'), 'hydrants', 'HYD-101'), {
+    register: arrayUnion({ action: 'one' }, { action: 'two' }),
+  }));
+});

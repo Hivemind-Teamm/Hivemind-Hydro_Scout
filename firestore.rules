@@ -235,7 +235,17 @@ service cloud.firestore {
               'updatedBy',
               'updatedAt'
             ]))
-        || (access == 'authorized' && onlyChangedFields(['operationalStatus']));
+        || (access == 'authorized'
+          && onlyChangedFields(['operationalStatus', 'pressureStatus', 'register', 'updatedBy', 'updatedAt'])
+          && appendsAtMostOneRegisterEntry());
+    }
+
+    // Status edits log one register entry; earlier entries cannot be rewritten.
+    function appendsAtMostOneRegisterEntry() {
+      let before = resource.data.get('register', []);
+      let after = request.resource.data.get('register', []);
+      return after == before
+        || (after is list && after.size() == before.size() + 1 && after.hasAll(before));
     }
 
     function hydrantBarangay(hydrantId) {
