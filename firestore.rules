@@ -147,8 +147,10 @@ service cloud.firestore {
               && data.targetName is string && data.targetName.size() > 0 && data.targetName.size() <= 120
               && notificationId.matches('^account-assignment-[a-f0-9-]{36}$')
               && data.message == 'Admin account: ' + data.adminEmail + ' changed "' + data.targetName + '" station to ' + stationId + '.'
-              && get(/databases/$(database)/documents/users/$(data.targetUid)).data.accountType == 'person'
-              && get(/databases/$(database)/documents/users/$(data.targetUid)).data.stationId != stationId
+              // Self-signup profiles have no stationId (and legacy ones may lack
+              // accountType); a missing field must not error the whole rule.
+              && get(/databases/$(database)/documents/users/$(data.targetUid)).data.get('accountType', 'person') == 'person'
+              && get(/databases/$(database)/documents/users/$(data.targetUid)).data.get('stationId', null) != stationId
               && getAfter(/databases/$(database)/documents/users/$(data.targetUid)).data.accountType == 'person'
               && getAfter(/databases/$(database)/documents/users/$(data.targetUid)).data.stationId == stationId
               && getAfter(/databases/$(database)/documents/users/$(data.targetUid)).data.displayName == data.targetName)
