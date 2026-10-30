@@ -12,10 +12,11 @@ export async function clearFireIncident(db: Firestore, uid: string, id: string) 
   if (!['authorized', 'head', 'admin'].includes(role)) throw new FireClearError('Not authorized to clear incidents.', 403);
   return db.runTransaction(async transaction => {
     const pinRef = db.doc(`firePins/${id}`);
-    const [pin, owner, responders, incidents] = await Promise.all([
+    const [pin, owner, responders, incidents, linkedResponses] = await Promise.all([
       transaction.get(pinRef), transaction.get(db.doc(`firePinOwners/${id}`)),
       transaction.get(db.collection('stationResponses').where('status', '==', 'active')),
       transaction.get(db.collection('firePins').where('status', '==', 'active')),
+      transaction.get(db.collection('stationResponses').where('firePinId', '==', id)),
     ]);
     if (!pin.exists) throw new FireClearError('Incident not found.', 404);
     const data = pin.data()!;
@@ -42,6 +43,28 @@ export async function clearFireIncident(db: Firestore, uid: string, id: string) 
         message: `${response.displayName} ended response because the fire incident was cleared.`, createdAt: now,
       });
     });
+        // Delete leftover locations for responses previously ended on this incident.
+    // Active responses have already been handled above.
+    const activeIds = new Set(active.map(record => record.id));
+
+    for (const record of linkedResponses.docs) {
+      if (activeIds.has(record.id)) continue;
+
+      const response = record.data();
+
+      if (
+        typeof response.stationId !== 'string' ||
+        !/^[A-Za-z0-9_-]{1,128}$/.test(response.stationId)
+      ) {
+        continue;
+      }
+
+      transaction.delete(
+        db.doc(`stations/${response.stationId}/unitLocations/${record.id}`)
+      );
+      transaction.delete(db.doc(`responseLocations/${record.id}`));
+    }
+
     return { endedResponses: active.length };
   });
 }

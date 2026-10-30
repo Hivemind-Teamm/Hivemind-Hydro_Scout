@@ -34,6 +34,16 @@ try {
     await db.doc(`stations/${stationId}/unitLocations/${id}`).set({ lat: 14 });
     await db.doc(`responseLocations/${id}`).set({ lat: 14 });
   }
+  // An ended response can retain an orphaned location.
+  await db.doc('stationResponses/old').set({
+    uid: 'old',
+    displayName: 'Old responder',
+    stationId: 'one',
+    firePinId: pinId,
+    status: 'ended',
+  });
+  await db.doc('stations/one/unitLocations/old').set({ lat: 14 });
+  await db.doc('responseLocations/old').set({ lat: 14 });
   await assert.rejects(clearFireIncident(db, 'outsider', pinId), error => error.status === 403);
   await assert.rejects(clearFireIncident(db, 'visitor', pinId), error => error.status === 403);
   assert.equal((await db.doc(`firePins/${pinId}`).get()).data().status, 'active');
@@ -48,6 +58,9 @@ try {
     assert.equal((await db.doc(`responseLocations/${id}`).get()).exists, false);
     assert.equal((await db.doc(`stations/${station}/notifications/${id}_end`).get()).data().type, 'response-ended');
   }
+  assert.equal((await db.doc('stations/one/unitLocations/old').get()).exists, false);
+  assert.equal((await db.doc('responseLocations/old').get()).exists, false);
+  assert.equal((await db.doc('stationResponses/old').get()).data().status, 'ended');
   assert.equal((await db.doc('stationResponses/c').get()).data().status, 'active');
   assert.equal((await clearFireIncident(db, 'creator', pinId)).endedResponses, 0);
   // Preserve legacy sessions while another active incident makes their target ambiguous.

@@ -14,6 +14,7 @@ import { sortAccountDirectory, type AccountSort } from '@/lib/account-directory-
 import { useMemo, useRef, useState, type DragEvent } from 'react';
 import { FiX } from 'react-icons/fi';
 import { useAuth } from '@/lib/auth-context';
+import { useStaleUnitLocationCleanup } from '@/lib/use-stale-unit-location-cleanup';
 import AvatarPlaceholder from './AvatarPlaceholder';
 import {
   useUsers,
@@ -36,6 +37,7 @@ import { useStations, type Station } from '../data/stations';
 
 export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   const { user } = useAuth();
+  useStaleUnitLocationCleanup(Boolean(user?.uid));
   const { users, loading, error } = useUsers();
   const { hydrants } = useHydrants();
 
