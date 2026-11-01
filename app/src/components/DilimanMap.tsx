@@ -1,5 +1,6 @@
 'use client';
 import StationUnitIcon from './StationUnitIcon';
+import StaticStationPin from './StaticStationPin';
 import SharedFirePinMarker from './SharedFirePinMarker';
 import type { MapFirePin } from '@/lib/use-shared-fire-pins';
 
@@ -83,6 +84,7 @@ interface DilimanMapProps {
   selectedStationId?: string | null;
   onSelectStation: (stationId: string) => void;
   unitLocations?: import('@/lib/map-unit-location').MapUnitLocation[];
+  stationPins?: import('../data/stations').Station[];
   hydrants: Hydrant[];
   aorBarangays: string[];
   selectedHydrantId: string | null;
@@ -349,7 +351,7 @@ const DASH_SEQUENCE = [
 
 export default function DilimanMap({
   selectedStationId, onSelectStation,
-  unitLocations = [],
+  unitLocations = [], stationPins = [],
   hydrants, aorBarangays, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
   firePinMode = false, fire = null, onFirePin, onFireMove, sharedFirePins = [], onSelectFire,
@@ -866,6 +868,16 @@ export default function DilimanMap({
         {sharedFirePins.map(pin => <Marker key={`fire-${pin.id}`} longitude={pin.lng} latitude={pin.lat} anchor="center">
           <SharedFirePinMarker arrivalAt={pin.arrivalAt} onSelect={() => onSelectFire?.(pin.id)} />
         </Marker>)}
+        {stationPins.map(station => station.location && (
+          <Marker
+            key={`station-${station.id}`}
+            longitude={station.location.lng}
+            latitude={station.location.lat}
+            anchor="bottom"
+          >
+            <StaticStationPin name={station.name} />
+          </Marker>
+        ))}
         {unitLocations.map(location => (
           <Marker key={location.id} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
             <StationUnitIcon location={location} selected={selectedStationId === location.stationId}

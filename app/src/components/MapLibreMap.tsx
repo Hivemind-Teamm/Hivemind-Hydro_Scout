@@ -1,5 +1,6 @@
 'use client';
 import StationUnitIcon from './StationUnitIcon';
+import StaticStationPin from './StaticStationPin';
 import SharedFirePinMarker from './SharedFirePinMarker';
 import type { MapFirePin } from '@/lib/use-shared-fire-pins';
 
@@ -114,6 +115,7 @@ interface MapLibreMapProps {
   selectedStationId?: string | null;
   onSelectStation: (stationId: string) => void;
   unitLocations?: import('@/lib/map-unit-location').MapUnitLocation[];
+  stationPins?: import('../data/stations').Station[];
   hydrants: Hydrant[];
   aorBarangays: string[];
   selectedHydrantId: string | null;
@@ -449,7 +451,7 @@ const TRANSPARENT_PIXEL = { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 
 
 export default function MapLibreMap({
   selectedStationId, onSelectStation,
-  unitLocations = [],
+  unitLocations = [], stationPins = [],
   hydrants, aorBarangays, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
   firePinMode = false, fire = null, onFirePin, onFireMove, sharedFirePins = [], onSelectFire,
@@ -1016,6 +1018,17 @@ export default function MapLibreMap({
       {map && sharedFirePins.map(pin => <MapMarker key={`fire-${pin.id}`} map={map} longitude={pin.lng} latitude={pin.lat} anchor="center">
         <SharedFirePinMarker arrivalAt={pin.arrivalAt} onSelect={() => onSelectFire?.(pin.id)} />
       </MapMarker>)}
+      {map && stationPins.map(station => station.location && (
+        <MapMarker
+          key={`station-${station.id}`}
+          map={map}
+          longitude={station.location.lng}
+          latitude={station.location.lat}
+          anchor="bottom"
+        >
+          <StaticStationPin name={station.name} />
+        </MapMarker>
+      ))}
       {map && unitLocations.map(location => (
         <MapMarker key={location.id} map={map} longitude={location.lng} latitude={location.lat} anchor="bottom" style={{ zIndex: selectedStationId === location.stationId ? 10 : 1 }}>
           <StationUnitIcon location={location} selected={selectedStationId === location.stationId}

@@ -15,6 +15,8 @@ import dynamic from 'next/dynamic';
 import DilimanMap from './DilimanMap';
 import type { MapFirePin } from '@/lib/use-shared-fire-pins';
 import StationInfoPanel from './StationInfoPanel';
+import { useStations } from '../data/stations';
+import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useUnitLocations } from '@/lib/use-unit-locations';
 
@@ -374,6 +376,9 @@ function MapView({
 }: MapViewProps) {
   const { isDark } = useTheme();
   const { locations: unitLocations, error: unitLocationError } = useUnitLocations();
+  const { user } = useAuth();
+  const { stations } = useStations();
+  const stationPins = user ? stations.filter(station => station.location !== null) : [];
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const controllerRef = useRef<MapController | null>(null);
   const handleMapReady = useCallback((controller: MapController) => {
@@ -458,6 +463,7 @@ function MapView({
             selectedStationId={visibleStationId}
             onSelectStation={selectStation}
             unitLocations={unitLocations}
+            stationPins={stationPins}
             hydrants={
               hydrants
             }
@@ -534,6 +540,7 @@ function MapView({
             selectedStationId={visibleStationId}
             onSelectStation={selectStation}
             unitLocations={unitLocations}
+            stationPins={stationPins}
             hydrants={
               hydrants
             }

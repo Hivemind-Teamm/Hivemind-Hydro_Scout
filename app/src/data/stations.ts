@@ -9,8 +9,27 @@ export interface Station {
   id: string;
   name: string;
   active: boolean;
+  location: { lat: number; lng: number } | null;
   /** Barangays in this station's Area of Responsibility (lib/qc-barangays.json names). */
   aorBarangays: string[];
+}
+
+function readStationLocation(value: unknown): Station['location'] {
+  if (!value || typeof value !== 'object') return null;
+
+  const coordinates = value as Record<string, unknown>;
+  const { lat, lng } = coordinates;
+
+  if (
+    typeof lat !== 'number' ||
+    typeof lng !== 'number' ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 || lat > 90 ||
+    lng < -180 || lng > 180
+  ) return null;
+
+  return { lat, lng };
 }
 
 export function useStations() {
@@ -25,6 +44,7 @@ export function useStations() {
         id: record.id,
         name: typeof record.data().name === 'string' ? record.data().name : record.id,
         active: true,
+        location: readStationLocation(record.data().location),
         aorBarangays: readAorBarangays(record.data().aorBarangays),
       })).sort((a, b) => a.name.localeCompare(b.name)));
       setError(null);
