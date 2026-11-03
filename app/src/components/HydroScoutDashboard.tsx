@@ -17,6 +17,7 @@ import LocationPreviewPanel from './LocationPreviewPanel';
 import NearestHydrantPanel from './NearestHydrantPanel';
 import FireResponsePanel from './FireResponsePanel';
 import StationResponseControl from './StationResponseControl';
+import HydrantCheckingPanel from './HydrantCheckingPanel';
 
 // The three heaviest, rarely-open surfaces are split out of the initial
 // bundle so the first load parses/executes less JS on phones. They're warmed
@@ -35,6 +36,7 @@ import {
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
 import { useSharedFirePins } from '@/lib/use-shared-fire-pins';
+import { recordHydrantCheck, useHydrantChecking, type HydrantCheckStatus } from '@/lib/hydrant-checking';
 import { useIsMobile } from '@/lib/use-media-query';
 import { useOnlineStatus } from '@/lib/use-online-status';
 import { haversineM, formatDistance, formatDuration, distToRouteM } from '@/lib/haversine';
@@ -98,6 +100,7 @@ export default function HydroScoutDashboard() {
   const [showEdit, setShowEdit] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showReports, setShowReports] = useState(false);
+  const [showHydrantChecking, setShowHydrantChecking] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [showOpsDashboard, setShowOpsDashboard] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
@@ -192,7 +195,7 @@ export default function HydroScoutDashboard() {
   const [mapReady, setMapReady] = useState(false);
   const splashStartedRef = useRef(false);
 
-  const { user, role, aorBarangays, canUseDeviceLocation } = useAuth();
+  const { user, role, accountType, stationId, aorBarangays, canUseDeviceLocation } = useAuth();
   const sharedFires = useSharedFirePins();
   const { create: createSharedFirePin, move: moveSharedFirePin } = sharedFires;
   const fireIncident = sharedFires.pins.find(pin => pin.id === selectedFireId) ?? null;
@@ -207,6 +210,7 @@ export default function HydroScoutDashboard() {
   const fire = canPinFire && fireIncident ? { ...fireIncident, address: fireAddress?.key === `${fireIncident.id}:${fireIncident.lat}:${fireIncident.lng}` ? fireAddress.address : null } : null;
   const canEditFire = !!fireIncident && sharedFires.canEdit(fireIncident);
   const { hydrants, loading, error } = useHydrants();
+  const checking = useHydrantChecking(stationId, role === 'admin');
   const { reports, loading: reportsLoading } = useReports();
   const hasPendingReports = reports.some((r) => r.status === 'pending');
 
@@ -596,6 +600,12 @@ export default function HydroScoutDashboard() {
     setShowReport(false);
     controllerRef.current?.flyTo(hydrant.lat, hydrant.lng, 16);
   }, []);
+
+  const handleHydrantCheck = useCallback(async (hydrant: Hydrant, status: HydrantCheckStatus) => {
+    if (!user || !checking.selectedSession || checking.selectedSession.status !== 'active') return;
+    const displayName = user.displayName?.trim() || user.email?.split('@')[0] || 'Responder';
+    await recordHydrantCheck(checking.selectedSession, hydrant, { uid: user.uid, displayName, status });
+  }, [checking.selectedSession, user]);
 
   const handleCloseAll = useCallback(() => {
     if (selectedHydrant || nearestHydrant) controllerRef.current?.zoomOut();
@@ -1228,6 +1238,7 @@ export default function HydroScoutDashboard() {
         firePinMode={firePinMode}
         fireActive={false}
         onToggleFirePin={handleToggleFirePinMode}
+        onToggleChecking={() => setShowHydrantChecking(true)}
       />
       <StationResponseControl fireIncident={fireIncident} actionContainer={responseActionContainer} onViewFireLocation={handleViewFireNotification} />
       {sharedFires.error && <p role="alert" className="pointer-events-auto absolute bottom-24 left-4 right-20 z-[2400] max-w-sm rounded-lg bg-white/95 p-3 text-xs text-red-600 shadow dark:bg-neutral-900">{sharedFires.error}</p>}
@@ -1497,6 +1508,18 @@ export default function HydroScoutDashboard() {
         </>
       )}
 
+      {showHydrantChecking && (
+        <HydrantCheckingPanel
+          sessions={checking.sessions}
+          selectedSession={checking.selectedSession}
+          onSelectSession={checking.setSelectedSessionId}
+          checks={checking.checks}
+          hydrants={hydrants}
+          onSelectHydrant={handleSelectHydrant}
+          onClose={() => setShowHydrantChecking(false)}
+        />
+      )}
+
       {selectedHydrant && (
         <HydrantInfoPanel
           hydrant={selectedHydrant}
@@ -1510,6 +1533,9 @@ export default function HydroScoutDashboard() {
           isOtw={otwHydrant?.id === selectedHydrant?.id}
           routeCalculating={otwHydrant?.id === selectedHydrant?.id && !otwMeta}
           scrollRef={panelScrollRef}
+          checkingSession={checking.selectedSession}
+          check={checking.checks.find(item => item.hydrantId === selectedHydrant.id) ?? null}
+          onRecordCheck={status => handleHydrantCheck(selectedHydrant, status)}
         />
       )}
 

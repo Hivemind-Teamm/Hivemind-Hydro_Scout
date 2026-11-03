@@ -14,7 +14,6 @@ import {
   onSnapshot,
   updateDoc,
   addDoc,
-  runTransaction,
   writeBatch,
   serverTimestamp,
   arrayUnion,
@@ -23,7 +22,6 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { mapActivityActor } from '@/lib/map-activity';
 import {
   hydrantFromDoc,
   toOperationalStatus,
@@ -139,16 +137,10 @@ export async function updateHydrantStatus(hydrantId: string, input: EditHydrantI
   }
 
   try {
-    const actor = await mapActivityActor();
-    await runTransaction(db, async tx => {
-      const hydrant = await tx.get(ref);
-      tx.update(ref, payload);
-      if (actor && hydrant.exists()) tx.set(doc(collection(db, 'stations', actor.stationId, 'notifications')), {
-        type: 'hydrant-updated', uid: actor.uid, displayName: actor.displayName, hydrantId,
-        lat: hydrant.data().location.latitude, lng: hydrant.data().location.longitude,
-        message: `${actor.displayName} updated hydrant ${hydrantId}.`, createdAt: serverTimestamp(),
-      });
-    });
+    // Hydrant edits belong in the hydrant's register. Station Activity is
+    // reserved for operational events, so one edit does not create a second,
+    // noisy station notification.
+    await updateDoc(ref, payload);
   } catch (error) {
     logFirestoreError('update:hydrant-status', error);
     throw error;

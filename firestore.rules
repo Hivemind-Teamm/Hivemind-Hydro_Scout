@@ -121,19 +121,14 @@ service cloud.firestore {
               && getAfter(/databases/$(database)/documents/firePins/$(data.firePinId)).data.lng == data.lng
               && getAfter(/databases/$(database)/documents/firePinOwners/$(data.firePinId)).data.uid == request.auth.uid))
             && data.message == data.displayName + ' pinned a fire incident.')
-          || (data.type in ['hydrant-pinned', 'hydrant-updated']
+          || (data.type == 'hydrant-pinned'
             && !('firePinId' in data)
             && data.hydrantId is string && data.hydrantId.matches('^HYD-[0-9]{3}$')
-            && ((data.type == 'hydrant-pinned'
-                && !exists(/databases/$(database)/documents/hydrants/$(data.hydrantId))
-                && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.createdAt == request.time)
-              || (data.type == 'hydrant-updated'
-                && exists(/databases/$(database)/documents/hydrants/$(data.hydrantId))
-                && get(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.get('updatedAt', null) != request.time
-                && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.updatedAt == request.time))
+            && !exists(/databases/$(database)/documents/hydrants/$(data.hydrantId))
+            && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.createdAt == request.time
             && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.location.latitude() == data.lat
             && getAfter(/databases/$(database)/documents/hydrants/$(data.hydrantId)).data.location.longitude() == data.lng
-            && data.message == data.displayName + (data.type == 'hydrant-pinned' ? ' pinned hydrant ' : ' updated hydrant ') + data.hydrantId + '.'));
+            && data.message == data.displayName + ' pinned hydrant ' + data.hydrantId + '.'));
     }
 
     function isValidStationNotification(stationId, notificationId) {
@@ -260,6 +255,18 @@ service cloud.firestore {
 
     function hydrantBarangay(hydrantId) {
       return get(/databases/$(database)/documents/hydrants/$(hydrantId)).data.get('barangay', null);
+    }
+
+    // Field-check coverage is stored separately from a hydrant's operational
+    // status. A responder must be assigned to the session's station and may
+    // only record an in-AOR hydrant.
+    function canViewHydrantChecking(stationId) {
+      return isSignedIn() && (isAdmin() || (currentUserData().stationId == stationId && (isAuthorized() || isHead())));
+    }
+
+    function canRecordHydrantCheck(stationId, hydrantId) {
+      return canViewHydrantChecking(stationId)
+        && (isAdmin() || hydrantAccess(hydrantBarangay(hydrantId)) in ['head', 'authorized']);
     }
 
     function isValidStationAccount(stationId, uid, allowLegacyRole) {
@@ -401,6 +408,35 @@ service cloud.firestore {
         && request.resource.data.active is bool
         && validStationAor();
       allow delete: if isAdmin();
+
+      // A checking session tracks field-test coverage. Its child items never
+      // alter a hydrant's operational condition.
+      match /checkingSessions/{sessionId} {
+        allow read: if canViewHydrantChecking(stationId);
+        // The cookie-authenticated API creates and completes sessions. It
+        // derives the AoR hydrant list on the server, so a client cannot end
+        // a session before every required hydrant has been recorded.
+        allow create, update: if false;
+        allow delete: if false;
+
+        match /items/{hydrantId} {
+          function validCheck() {
+            let data = request.resource.data;
+            return data.keys().hasAll(['hydrantId', 'status', 'note', 'checkedByUid', 'checkedByName', 'checkedAt'])
+              && data.keys().hasOnly(['hydrantId', 'status', 'note', 'checkedByUid', 'checkedByName', 'checkedAt'])
+              && data.hydrantId == hydrantId
+              && data.status in ['checked', 'follow-up', 'skipped']
+              && data.note is string && data.note.size() <= 500
+              && data.checkedByUid == request.auth.uid
+              && data.checkedByName is string && data.checkedByName.size() > 0 && data.checkedByName.size() <= 120
+              && data.checkedAt == request.time;
+          }
+          allow read: if canViewHydrantChecking(stationId);
+          allow create, update: if get(/databases/$(database)/documents/stations/$(stationId)/checkingSessions/$(sessionId)).data.status == 'active'
+            && canRecordHydrantCheck(stationId, hydrantId) && validCheck();
+          allow delete: if false;
+        }
+      }
 
       match /accounts/{uid} {
         allow read: if isSignedIn() && (

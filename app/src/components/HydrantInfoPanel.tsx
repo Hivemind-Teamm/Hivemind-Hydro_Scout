@@ -6,6 +6,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
 import { FiX } from 'react-icons/fi';
+import type { HydrantCheck, HydrantCheckingSession, HydrantCheckStatus } from '@/lib/hydrant-checking';
 
 interface HydrantInfoPanelProps {
   hydrant: Hydrant;
@@ -21,6 +22,9 @@ interface HydrantInfoPanelProps {
   routeCalculating?: boolean;
   /** Forwarded to the inner scrollable div — used by the map scroll-mode gesture. */
   scrollRef?: React.RefObject<HTMLDivElement | null>;
+  checkingSession?: HydrantCheckingSession | null;
+  check?: HydrantCheck | null;
+  onRecordCheck?: (status: HydrantCheckStatus) => Promise<void>;
 }
 
 const PRESSURE_COLOR: Record<string, string> = {
@@ -34,21 +38,32 @@ type FlashState = 'idle' | 'red1' | 'off1' | 'red2' | 'active';
 
 export default function HydrantInfoPanel({
   hydrant, onClose, onOpenFullDetails, onEdit, onReport,
-  onFlyTo, onRoute, onRouteDismiss, isOtw, routeCalculating = false, scrollRef,
+  onFlyTo, onRoute, onRouteDismiss, isOtw, routeCalculating = false, scrollRef, checkingSession = null, check = null, onRecordCheck,
 }: HydrantInfoPanelProps) {
-  const { role, canWriteInAor } = useAuth();
+  const { role, accountType, aorBarangays } = useAuth();
   const isMobile = useIsMobile();
   const meta = STATUS_META[hydrant.status];
   // Editing and reporting are limited to the station's Area of Responsibility.
-  const inAor     = canWriteInAor(hydrant.barangay);
+  const inAor     = role === 'admin' || ((accountType === 'station' || role === 'authorized' || role === 'head') && aorBarangays.includes(hydrant.barangay));
   // Authorized members edit operational status only (see EditStatusPanel).
-  const editRole  = role === 'authorized' || role === 'head' || role === 'admin';
+  const editRole  = accountType === 'station' || role === 'authorized' || role === 'head' || role === 'admin';
   const reportRole = editRole;
   const canEdit   = editRole && inAor;
   const canReport = reportRole && inAor;
   const outsideAor = (editRole || reportRole) && !inAor;
   // General users (and guests) are view-only — no routing.
   const canRoute  = role === 'authorized' || role === 'head' || role === 'admin';
+  const canCheck = !!checkingSession && checkingSession.status === 'active' && canEdit && !!onRecordCheck;
+  const [checkSaving, setCheckSaving] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+
+  async function recordCheck(status: HydrantCheckStatus) {
+    if (!onRecordCheck) return;
+    setCheckSaving(true); setCheckError(null);
+    try { await onRecordCheck(status); }
+    catch { setCheckError('Could not save the checking result.'); }
+    finally { setCheckSaving(false); }
+  }
 
   // Touch device (phone / tablet) = primary pointer is coarse (finger).
   // Desktop with a mouse = primary pointer is fine.
@@ -270,6 +285,19 @@ export default function HydrantInfoPanel({
               <p className="text-xs font-bold text-neutral-700 dark:text-neutral-200">{hydrant.key}</p>
             </div>
           </div>
+
+          {checkingSession && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/20">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Hydrant checking · {checkingSession.name}</p>
+              <p className="mt-1 text-xs font-bold text-neutral-800 dark:text-neutral-100">{check ? ({ checked: 'Checked', 'follow-up': 'Needs follow-up', skipped: 'Skipped' }[check.status]) : 'Not checked in this session'}</p>
+              {canCheck && <div className="mt-2 flex flex-wrap gap-1.5">
+                <button disabled={checkSaving} onClick={() => recordCheck('checked')} className="rounded-md bg-[#2fbf4f] px-2.5 py-1.5 text-[10px] font-bold text-white disabled:opacity-60">Checked</button>
+                <button disabled={checkSaving} onClick={() => recordCheck('follow-up')} className="rounded-md bg-[#f59e0b] px-2.5 py-1.5 text-[10px] font-bold text-white disabled:opacity-60">Follow-up</button>
+                <button disabled={checkSaving} onClick={() => recordCheck('skipped')} className="rounded-md bg-neutral-500 px-2.5 py-1.5 text-[10px] font-bold text-white disabled:opacity-60">Skipped</button>
+              </div>}
+              {checkError && <p role="alert" className="mt-2 text-[10px] text-red-600">{checkError}</p>}
+            </div>
+          )}
 
           {(canRoute || canEdit || canReport) && (
           <div className="flex items-center gap-2">

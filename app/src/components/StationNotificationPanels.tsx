@@ -127,6 +127,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           const response = item.response;
           const group = item.responseGroup;
           const active = response?.status === 'active' || (group?.activeCount ?? 0) > 0;
+          const checking = item.type === 'hydrant-checking';
           const { color, label } = notificationStyle(response || group ? active ? 'response-started' : 'response-ended' : item.type);
           const read = () => readActivity(item);
           return <article key={stationNotificationCardKey(item)} style={{ borderLeftColor: color }} className={`relative border-l-[3px] px-4 py-3 transition-colors hover:bg-neutral-50 focus-within:bg-neutral-50 dark:hover:bg-neutral-800/50 dark:focus-within:bg-neutral-800/50 ${active ? 'response-notification-active' : ''}`}>
@@ -155,6 +156,12 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
               <div><dt className="inline font-semibold">Ended: </dt><dd className="inline">{active ? 'Response ongoing' : time(response.endedAt)}</dd></div>
               <div><dt className="inline font-semibold">Duration: </dt><dd className="inline">{responseDuration(response, now)}</dd></div>
               {response.endReason === 'station-head' && <div className="font-semibold text-amber-700 dark:text-amber-400">Closed by station management</div>}
+            </dl>}
+            {checking && <dl className="mt-2 space-y-1 text-[10px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+              <div><dt className="inline font-semibold">Session: </dt><dd className="inline">{item.checkingName || 'Hydrant checking'}</dd></div>
+              <div><dt className="inline font-semibold">Status: </dt><dd className="inline">{item.checkingStatus === 'completed' ? 'Completed' : 'In progress'}</dd></div>
+              <div><dt className="inline font-semibold">Coverage: </dt><dd className="inline">{item.checkedCount ?? 0} / {item.targetHydrantCount ?? 0} recorded</dd></div>
+              <div><dt className="inline font-semibold">Started: </dt><dd className="inline">{time(item.startedAt ?? item.createdAt)}</dd></div>
             </dl>}
             <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
               {!assignment && item.uid && <>{accountLink(item.uid, item.displayName || 'View account', 'Member', read)}{' · '}</>}
@@ -249,6 +256,14 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           {!selected.limited && <div><dt className="text-neutral-400">Last location report</dt><dd className="mt-1">{time(selected.response.lastLocationAt)}</dd></div>}
           {selected.response.endedByName && <div><dt className="text-neutral-400">Ended by</dt><dd className="mt-1">{selected.response.endedByUid ? accountLink(selected.response.endedByUid, selected.response.endedByName, 'Member', () => readActivity(selected)) : selected.response.endedByName}{selected.response.endReason === 'station-head' ? ' · Station management' : ''}</dd></div>}
           {!selected.limited && <div><dt className="text-neutral-400">Response ID</dt><dd className="mt-1 break-all font-mono text-[10px]">{selected.responseId}</dd></div>}
+        </> : selected.type === 'hydrant-checking' ? <>
+          <div><dt className="text-neutral-400">Session</dt><dd className="mt-1 font-semibold">{selected.checkingName || 'Hydrant checking'}</dd></div>
+          <div><dt className="text-neutral-400">Status</dt><dd className="mt-1 font-semibold">{selected.checkingStatus === 'completed' ? 'Completed' : 'In progress'}</dd></div>
+          <div><dt className="text-neutral-400">Coverage</dt><dd className="mt-1">{selected.checkedCount ?? 0} of {selected.targetHydrantCount ?? 0} hydrants recorded</dd></div>
+          <div><dt className="text-neutral-400">Pending</dt><dd className="mt-1">{selected.pendingCount ?? 0}</dd></div>
+          <div><dt className="text-neutral-400">Needs follow-up</dt><dd className="mt-1">{selected.followUpCount ?? 0}</dd></div>
+          <div><dt className="text-neutral-400">Started</dt><dd className="mt-1">{time(selected.startedAt ?? selected.createdAt)}</dd></div>
+          {selected.checkingStatus === 'completed' && <div><dt className="text-neutral-400">Completed</dt><dd className="mt-1">{time(selected.endedAt)}</dd></div>}
         </> : <>
           {selected.uid && <div><dt className="text-neutral-400">{selected.type === 'personal-station-assigned' ? 'Admin' : 'Account'}</dt><dd className="mt-1">{accountLink(selected.uid, selected.displayName || selected.adminEmail || 'View account', selected.type === 'personal-station-assigned' ? 'Admin' : 'Member', () => readActivity(selected))}</dd></div>}
           {selected.targetUid && <div><dt className="text-neutral-400">Edited account</dt><dd className="mt-1">{accountLink(selected.targetUid, selected.targetName || 'View account', 'Member', () => readActivity(selected))}</dd></div>}

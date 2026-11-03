@@ -15,7 +15,7 @@ import {
 import { HYDRANT_PIN_FILTER } from './hydrantIcon';
 import OtwHazardPanel from './OtwHazardPanel';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
-import { FiAlertTriangle, FiBell, FiUsers, FiUserCheck } from 'react-icons/fi';
+import { FiAlertTriangle, FiBell, FiUsers, FiUserCheck, FiClipboard } from 'react-icons/fi';
 import { MdLocalFireDepartment } from 'react-icons/md';
 
 interface DashboardOverlayProps {
@@ -53,6 +53,7 @@ interface DashboardOverlayProps {
   /** A fire is currently pinned on the map. */
   fireActive?: boolean;
   onToggleFirePin?: () => void;
+  onToggleChecking?: () => void;
 }
 
 function DashboardOverlay({
@@ -87,6 +88,7 @@ function DashboardOverlay({
   firePinMode = false,
   fireActive = false,
   onToggleFirePin,
+  onToggleChecking,
 }: DashboardOverlayProps) {
   const { user, role, accountType, stationId, locationPrivacyAvailable, locationPrivacyGranted, openLocationConsent } = useAuth();
   const { unreadActivityCount, unreadMemberCount, canViewActivity, canApproveMembers } = useStationNotifications();
@@ -97,6 +99,7 @@ function DashboardOverlay({
   const canApproveStationMembers = canApproveMembers;
   const canViewStationMembers = !!user && (role === 'admin' || (role === 'head' && !!stationId));
   const canPin = role === 'authorized' || role === 'head' || role === 'admin';
+  const canUseChecking = accountType === 'station' || role === 'authorized' || role === 'head' || role === 'admin';
   // Fire response planning is for responders — the same roles that can route.
   const canPinFire = role === 'authorized' || role === 'head' || role === 'admin';
   const firePinLabel = firePinMode ? 'Cancel fire pin' : fireActive ? 'Move fire pin' : 'Pin a fire';
@@ -267,6 +270,9 @@ function DashboardOverlay({
                 <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e0353b] text-[9px] font-bold text-white">!</span>
               )}
             </div>
+          )}
+          {canUseChecking && onToggleChecking && (
+            <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded tooltipSide="left"><FiClipboard /></ToolButton>
           )}
           {(addHydrantMode || firePinMode) && (
             <ToolButton label={pinHereLabel} onClick={onTargetLocation} rounded tooltipSide="left">
@@ -614,6 +620,10 @@ function DashboardOverlay({
               </span>
             )}
           </div>
+        )}
+
+        {canUseChecking && onToggleChecking && (
+          <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded><FiClipboard /></ToolButton>
         )}
 
         {canPinFire && onToggleFirePin && (

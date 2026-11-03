@@ -2,7 +2,7 @@
 export function notificationStyle(type: string) {
   switch (type) {
     case 'hydrant-pinned': return { color: '#854d0e', label: 'Hydrant pinned' };
-    case 'hydrant-updated': return { color: '#2563eb', label: 'Hydrant update' };
+    case 'hydrant-checking': return { color: '#0f766e', label: 'Hydrant checking' };
     case 'fire-pinned': return { color: '#ea580c', label: 'Fire incident' };
     case 'response-started': return { color: '#0891b2', label: 'Responding' };
     case 'response-ended':
