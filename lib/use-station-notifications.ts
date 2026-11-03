@@ -142,11 +142,11 @@ function useManagementNotifications() {
 
 export function useStationNotifications() {
   const { user, role, accountType, stationId, stationMembershipStatus } = useAuth();
-  const fullDetails = role === 'head';
+  const fullDetails = role === 'head' || role === 'admin';
   const canApproveMembers = !!user && !!stationId && role === 'head' && accountType !== 'station';
   const management = useManagementNotifications();
-  const limited = useLimitedNotifications(user && role !== 'admin' && !fullDetails ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
-  const feed = fullDetails ? management : limited;
+  const limited = useLimitedNotifications(user && (role === 'admin' || !fullDetails) ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
+  const feed = role === 'head' ? management : limited;
   const notifications = useMemo(() => dailyResponseNotifications(feed.notifications, stationId), [feed.notifications, stationId]);
   const activityUnreadCount = (item: StationNotification) => unreadActivityCount(item, feed.isActivityUnread);
   const unreadActivities = notifications.reduce((sum, item) => sum + activityUnreadCount(item), 0);
@@ -157,7 +157,7 @@ export function useStationNotifications() {
     hasUnreadActivity: unreadActivities > 0,
     isActivityUnread: (item: StationNotification) => activityUnreadCount(item) > 0,
     readActivity: (item: StationNotification) => { if (!item.responseGroup) feed.readActivity(item); },
-    canViewActivity: !!user && role !== 'admin',
+    canViewActivity: !!user && role !== 'general',
     canApproveMembers,
   };
 }

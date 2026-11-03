@@ -15,7 +15,7 @@ import {
 import { HYDRANT_PIN_FILTER } from './hydrantIcon';
 import OtwHazardPanel from './OtwHazardPanel';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
-import { FiAlertTriangle, FiBell, FiUsers, FiUserCheck, FiClipboard } from 'react-icons/fi';
+import { FiAlertTriangle, FiBell, FiUsers, FiUserCheck } from 'react-icons/fi';
 import { MdLocalFireDepartment } from 'react-icons/md';
 
 interface DashboardOverlayProps {
@@ -272,7 +272,7 @@ function DashboardOverlay({
             </div>
           )}
           {canUseChecking && onToggleChecking && (
-            <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded tooltipSide="left"><FiClipboard /></ToolButton>
+            <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded tooltipSide="left"><HydrantCheckingGlyph /></ToolButton>
           )}
           {(addHydrantMode || firePinMode) && (
             <ToolButton label={pinHereLabel} onClick={onTargetLocation} rounded tooltipSide="left">
@@ -623,7 +623,7 @@ function DashboardOverlay({
         )}
 
         {canUseChecking && onToggleChecking && (
-          <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded><FiClipboard /></ToolButton>
+          <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded><HydrantCheckingGlyph /></ToolButton>
         )}
 
         {canPinFire && onToggleFirePin && (
@@ -902,16 +902,25 @@ function FirePinButton({ label, onClick, active, pinned, tooltipSide }: {
   pinned: boolean;
   tooltipSide?: 'right' | 'left' | 'top';
 }) {
+  const tooltipPos: Record<string, string> = {
+    right: 'left-[calc(100%+8px)] top-1/2 -translate-y-1/2',
+    left: 'right-[calc(100%+8px)] top-1/2 -translate-y-1/2',
+    top: 'bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2',
+  };
   return (
-    <div className="relative">
-      <ToolButton label={label} onClick={onClick} rounded active={active} tooltipSide={tooltipSide}>
-        <MdLocalFireDepartment className={`h-[22px] w-[22px] ${active ? '' : 'text-[#f97316]'}`} />
-      </ToolButton>
+    <div className="group relative">
+      <button type="button" aria-label={label} onClick={onClick}
+        className={`relative flex h-12 w-12 items-center justify-center transition-all duration-150 ease-out hover:scale-110 active:scale-90 ${active ? 'drop-shadow-[0_4px_10px_rgba(245,158,11,0.65)]' : 'drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]'}`}>
+        <MdLocalFireDepartment className={`h-12 w-12 ${active ? 'fire-pin-control-active text-[#f5c20a]' : 'text-[#f97316]'}`} />
+      </button>
       {pinned && !active && (
         <span className="pointer-events-none absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-[#e0353b] dark:border-neutral-800">
           <span className="h-1.5 w-1.5 animate-ping rounded-full bg-white/80" />
         </span>
       )}
+      <div className={`pointer-events-none absolute z-[9999] whitespace-nowrap opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-hover:[transition-delay:500ms] ${tooltipPos[tooltipSide ?? 'right']}`}>
+        <span className="block rounded-lg bg-neutral-900/95 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-xl dark:bg-neutral-800 dark:ring-1 dark:ring-white/10">{label}</span>
+      </div>
     </div>
   );
 }
@@ -1000,6 +1009,14 @@ function ReportGlyph() {
       <polyline points="14 2 14 8 20 8" />
       <line x1="8" y1="13" x2="16" y2="13" />
       <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  );
+}
+
+function HydrantCheckingGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12.5 9.5 17 19 7" />
     </svg>
   );
 }

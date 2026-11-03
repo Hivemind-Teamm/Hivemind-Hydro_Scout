@@ -11,7 +11,21 @@ const millis = (value: { toMillis?: () => number } | null | undefined) => value?
 export async function limitedNotificationFeed(db: Firestore, uid: string, profile: DocumentData) {
   const access = notificationAccess(profile);
   const items: StationNotification[] = [];
-  if (access.operational && access.stationId) {
+  const isGlobalAdmin = profile.accountType === 'person' && profile.role === 'admin';
+  if (isGlobalAdmin) {
+    const events = await db.collectionGroup('notifications').orderBy('createdAt', 'desc').limit(100).get();
+    const notices = events.docs.flatMap(record => {
+      const stationId = record.ref.parent.parent?.id;
+      return stationId ? [{ ...record.data(), id: record.id, stationId } as StationNotification] : [];
+    });
+    const responseIds = [...new Set(notices.flatMap(item => item.responseId ? [item.responseId] : []))];
+    const records = responseIds.length ? await db.getAll(...responseIds.map(id => db.doc(`stationResponses/${id}`))) : [];
+    const responses = records.map(record => ({ ...record.data(), id: record.id }) as StationResponseSummary);
+    for (const source of stationNotificationFeed(notices, responses)) {
+      const stationId = source.stationId || 'unknown';
+      items.push({ ...source, id: token(`station:${stationId}:${source.id}`, millis(source.createdAt)) });
+    }
+  } else if (access.operational && access.stationId) {
     const events = await db.collection(`stations/${access.stationId}/notifications`).orderBy('createdAt', 'desc').limit(100).get();
     const notices = events.docs.map(record => ({ ...record.data(), id: record.id }) as StationNotification);
     const responseIds = [...new Set(notices.flatMap(item => item.responseId ? [item.responseId] : []))];
@@ -48,7 +62,7 @@ export async function limitedNotificationFeed(db: Firestore, uid: string, profil
 }
 
 export function serializeLimitedNotification(item: StationNotification) {
-  return { ...item, createdAt: millis(item.createdAt),
+  return { ...item, createdAt: millis(item.createdAt), startedAt: millis(item.startedAt), endedAt: millis(item.endedAt),
     ...(item.response ? { response: { ...item.response, startedAt: millis(item.response.startedAt), endedAt: millis(item.response.endedAt) } } : {}),
   };
 }

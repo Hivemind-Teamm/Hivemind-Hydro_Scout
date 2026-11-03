@@ -2,6 +2,7 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type StationNotification = {
   id: string; uid?: string; displayName?: string; adminEmail?: string;
+  stationId?: string; stationName?: string;
   targetUid?: string; targetName?: string; message: string; type: string; createdAt?: Timestamp | null;
   responseId?: string;
   limited?: boolean;
@@ -101,7 +102,7 @@ export function dailyResponseNotifications(feed: StationNotification[], stationI
     const activeCount = entries.filter(item => item.response?.status === 'active').length;
     const action = activeCount === entries.length ? 'started response' : activeCount === 0 ? 'ended response' : 'updated their response status';
     const latest = [...entries].sort((a, b) => millis(b.createdAt) - millis(a.createdAt))[0];
-    result.push({ id, type: activeCount > 0 ? 'response-started' : 'response-ended', limited,
+    result.push({ id, stationId: entries[0].stationId, stationName: entries[0].stationName, type: activeCount > 0 ? 'response-started' : 'response-ended', limited,
       message: limited ? `${entries.length} station ${entries.length === 1 ? 'response' : 'responses'} updated.` : `${names} ${action}.`,
       createdAt: latest.createdAt,
       responseGroup: { day, entries, activeCount, peopleCount: people.length },

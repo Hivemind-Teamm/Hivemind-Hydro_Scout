@@ -8,8 +8,8 @@ import { parseReadNotifications } from './notification-read-state';
 type Feed = { scope: string | null; items: StationNotification[]; readIds: string[]; receiptTokens: Record<string, string>; error: string | null };
 const localReads = new Map<string, Set<string>>();
 const readEvent = 'hydroscout:limited-notification-read';
-type WireNotification = Omit<StationNotification, 'createdAt' | 'response'> & {
-  createdAt: number;
+type WireNotification = Omit<StationNotification, 'createdAt' | 'startedAt' | 'endedAt' | 'response'> & {
+  createdAt: number; startedAt?: number; endedAt?: number;
   response?: Omit<NonNullable<StationNotification['response']>, 'startedAt' | 'endedAt'> & { startedAt: number; endedAt: number };
 };
 type WireFeed = { viewerUid: string; notifications: WireNotification[]; readIds: string[]; receiptTokens?: Record<string, string> };
@@ -57,8 +57,8 @@ export function useLimitedNotifications(scope: string | null) {
       try {
         const data = await fetchFeed(scope, maxAgeMs);
         const stamp = (value: number) => value > 0 ? Timestamp.fromMillis(value) : null;
-        const items = data.notifications.map(({ response, createdAt, ...item }): StationNotification => ({
-          ...item, createdAt: stamp(createdAt),
+        const items = data.notifications.map(({ response, createdAt, startedAt, endedAt, ...item }): StationNotification => ({
+          ...item, createdAt: stamp(createdAt), startedAt: stamp(startedAt ?? 0), endedAt: stamp(endedAt ?? 0),
           response: response ? { ...response,
             startedAt: stamp(response.startedAt), endedAt: stamp(response.endedAt) } : undefined,
         }));

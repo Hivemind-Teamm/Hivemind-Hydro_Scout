@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FiCheck, FiX } from 'react-icons/fi';
 import { useStationNotifications, type JoinRequest, type StationNotification } from '@/lib/use-station-notifications';
 import { responseDuration, stationNotificationCardKey } from '@/lib/station-notification-feed';
@@ -10,6 +10,7 @@ import PillBadge from './PillBadge';
 import { notificationStyle } from '@/lib/notification-style';
 import NotificationCountBadge from './NotificationCountBadge';
 import { accountLoginStatus } from '@/lib/account-login-status';
+import { useAuth } from '@/lib/auth-context';
 
 function time(value?: { toDate?: () => Date } | null) {
   const date = value?.toDate?.();
@@ -45,12 +46,20 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   onViewFireLocation: (lat: number, lng: number) => void;
 }) {
   const { notifications, requests, error: notificationError, activityUnreadCount, isMemberUnread, readActivity, readMember, fullDetails } = useStationNotifications();
+  const { role } = useAuth();
+  const isGlobalAdmin = role === 'admin';
   const [profile, setProfile] = useState<ViewingUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [stationSearch, setStationSearch] = useState('');
   const selected = notifications.find(item => stationNotificationCardKey(item) === selectedKey);
+  const visibleNotifications = useMemo(() => {
+    const term = stationSearch.trim().toLowerCase();
+    if (!isGlobalAdmin || !term) return notifications;
+    return notifications.filter(item => `${item.stationName ?? ''} ${item.stationId ?? ''}`.toLowerCase().includes(term));
+  }, [isGlobalAdmin, notifications, stationSearch]);
   const hasActiveResponse = notifications.some(item => item.response?.status === 'active' || (item.responseGroup?.activeCount ?? 0) > 0);
   const opening = useRef(false);
 
@@ -117,12 +126,13 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       onClick={activityOpen ? closeActivity : closeMembers}
       className="pointer-events-auto absolute inset-0 z-[4000] bg-black/25" />}
     {(activityOpen || membersOpen) && <section aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}>
-      {activityOpen ? header(fullDetails ? 'Station activity' : 'Notifications', fullDetails ? 'Map, account and response updates' : 'Station operations and your updates', closeActivity) : header('Member approvals', 'Pending membership requests', closeMembers)}
+      {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates', closeActivity) : header('Member approvals', 'Pending membership requests', closeMembers)}
       <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification to read it. In daily response groups, expand each entry to mark it read. Times are shown in PHT.</p>
+      {activityOpen && isGlobalAdmin && <div className="border-b border-neutral-100 px-4 py-2.5 dark:border-neutral-800"><input type="search" value={stationSearch} onChange={event => setStationSearch(event.target.value)} aria-label="Filter station activity by station" placeholder="Search station ID or name" className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-xs text-neutral-800 outline-none focus:border-[#e0353b] dark:border-neutral-700 dark:text-neutral-100" /></div>}
       {(error || notificationError) && <p role="alert" className="px-4 py-2 text-xs text-red-600">{error || notificationError}</p>}
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}
       <div className="scroll-fade min-h-0 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
-        {activityOpen ? notifications.map(item => {
+        {activityOpen ? visibleNotifications.map(item => {
           const assignment = item.type === 'personal-station-assigned';
           const response = item.response;
           const group = item.responseGroup;
@@ -150,6 +160,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
                 {' to '}{stationName}.
               </> : item.message}
             </div>
+            {isGlobalAdmin && item.stationId && <p className="mt-1 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">Station: {item.stationName || item.stationId} <span className="font-normal">· {item.stationId}</span></p>}
             {response && <dl className="mt-2 space-y-1 text-[10px] leading-relaxed text-neutral-500 dark:text-neutral-400">
               <div><dt className="inline font-semibold">Station: </dt><dd className="inline">{response.stationName || stationName}</dd></div>
               <div><dt className="inline font-semibold">Started: </dt><dd className="inline">{time(response.startedAt)}</dd></div>
@@ -192,7 +203,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           </div>
           </div>
         </article>)}
-        {(activityOpen ? !notifications.length : !requests.length) && <p className="px-4 py-8 text-center text-xs text-neutral-400">{activityOpen ? 'No station activity yet.' : 'No pending member requests.'}</p>}
+        {(activityOpen ? !visibleNotifications.length : !requests.length) && <p className="px-4 py-8 text-center text-xs text-neutral-400">{activityOpen ? (isGlobalAdmin && stationSearch ? 'No activity matches that station.' : 'No station activity yet.') : 'No pending member requests.'}</p>}
       </div>
     </section>}
     {selected && <NotificationDialog title={selected.type === 'personal-station-assigned' && selected.uid && selected.targetUid

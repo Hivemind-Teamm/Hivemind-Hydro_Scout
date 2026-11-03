@@ -432,6 +432,18 @@ body {
    The incident marker placed in fire-pin mode, shared by both map providers
    (see fireIcon.ts). Anchored at its center — that point is the center of the
    hydrant search radius. Draggable, hence the grab cursor. */
+/* Active fire-pin mode: a small, irregular flame flicker instead of a bounce. */
+@keyframes fire-control-flicker {
+  0%, 100% { transform: translateY(0) rotate(-2deg) scale(1); }
+  28% { transform: translateY(-2px) rotate(3deg) scale(1.04, 0.97); }
+  56% { transform: translateY(-1px) rotate(-4deg) scale(0.98, 1.05); }
+  78% { transform: translateY(-3px) rotate(2deg) scale(1.03, 0.98); }
+}
+.fire-pin-control-active {
+  transform-origin: center bottom;
+  animation: fire-control-flicker 900ms ease-in-out infinite;
+}
+
 .fire-pin-arrival {
   position: absolute;
   inset: -8px;
@@ -545,6 +557,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .fire-pin-pulse, .fire-supply-ring { animation: none; opacity: 0; }
+  .fire-pin-control-active { animation: none; }
 }
 
 /* ── Add-hydrant active ripple — hydrant-shaped, short reach ── */

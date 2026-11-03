@@ -349,7 +349,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         {hasPendingStationRequest && <span className="px-2 text-xs font-semibold text-amber-700">Station request pending approval</span>}
         {error && <span role="alert" className="max-w-56 text-xs text-red-600">{error}</span>}
       </div>}
-      <StationNotificationPanels key={user.uid + ':' + stationId} stationName={station?.name ?? stationId ?? 'Station'}
+      <StationNotificationPanels key={user.uid + ':' + stationId} stationName={isGlobalAdmin ? 'All stations' : station?.name ?? stationId ?? 'Station'}
         activityOpen={open} membersOpen={openMemberApprovals && canApprove}
         closeActivity={() => setOpen(false)} closeMembers={() => setOpenMemberApprovals(false)}
         reviewRequest={reviewRequest} onViewFireLocation={onViewFireLocation} />
