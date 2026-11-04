@@ -17,10 +17,11 @@ test('limited projection excludes administrative categories and all identities/f
     assert.equal(limitedOperationalNotification({ id: 'one', type, message: 'private' }), null);
   }
   const source = { id: 'event', type: 'response-ended', message: 'PRIVATE', uid: 'PRIVATE', displayName: 'PRIVATE', adminEmail: 'PRIVATE', targetUid: 'PRIVATE', targetName: 'PRIVATE', responseId: 'response',
-    response: { id: 'response', uid: 'PRIVATE', displayName: 'PRIVATE', stationId: 'one', status: 'ended', endedByName: 'PRIVATE', endedByUid: 'PRIVATE', lastLocationAt: 'PRIVATE', endReason: 'PRIVATE' } };
+    response: { id: 'response', uid: 'PRIVATE', displayName: 'PRIVATE', stationId: 'one', stationName: 'CIIT Fire Station', status: 'ended', endedByName: 'PRIVATE', endedByUid: 'PRIVATE', lastLocationAt: 'PRIVATE', endReason: 'PRIVATE' } };
   const projected = limitedOperationalNotification(source);
   assert.equal(JSON.stringify(projected).includes('PRIVATE'), false);
   assert.equal(projected.message, 'A station unit ended response.');
   assert.equal(projected.response.status, 'ended');
+  assert.equal(projected.response.stationName, 'CIIT Fire Station');
   assert.equal(projected.uid, undefined);
 });

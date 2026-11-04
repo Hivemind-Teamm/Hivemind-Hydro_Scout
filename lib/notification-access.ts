@@ -27,7 +27,8 @@ export function limitedOperationalNotification(item: StationNotification): Stati
     ...(item.hydrantId ? { hydrantId: item.hydrantId } : {}),
     ...(typeof item.lat === 'number' && typeof item.lng === 'number' ? { lat: item.lat, lng: item.lng } : {}),
     ...(item.response ? {
-      response: { id: '', uid: '', displayName: '', stationId: '', status: item.response.status,
+      // The station name is public (stations are world-readable); personal identities are not.
+      response: { id: '', uid: '', displayName: '', stationId: '', stationName: item.response.stationName, status: item.response.status,
         incidentLat: item.response.incidentLat, incidentLng: item.response.incidentLng,
         startedAt: item.response.startedAt, endedAt: item.response.endedAt },
     } : {}),

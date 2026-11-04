@@ -211,11 +211,11 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       : selected.message} onClose={() => setSelectedKey(null)}>
       {selected.responseGroup && <div className="space-y-3">
         <div className="flex items-center justify-between gap-3 text-xs">
-          <p className="font-semibold">{stationName} · {selected.responseGroup.day} (PHT)</p>
+          <p className="font-semibold">{selected.stationName || stationName} · {selected.responseGroup.day} (PHT)</p>
           <NotificationCountBadge count={activityUnreadCount(selected)} label="unread response updates" />
         </div>
         <p className="text-[11px] text-neutral-500">Expand an entry to view its details and mark that update as read.</p>
-        {selected.responseGroup.entries.map((entry, index) => {
+        {selected.responseGroup.entries.map(entry => {
           const response = entry.response!;
           const active = response.status === 'active';
           return <details key={stationNotificationCardKey(entry)}
@@ -223,7 +223,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
             className={`rounded-xl border border-neutral-200 p-3 dark:border-neutral-700 ${active ? 'response-notification-active' : ''}`}>
             <summary className="cursor-pointer text-xs font-semibold">
               <span className="inline-flex w-[calc(100%-1rem)] items-center justify-between gap-2 align-middle">
-                <span>{entry.limited ? `Station response ${index + 1}` : entry.displayName || response.displayName || 'Responder'}
+                <span>{entry.limited ? response.stationName || entry.stationName || selected.stationName || stationName : entry.displayName || response.displayName || 'Responder'}
                   <span className="mt-0.5 block text-[10px] font-normal text-neutral-500">{active ? 'Responding' : 'Response ended'} · {time(response.startedAt)}</span>
                 </span>
                 <NotificationCountBadge count={activityUnreadCount(entry)} label="unread response updates" />
