@@ -97,14 +97,27 @@ export async function POST(req: NextRequest) {
     const roleLabel = isStation ? 'Station Account' : ROLE_LABELS[role] ?? role;
     const actorStationId = typeof profile.stationId === 'string' ? profile.stationId : null;
     const dateStr = new Date().toISOString().slice(0, 10);
+    // A single counter document replaces the previous 1-to-500 probe inside
+    // every creation transaction. Existing data is scanned only once, on the
+    // first creation after this optimization, then subsequent saves read and
+    // update just this counter.
+    const counter = db.doc('systemCounters/hydrants');
+    const currentCounter = await counter.get();
+    let initialNext = 1;
+    if (!currentCounter.exists) {
+      const existing = await db.collection('hydrants').select().get();
+      initialNext = existing.docs.reduce((next, record) => {
+        const match = /^HYD-(\d+)$/.exec(record.id);
+        return match ? Math.max(next, Number(match[1]) + 1) : next;
+      }, 1);
+    }
     const id = await db.runTransaction(async tx => {
-      // First unoccupied HYD-### slot, matching the previous client allocation.
-      let hydrantId: string | null = null;
-      for (let i = 1; i <= 500 && !hydrantId; i++) {
-        const candidate = `HYD-${String(i).padStart(3, '0')}`;
-        if (!(await tx.get(db.doc(`hydrants/${candidate}`))).exists) hydrantId = candidate;
-      }
-      if (!hydrantId) throw new Error('No hydrant IDs are available.');
+      const counterRecord = await tx.get(counter);
+      const storedNext = counterRecord.data()?.next;
+      const next = Number.isSafeInteger(storedNext) && storedNext > 0
+        ? storedNext : initialNext;
+      const hydrantId = `HYD-${String(next).padStart(3, '0')}`;
+      tx.set(counter, { next: next + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       tx.set(db.doc(`hydrants/${hydrantId}`), {
         location: new GeoPoint(input.lat, input.lng),
         barangay,

@@ -155,12 +155,13 @@ export interface ReportsState {
   error: string | null;
 }
 
-export function useReports(): ReportsState {
+export function useReports(enabled = true): ReportsState {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     const listenerStartedAtMs = Date.now();
     const loggedReports = new Set<string>();
     // collectionGroup gathers the `reports` subcollection across every hydrant.
@@ -207,9 +208,9 @@ export function useReports(): ReportsState {
       },
     );
     return unsub;
-  }, []);
+  }, [enabled]);
 
-  return { reports, loading, error };
+  return enabled ? { reports, loading, error } : { reports: [], loading: false, error: null };
 }
 
 export interface CreateReportInput {

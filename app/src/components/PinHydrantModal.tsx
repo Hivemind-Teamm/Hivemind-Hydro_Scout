@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
 import { type HydrantStatus } from '../data/hydrants';
@@ -82,20 +80,6 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
   // Submit state
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
-
-  // Preview the next available HYD-XXX ID on mount
-  const [previewId, setPreviewId] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      for (let i = 1; i <= 500; i++) {
-        const id = `HYD-${String(i).padStart(3, '0')}`;
-        const snap = await getDoc(doc(db, 'hydrants', id));
-        if (!snap.exists()) { if (!cancelled) setPreviewId(id); return; }
-      }
-    })().catch(() => { /* preview is best-effort */ });
-    return () => { cancelled = true; };
-  }, []);
 
   const lat = parseFloat(latStr);
   const lng = parseFloat(lngStr);
@@ -198,13 +182,7 @@ export default function PinHydrantModal({ onClose, initialLat, initialLng, initi
                 className="h-20 w-20 object-contain drop-shadow-md"
               />
               <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">New Hydrant</p>
-              {previewId ? (
-                <span className="rounded-full bg-[#e0353b]/10 dark:bg-[#e0353b]/15 px-3 py-0.5 text-sm font-extrabold tracking-wide text-[#e0353b] dark:text-[#e0353b]">
-                  {previewId}
-                </span>
-              ) : (
-                <span className="text-[10px] text-neutral-300 dark:text-neutral-600">Resolving ID…</span>
-              )}
+              <span className="text-[10px] text-neutral-400 dark:text-neutral-500">ID assigned when saved</span>
             </div>
 
             {/* Mini map preview */}

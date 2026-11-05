@@ -124,7 +124,7 @@ test("Clears earlier assignments on server failure", async () => {
 
   assert.equal(states.at(-1).verified, true);
 
-  clock.fire(5000);
+  clock.fire(15000);
   await flush();
 
   assert.deepEqual(states.at(-1), {
@@ -158,7 +158,7 @@ test("Malformed responses invalidate earlier assignments", async () => {
 
   assert.equal(states.at(-1).verified, true);
 
-  clock.fire(5000);
+  clock.fire(15000);
   await flush();
 
   assert.deepEqual(states.at(-1), {
@@ -216,7 +216,7 @@ test("Ignores late responses from a stopped session", async () => {
   await flush();
 
   assert.equal(states.length, countBeforeLateResponse);
-  assert.equal(clock.count(5000), 1);
+  assert.equal(clock.count(15000), 1);
 
   controller.stop();
 });
@@ -420,10 +420,10 @@ test("Expired verification revokes an assigned incident", async () => {
 
     assert.equal(states.at(-1).verified, true);
     assert.equal(states.at(-1).incidents.length, 1);
-    assert.equal(clock.count(15000), 1);
+    assert.equal(clock.count(45000), 1);
 
     // Simulate delayed polling: the expiry deadline fires first.
-    clock.fire(15000);
+    clock.fire(45000);
 
     assert.deepEqual(states.at(-1), {
       incidents: [],
@@ -432,17 +432,17 @@ test("Expired verification revokes an assigned incident", async () => {
     });
 
     // A fresh successful server response may restore verification.
-    clock.fire(5000);
+    clock.fire(15000);
     await flush();
 
     assert.equal(states.at(-1).verified, true);
     assert.deepEqual(states.at(-1).incidents, [incident]);
-    assert.equal(clock.count(15000), 1);
+    assert.equal(clock.count(45000), 1);
   } finally {
     controller.stop();
   }
 
-  assert.equal(clock.count(15000), 0);
+  assert.equal(clock.count(45000), 0);
 });
 
 test("Fresh verification replaces the old expiry deadline", async () => {
@@ -460,17 +460,17 @@ test("Fresh verification replaces the old expiry deadline", async () => {
     controller.start();
     await flush();
 
-    assert.equal(clock.count(15000), 1);
+    assert.equal(clock.count(45000), 1);
 
     // A timely follow-up verification renews the deadline.
-    clock.fire(5000);
+    clock.fire(15000);
     await flush();
 
     assert.equal(states.at(-1).verified, true);
-    assert.equal(clock.count(15000), 1);
+    assert.equal(clock.count(45000), 1);
 
     // Expiry must still revoke the latest verified assignment.
-    clock.fire(15000);
+    clock.fire(45000);
 
     assert.deepEqual(states.at(-1), {
       incidents: [],
@@ -481,5 +481,5 @@ test("Fresh verification replaces the old expiry deadline", async () => {
     controller.stop();
   }
 
-  assert.equal(clock.count(15000), 0);
+  assert.equal(clock.count(45000), 0);
 });
