@@ -210,12 +210,8 @@ export default function HydroScoutDashboard() {
   const fire = canPinFire && fireIncident ? { ...fireIncident, address: fireAddress?.key === `${fireIncident.id}:${fireIncident.lat}:${fireIncident.lng}` ? fireAddress.address : null } : null;
   const canEditFire = !!fireIncident && sharedFires.canEdit(fireIncident);
   const { hydrants, loading, error } = useHydrants();
-  // Field-check history is needed only while the checking panel is open.
-  const checking = useHydrantChecking(stationId, role === 'admin', showHydrantChecking);
-  // The Reports Register is an on-demand surface. Keeping its global
-  // collection-group listener closed while the panel is hidden avoids
-  // reading every report for map-only sessions.
-  const { reports, loading: reportsLoading } = useReports(showReports);
+  const checking = useHydrantChecking(stationId, role === 'admin');
+  const { reports, loading: reportsLoading } = useReports();
   const hasPendingReports = reports.some((r) => r.status === 'pending');
 
   useEffect(() => {

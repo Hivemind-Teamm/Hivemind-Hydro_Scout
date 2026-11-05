@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, collectionGroup, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, collectionGroup, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Hydrant } from '@/app/src/data/hydrants';
 
@@ -30,7 +30,7 @@ function toDate(value: unknown): Date | null {
     ? (value as { toDate: () => Date }).toDate() : null;
 }
 
-export function useHydrantChecking(stationId: string | null, isAdmin: boolean, enabled = true) {
+export function useHydrantChecking(stationId: string | null, isAdmin: boolean) {
   const [sessions, setSessions] = useState<HydrantCheckingSession[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [checks, setChecks] = useState<HydrantCheck[]>([]);
@@ -38,13 +38,11 @@ export function useHydrantChecking(stationId: string | null, isAdmin: boolean, e
   const completionAttempted = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!enabled || (!stationId && !isAdmin)) return;
-    // Coverage history is useful, but an ever-growing listener is not. The
-    // current session is always among the newest records and the panel keeps
-    // the most recent completed sessions for reference.
+    if (!stationId && !isAdmin) { setSessions([]); setLoading(false); return; }
+    setLoading(true);
     const source = isAdmin && !stationId
-      ? query(collectionGroup(db, 'checkingSessions'), orderBy('startedAt', 'desc'), limit(25))
-      : query(collection(db, 'stations', stationId!, 'checkingSessions'), orderBy('startedAt', 'desc'), limit(25));
+      ? query(collectionGroup(db, 'checkingSessions'), orderBy('startedAt', 'desc'))
+      : query(collection(db, 'stations', stationId!, 'checkingSessions'), orderBy('startedAt', 'desc'));
     return onSnapshot(source, snapshot => {
       const next = snapshot.docs.flatMap(record => {
         const data = record.data();
@@ -57,11 +55,11 @@ export function useHydrantChecking(stationId: string | null, isAdmin: boolean, e
       setSelectedSessionId(current => current && next.some(item => item.id === current) ? current : (next.find(item => item.status === 'active')?.id ?? next[0]?.id ?? null));
       setLoading(false);
     }, () => { setSessions([]); setLoading(false); });
-  }, [stationId, isAdmin, enabled]);
+  }, [stationId, isAdmin]);
 
-  const selectedSession = useMemo(() => enabled ? sessions.find(item => item.id === selectedSessionId) ?? null : null, [sessions, selectedSessionId, enabled]);
+  const selectedSession = useMemo(() => sessions.find(item => item.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
   useEffect(() => {
-    if (!enabled || !selectedSession) return;
+    if (!selectedSession) { setChecks([]); return; }
     return onSnapshot(collection(db, 'stations', selectedSession.stationId, 'checkingSessions', selectedSession.id, 'items'), snapshot => {
       setChecks(snapshot.docs.flatMap(record => {
         const data = record.data();
@@ -69,7 +67,7 @@ export function useHydrantChecking(stationId: string | null, isAdmin: boolean, e
         return [{ hydrantId: data.hydrantId, status: data.status as HydrantCheckStatus, note: typeof data.note === 'string' ? data.note : '', checkedByName: typeof data.checkedByName === 'string' ? data.checkedByName : 'Responder', checkedAt: toDate(data.checkedAt) }];
       }));
     }, () => setChecks([]));
-  }, [selectedSession, enabled]);
+  }, [selectedSession]);
 
   useEffect(() => {
     if (!selectedSession || selectedSession.status !== 'active' || !selectedSession.targetHydrantCount || checks.length < selectedSession.targetHydrantCount) return;
@@ -78,14 +76,7 @@ export function useHydrantChecking(stationId: string | null, isAdmin: boolean, e
     void completeHydrantCheckingSession(selectedSession).catch(() => { completionAttempted.current = null; });
   }, [checks.length, selectedSession]);
 
-  return {
-    sessions: enabled ? sessions : [],
-    selectedSession,
-    selectedSessionId: enabled ? selectedSessionId : null,
-    setSelectedSessionId,
-    checks: enabled ? checks : [],
-    loading: enabled ? loading : false,
-  };
+  return { sessions, selectedSession, selectedSessionId, setSelectedSessionId, checks, loading };
 }
 
 async function checkingRequest(body: Record<string, unknown>) {

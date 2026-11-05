@@ -81,9 +81,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
     if (!canViewRoster || (!isGlobalAdmin && !stationId)) return;
     const responseQuery = isGlobalAdmin
       ? query(collection(db, 'stationResponses'), where('status', '==', 'active'))
-      // Station activity has immutable notification records for completed
-      // responses. The live roster only needs units that are still active.
-      : query(collection(db, 'stationResponses'), where('stationId', '==', stationId), where('status', '==', 'active'));
+      : query(collection(db, 'stationResponses'), where('stationId', '==', stationId));
     const active = onSnapshot(responseQuery, snapshot => {
       setResponseStation(isGlobalAdmin ? 'all-stations' : stationId);
       setResponses(snapshot.docs.map(record => ({ id: record.id, ...record.data() } as ResponseRecord))
