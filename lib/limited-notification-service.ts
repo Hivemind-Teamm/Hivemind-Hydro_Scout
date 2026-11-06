@@ -11,7 +11,7 @@ const millis = (value: { toMillis?: () => number } | null | undefined) => value?
 export async function limitedNotificationFeed(db: Firestore, uid: string, profile: DocumentData) {
   const access = notificationAccess(profile);
   const items: StationNotification[] = [];
-  const isGlobalAdmin = profile.accountType === 'person' && profile.role === 'admin';
+  const isGlobalAdmin = profile.role === 'admin';
   if (isGlobalAdmin) {
     const events = await db.collectionGroup('notifications').orderBy('createdAt', 'desc').limit(100).get();
     const notices = events.docs.flatMap(record => {

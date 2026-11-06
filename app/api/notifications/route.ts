@@ -26,7 +26,7 @@ async function viewer(req: NextRequest, loadProfile = true) {
     const db = getFirestore(app);
     if (!loadProfile) return { db, uid: decoded.uid, session, profile: null };
     const profile = await notificationProfile(db, decoded.uid);
-    if (!['person', 'station'].includes(profile.accountType)) return null;
+    if (!['person', 'station'].includes(profile.accountType) && profile.role !== 'admin') return null;
     return { db, uid: decoded.uid, session, profile };
   } catch { return null; }
 }

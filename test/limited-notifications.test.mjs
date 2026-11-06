@@ -13,6 +13,7 @@ try {
     'users/member': { accountType: 'person', role: 'authorized', stationId: 'one', stationMembershipStatus: 'approved' },
     'users/general': { accountType: 'person', role: 'general' },
     'users/delegate': { accountType: 'person', role: 'authorized', stationId: 'one', stationMembershipStatus: 'pending', stationAccessIds: ['one'] },
+    'users/admin': { role: 'admin' },
     'stationJoinRequests/general': { uid: 'general', stationId: 'one', status: 'rejected', createdAt: stamp, reviewedAt: stamp },
     'stationJoinRequests/other': { uid: 'other', stationId: 'one', status: 'pending', createdAt: stamp },
     'stations/one/notifications/fire': { type: 'fire-pinned', message: 'SECRET person pinned fire', uid: 'SECRET', displayName: 'SECRET', createdAt: stamp, lat: 14.65, lng: 121.06 },
@@ -34,6 +35,9 @@ try {
   assert.deepEqual(general.map(item => item.type).sort(), ['membership-rejected', 'report-pending']);
   assert.equal(JSON.stringify(general).includes('PRIVATE'), false);
   assert.deepEqual(await feed('delegate'), []);
+  const admin = await feed('admin');
+  assert.ok(admin.some(item => item.stationId === 'one' && item.type === 'personal-station-assigned'));
+  assert.ok(admin.some(item => item.stationId === 'two' && item.message === 'Other station'));
   await db.doc('users/member').update({ stationMembershipStatus: 'rejected' });
   assert.deepEqual(await feed('member'), []);
   await db.doc('users/member').update({ stationMembershipStatus: 'approved' });
