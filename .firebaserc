@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "hydro-scout"
-  }
+    "default": "hydro-scout",
+    "staging": "hydro-scout-staging"
+  },
+  "targets": {},
+  "etags": {}
 }
