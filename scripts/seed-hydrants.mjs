@@ -161,6 +161,15 @@ function toDoc(r) {
     pressureStatus:
       r.pressureStatus,
 
+    // Incoming BFP inventory can be loaded as a visible reference set before
+    // its availability has been field-verified. These records remain outside
+    // response planning and checking coverage until promoted later.
+    ...(r.referenceOnly === true ? {
+      referenceOnly: true,
+      operationalStatus: 'BFP Reference',
+      pressureStatus: 'None',
+    } : {}),
+
     waterCleanliness:
       r.waterCleanliness,
 

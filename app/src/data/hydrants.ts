@@ -34,7 +34,10 @@ export type HydrantStatus =
 
   | 'reduced'
 
-  | 'out';
+  | 'out'
+
+  /** BFP-supplied location awaiting operational verification. */
+  | 'reference';
 
 
 
@@ -202,6 +205,9 @@ export interface StatusMeta {
 
   pillLabel: string;
 
+  /** Optional CSS filter used to make the shared pin asset distinct. */
+  iconFilter?: string;
+
 }
 
 
@@ -268,6 +274,28 @@ export const STATUS_META:
 
     },
 
+    reference: {
+
+      color: '#7c3aed',
+
+      // Reuse the existing pin artwork with a violet transformation so this
+      // temporary reference category does not need another raster asset.
+      iconUrl:
+
+        '/Hydrant%20Pin%20Gren.png',
+
+      iconFilter: 'hue-rotate(145deg) saturate(1.45)',
+
+      legendLabel:
+
+        'BFP Reference — not for use',
+
+      pillLabel:
+
+        'BFP Reference',
+
+    },
+
   };
 
 
@@ -281,6 +309,8 @@ export const STATUS_ORDER:
     'reduced',
 
     'out',
+
+    'reference',
 
   ];
 
@@ -311,6 +341,8 @@ export function countByStatus(
       reduced: 0,
 
       out: 0,
+
+      reference: 0,
 
     } as Record<
 
@@ -358,6 +390,14 @@ export function toStatus(
 
       return 'out';
 
+    case 'bfp reference':
+
+    case 'reference only':
+
+    case 'not yet verified':
+
+      return 'reference';
+
 
 
     default:
@@ -389,6 +429,10 @@ export function toOperationalStatus(
     case 'out':
 
       return 'Out of Service';
+
+    case 'reference':
+
+      return 'BFP Reference';
 
 
 
@@ -479,6 +523,10 @@ export function statusToPressureStatus(
     case 'out':
 
       return 'Out';
+
+    case 'reference':
+
+      return 'None';
 
 
 
@@ -901,13 +949,9 @@ export function hydrantFromDoc(
 
 
 
-  const status =
-
-    toStatus(
-
-      d.operationalStatus,
-
-    );
+  const status = d.referenceOnly === true
+    ? 'reference'
+    : toStatus(d.operationalStatus);
 
 
 

@@ -81,7 +81,15 @@ export async function POST(req: NextRequest) {
 
       const aor = new Set(readAorBarangays(station.data()?.aorBarangays));
       const hydrants = await account.db.collection('hydrants').get();
-      const targetHydrantIds = hydrants.docs.filter(item => aor.has(item.data().barangay)).map(item => item.id).sort();
+      // BFP reference records appear on the map for situational awareness but
+      // are not verified operational hydrants, so they must not inflate a
+      // station's checking coverage or block completion of a session.
+      const targetHydrantIds = hydrants.docs
+        .filter(item => aor.has(item.data().barangay)
+          && item.data().referenceOnly !== true
+          && item.data().operationalStatus !== 'BFP Reference')
+        .map(item => item.id)
+        .sort();
       if (!targetHydrantIds.length) return reply({ error: 'This station has no hydrants in its area of responsibility.' }, 409);
       const session = account.db.collection(`stations/${stationId}/checkingSessions`).doc();
       const notification = account.db.doc(`stations/${stationId}/notifications/hydrant-checking-${session.id}`);

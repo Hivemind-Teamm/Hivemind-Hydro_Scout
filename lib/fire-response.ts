@@ -46,6 +46,9 @@ export function rankHydrantsNearFire(
   let nearestOutside: FireHydrantCandidate | null = null;
 
   for (const hydrant of hydrants) {
+    // BFP reference records are shown on the map but cannot be used for
+    // response planning until their operational state is verified.
+    if (hydrant.status === 'reference') continue;
     const distanceM = haversineM(fire.lat, fire.lng, hydrant.lat, hydrant.lng);
     if (distanceM <= radiusM) {
       inRadius.push({ hydrant, distanceM });

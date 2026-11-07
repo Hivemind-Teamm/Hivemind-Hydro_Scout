@@ -173,6 +173,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
           : isOwnAor
             ? OWN_AOR_PIN_FILTER
             : OTHER_AOR_PIN_FILTER;
+        const markerFilter = `${pinFilter} ${meta.iconFilter ?? ''}`;
 
         // OTW mode visual states
         const nearRoute = nearRouteIds?.has(h.id) ?? false;
@@ -238,7 +239,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
                     title={`${h.name} — ${meta.legendLabel}`}
                     width={HYDRANT_ICON_WIDTH}
                     height={HYDRANT_ICON_HEIGHT}
-                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: pinFilter }}
+                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: markerFilter }}
                   />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -248,7 +249,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
                     aria-hidden
                     width={HYDRANT_ICON_WIDTH}
                     height={HYDRANT_ICON_HEIGHT}
-                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: pinFilter }}
+                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: markerFilter }}
                   />
                   <span className="cut" />
                 </div>
@@ -266,14 +267,14 @@ const HydrantMarkers = memo(function HydrantMarkers({
                       width: HYDRANT_ICON_WIDTH,
                       height: HYDRANT_ICON_HEIGHT,
                       objectFit: 'contain',
-                      filter: pinFilter,
+                      filter: markerFilter,
                     }}
                   />
                   {/* Water only spouts from the focused pin — the selected
                       hydrant or the OTW routing target — so the map isn't a
                       field of spraying water at rest. Operational → strong
                       jet · reduced pressure → weak dribble. */}
-                  {(selected || isOtwTarget || isSupply) && !clustered && (
+                  {h.status !== 'reference' && (selected || isOtwTarget || isSupply) && !clustered && (
                     <div className="hydrant-fx">
                       <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
                         <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />

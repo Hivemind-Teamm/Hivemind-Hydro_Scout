@@ -263,7 +263,7 @@ function hydrantIcon(status: HydrantStatus): L.DivIcon {
 
   const iconUrl = STATUS_META[status].iconUrl;
   const W = HYDRANT_ICON_WIDTH, H = HYDRANT_ICON_HEIGHT;
-  const imgStyle = `display:block;width:${W}px;height:${H}px;object-fit:contain;filter:${HYDRANT_PIN_FILTER};cursor:pointer;`;
+  const imgStyle = `display:block;width:${W}px;height:${H}px;object-fit:contain;filter:${HYDRANT_PIN_FILTER} ${STATUS_META[status].iconFilter ?? ''};cursor:pointer;`;
 
   let content: string;
   if (status === 'out') {
@@ -644,7 +644,7 @@ const HydrantLayer = memo(function HydrantLayer({ hydrants, selectedHydrantId, o
 
       // Water only spouts from the pin the user is focused on — the selected
       // hydrant, or the OTW routing target. Everything else sits dry.
-      const showSpout = !clustered && (selectedHydrantId === h.id || isOtwTarget);
+      const showSpout = h.status !== 'reference' && !clustered && (selectedHydrantId === h.id || isOtwTarget);
       const fx = wrapper.querySelector('.hydrant-fx') as HTMLElement | null;
       if (fx) fx.style.display = showSpout ? 'block' : 'none';
 

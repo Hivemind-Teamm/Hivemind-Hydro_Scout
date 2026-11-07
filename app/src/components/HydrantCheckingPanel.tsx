@@ -15,7 +15,7 @@ export default function HydrantCheckingPanel({ sessions, selectedSession, onSele
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canManage = role === 'head' || accountType === 'station';
-  const scopedHydrants = role === 'admin' ? [] : hydrants.filter(hydrant => aorBarangays.includes(hydrant.barangay));
+  const scopedHydrants = role === 'admin' ? [] : hydrants.filter(hydrant => hydrant.status !== 'reference' && aorBarangays.includes(hydrant.barangay));
   const checksByHydrant = useMemo(() => new Map(checks.map(check => [check.hydrantId, check])), [checks]);
   const checked = checks.length;
   const followUps = checks.filter(item => item.status === 'follow-up').length;
