@@ -69,6 +69,8 @@ interface AuthContextValue {
   canWriteInAor: (barangay: string | null | undefined) => boolean;
   stationMembershipStatus: MembershipStatus;
   stationAccessIds: string[];
+  /** Current active response, used to adjust the responder's map display. */
+  activeResponseId: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -125,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [stationName, setStationName] = useState<string | null>(null);
   const [stationMembershipStatus, setStationMembershipStatus] = useState<MembershipStatus>("none");
   const [stationAccessIds, setStationAccessIds] = useState<string[]>([]);
+  const [activeResponseId, setActiveResponseId] = useState<string | null>(null);
   const [stationAor, setStationAor] = useState<{ stationId: string | null; barangays: string[] }>({ stationId: null, barangays: NO_BARANGAYS });
   const [loading, setLoading] = useState(true);
   const sessionGeneration = useRef(0);
@@ -138,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStationName(null);
     setStationMembershipStatus("none");
     setStationAccessIds([]);
+    setActiveResponseId(null);
   }
 
   function applyProfile(data: DocumentData | null | undefined) {
@@ -155,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStationAccessIds(Array.isArray(data?.stationAccessIds)
       ? data.stationAccessIds.filter((value: unknown): value is string => typeof value === "string")
       : []);
+    setActiveResponseId(typeof data?.activeResponseId === "string" ? data.activeResponseId : null);
   }
 
   useEffect(() => {
@@ -334,7 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, role, accountType, stationId: assignedStationId, stationName,
-      aorBarangays, stationMembershipStatus, stationAccessIds, loading,
+      aorBarangays, stationMembershipStatus, stationAccessIds, activeResponseId, loading,
       canWriteInAor: barangay => canWriteInAor(role, aorBarangays, barangay),
       login, logout, signup, refreshSession,
       openLocationConsent: locationConsent.openNotice,

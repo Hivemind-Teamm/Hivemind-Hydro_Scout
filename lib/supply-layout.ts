@@ -10,7 +10,7 @@ import type { SupplyLineEstimate } from './supply-line';
 type ReadyEstimate = Extract<SupplyLineEstimate, { status: 'ready' }>;
 
 export interface SupplyTruck {
-  /** Pumper at the hydrant, relay pumper between stages, or engine at the fire. */
+  /** Pumper at the hydrant, relay engine between stages, or engine at the fire. */
   role: 'pumper' | 'relay' | 'engine';
   /** `[lng, lat]` */
   at: [number, number];
@@ -19,10 +19,10 @@ export interface SupplyTruck {
 }
 
 /**
- * A relay pumper this close to the fire (along the hose) would hide under the
+ * A relay engine this close to the fire (along the hose) would hide under the
  * fire pin, so it is counted on the engine's badge instead.
  */
-export const MERGE_NEAR_FIRE_M = 50;
+export const MERGE_NEAR_FIRE_M = 10;
 
 export interface SupplyLineLayout {
   /** Every truck in the line, hydrant end first. Empty while the counts are pending. */
@@ -70,7 +70,7 @@ export function pointAlongPath(path: [number, number][], fraction: number): [num
 
 /**
  * Lays the trucks of `estimate` out along `path` (hydrant first, fire last):
- * the pumper at the hydrant, a relay pumper where each full stage ends, and
+ * the pumper at the hydrant, a relay engine where each full stage ends, and
  * the engine at the fire. Stage ends are placed by their share of the hose
  * length, so they also land in proportion on a straight stand-in line.
  */

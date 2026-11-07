@@ -4,6 +4,7 @@ import IncidentTrackingStatus from './IncidentTrackingStatus';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { doc, onSnapshot } from 'firebase/firestore';
 import MapView, { type MapProvider, type MapController, type FireOverlay } from './MapView';
 import DashboardOverlay from './DashboardOverlay';
 import HydrantInfoPanel from './HydrantInfoPanel';
@@ -35,6 +36,7 @@ import {
 } from '../data/hydrants';
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
+import { db } from '@/lib/firebase';
 import { useSharedFirePins } from '@/lib/use-shared-fire-pins';
 import { recordHydrantCheck, useHydrantChecking, type HydrantCheckStatus } from '@/lib/hydrant-checking';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -44,10 +46,9 @@ import { type RankedHydrant } from '@/lib/nearest-hydrant';
 import { playHazardChime } from '@/lib/chime';
 import { MdLocalFireDepartment } from 'react-icons/md';
 import {
-  FIRE_HYDRANT_RADIUS_M,
   circleRing,
+  findHydrantsNearFire,
   pickSupplyHydrant,
-  rankHydrantsNearFire,
 } from '@/lib/fire-response';
 import { useSupplyLine } from '@/lib/use-supply-line';
 import { layoutSupplyLine } from '@/lib/supply-layout';
@@ -170,7 +171,6 @@ export default function HydroScoutDashboard() {
       setShowReconnected(false);
       // Flash the offline/weak notice, then auto-dismiss after 3s. Re-runs on
       // each state change (e.g. offline→weak) so the message stays accurate.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowConnectionToast(true);
       if (connectionTimerRef.current) clearTimeout(connectionTimerRef.current);
       connectionTimerRef.current = setTimeout(() => setShowConnectionToast(false), 3000);
@@ -195,7 +195,7 @@ export default function HydroScoutDashboard() {
   const [mapReady, setMapReady] = useState(false);
   const splashStartedRef = useRef(false);
 
-  const { user, role, accountType, stationId, aorBarangays, canUseDeviceLocation } = useAuth();
+  const { user, role, stationId, aorBarangays, canUseDeviceLocation, activeResponseId } = useAuth();
   const sharedFires = useSharedFirePins();
   const { create: createSharedFirePin, move: moveSharedFirePin } = sharedFires;
   const fireIncident = sharedFires.pins.find(pin => pin.id === selectedFireId) ?? null;
@@ -213,6 +213,21 @@ export default function HydroScoutDashboard() {
   const checking = useHydrantChecking(stationId, role === 'admin');
   const { reports, loading: reportsLoading } = useReports();
   const hasPendingReports = reports.some((r) => r.status === 'pending');
+  const [activeResponseIncident, setActiveResponseIncident] = useState<{ responseId: string; lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!activeResponseId) return;
+    return onSnapshot(doc(db, 'stationResponses', activeResponseId), snapshot => {
+      const data = snapshot.data();
+      const lat = data?.incidentLat;
+      const lng = data?.incidentLng;
+      if (typeof lat === 'number' && Number.isFinite(lat) && typeof lng === 'number' && Number.isFinite(lng)) {
+        setActiveResponseIncident({ responseId: activeResponseId, lat, lng });
+      }
+    }, error => {
+      console.warn('Could not load the active response incident:', error);
+    });
+  }, [activeResponseId]);
 
   useEffect(() => {
     if (!loading && mapReady && !splashStartedRef.current) {
@@ -516,12 +531,21 @@ export default function HydroScoutDashboard() {
   // object) so the address arriving doesn't rebuild the map overlay.
   const fireLat = fire?.lat;
   const fireLng = fire?.lng;
-  const fireRanking = useMemo(
+  const fireSearch = useMemo(
     () => (fireLat === undefined || fireLng === undefined
       ? null
-      : rankHydrantsNearFire(hydrants, { lat: fireLat, lng: fireLng })),
+      : findHydrantsNearFire(hydrants, { lat: fireLat, lng: fireLng })),
     [hydrants, fireLat, fireLng],
   );
+  const fireRanking = fireSearch;
+  const fireSearchRadiusM = fireSearch?.radiusM ?? 1000;
+  const currentResponseIncident = activeResponseIncident?.responseId === activeResponseId ? activeResponseIncident : null;
+  const activeResponseSearchRadiusM = useMemo(() => currentResponseIncident
+    ? findHydrantsNearFire(hydrants, currentResponseIncident).radiusM
+    : null, [currentResponseIncident, hydrants]);
+  const hideUnitLocationsWhileResponding = !!activeResponseId && (!userLocation || !currentResponseIncident
+    || haversineM(userLocation.lat, userLocation.lng, currentResponseIncident.lat, currentResponseIncident.lng)
+      > (activeResponseSearchRadiusM ?? 1000));
   const fireSupply = useMemo(
     () => (fireRanking ? pickSupplyHydrant(fireRanking.inRadius, fireSupplyChoice) : null),
     [fireRanking, fireSupplyChoice],
@@ -556,11 +580,11 @@ export default function HydroScoutDashboard() {
     return {
       lat: fireLat,
       lng: fireLng,
-      radiusM: FIRE_HYDRANT_RADIUS_M,
+      radiusM: fireSearchRadiusM,
       zoneIds: new Set(fireRanking.inRadius.map((c) => c.hydrant.id)),
       supply,
     };
-  }, [fireLat, fireLng, fireRanking, fireSupply, supplyLine]);
+  }, [fireLat, fireLng, fireRanking, fireSearchRadiusM, fireSupply, supplyLine]);
 
   // Chime once when hazards first appear during OTW mode
   const prevHazardCountRef = useRef(0);
@@ -781,10 +805,10 @@ export default function HydroScoutDashboard() {
     const roomY = window.innerHeight - padding.top - padding.bottom;
     const roomX = window.innerWidth - padding.left - padding.right;
     controllerRef.current?.fitRoute(
-      circleRing(lat, lng, FIRE_HYDRANT_RADIUS_M, 16),
+      circleRing(lat, lng, fireSearchRadiusM, 16),
       roomY < 160 || roomX < 160 ? 48 : padding,
     );
-  }, [isMobile]);
+  }, [fireSearchRadiusM, isMobile]);
 
   // Moves (or first places) the fire and looks up its address. Moving the pin
   // keeps the incident's original timestamp; the address lookup only lands if
@@ -1056,7 +1080,7 @@ export default function HydroScoutDashboard() {
         lat={fire.lat}
         lng={fire.lng}
         address={fire.address}
-        radiusM={FIRE_HYDRANT_RADIUS_M}
+        radiusM={fireSearchRadiusM}
         candidates={fireRanking.inRadius}
         nearestOutside={fireRanking.nearestOutside}
         supply={fireSupply}
@@ -1150,6 +1174,7 @@ export default function HydroScoutDashboard() {
           onMapMove={handleMapMove}
           firePinMode={firePinMode}
           fire={fireOverlay}
+          hideUnitLocations={hideUnitLocationsWhileResponding}
           onFirePin={handleFirePin}
           onFireMove={canEditFire ? handleFireMove : undefined}
           sharedFirePins={user ? sharedFires.pins.filter(pin => pin.id !== fire?.id) : []}

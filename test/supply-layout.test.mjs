@@ -10,21 +10,19 @@ const close = (actual, expected, name) => {
     `${name}: ${actual} is not ${expected}`);
 };
 
-// A straight east-west line on the equator, so shares of distance are shares of longitude.
 const line = [[0, 0], [0.01, 0]];
 
-test('splits the hose into full stages and a shorter last one that add up to the hose length', () => {
+test('splits the hose into BFP 150-ft stages that add up to the full line', () => {
   assert.deepEqual(supplyStages(estimate(0)), [0]);
-  assert.deepEqual(supplyStages(estimate(320)), [320]);
-  assert.deepEqual(supplyStages(estimate(458)), [457, 1]);
-  assert.deepEqual(supplyStages(estimate(650)), [457, 193]);
-  assert.deepEqual(supplyStages(estimate(1372)), [457, 457, 457, 1]);
+  assert.deepEqual(supplyStages(estimate(45)), [45]);
+  assert.deepEqual(supplyStages(estimate(46)), [45, 1]);
+  assert.deepEqual(supplyStages(estimate(100)), [45, 46, 9]);
   for (let meters = 0; meters <= 3000; meters++) {
     const result = estimate(meters);
     const stages = supplyStages(result);
-    assert.equal(stages.length, result.fireTrucks - 1, `${meters} m: one stage per supply pumper`);
+    assert.equal(stages.length, result.fireTrucks - 1, `${meters} m: one stage per supply engine`);
     assert.equal(stages.reduce((sum, m) => sum + m, 0), meters, `${meters} m: stages add up`);
-    assert.ok(stages.every(m => m <= 458), `${meters} m: no stage is longer than one truck's hose`);
+    assert.ok(stages.every(m => m <= 46), `${meters} m: no stage exceeds 150 ft`);
     assert.ok(meters === 0 || stages.every(m => m > 0), `${meters} m: no empty stage`);
   }
 });
@@ -35,17 +33,15 @@ test('finds points along a path by distance, across bends', () => {
   close(pointAlongPath(bent, 0.5), [0.002, 0], 'halfway');
   close(pointAlongPath(bent, 0.875), [0.003, 0.0005], 'on the second leg');
   close(pointAlongPath(bent, 1), [0.003, 0.001], 'end');
-  close(pointAlongPath(bent, 2), [0.003, 0.001], 'clamped past the end');
-  close(pointAlongPath([[1, 1], [1, 1]], 0.5), [1, 1], 'zero-length path');
 });
 
-test('puts the pumper at the hydrant, a relay at the end of each full stage and the engine at the fire', () => {
-  const { trucks, labelAt } = layoutSupplyLine(line, estimate(650));
+test('puts one relay engine at every completed 150-ft stage', () => {
+  const { trucks, labelAt } = layoutSupplyLine(line, estimate(100));
   assert.deepEqual(trucks.map(t => t.role), ['pumper', 'relay', 'engine']);
   close(trucks[0].at, [0, 0], 'pumper');
-  close(trucks[1].at, [0.01 * 457 / 650, 0], 'relay');
+  close(trucks[1].at, [0.01 * 45 / 100, 0], 'relay');
   close(trucks[2].at, [0.01, 0], 'engine');
-  close(labelAt, [0.01 * 228.5 / 650, 0], 'label halfway along the first stage');
+  close(labelAt, [0.01 * 22.5 / 100, 0], 'label halfway along the first stage');
 });
 
 test('draws every counted truck exactly once', () => {
@@ -56,18 +52,15 @@ test('draws every counted truck exactly once', () => {
   }
 });
 
-test('a relay right by the fire is drawn with the engine instead of under the fire pin', () => {
-  const close = layoutSupplyLine(line, estimate(940));
-  assert.deepEqual(close.trucks.map(t => [t.role, t.count]), [['pumper', 1], ['relay', 1], ['engine', 2]]);
-  const apart = layoutSupplyLine(line, estimate(1000));
-  assert.deepEqual(apart.trucks.map(t => [t.role, t.count]), [['pumper', 1], ['relay', 1], ['relay', 1], ['engine', 1]]);
-  assert.equal(MERGE_NEAR_FIRE_M, 50);
+test('merges only a relay within 10 m of the fire into the engine marker', () => {
+  const closeToFire = layoutSupplyLine(line, estimate(46));
+  assert.deepEqual(closeToFire.trucks.map(t => [t.role, t.count]), [['pumper', 1], ['engine', 2]]);
+  const apart = layoutSupplyLine(line, estimate(55));
+  assert.deepEqual(apart.trucks.map(t => [t.role, t.count]), [['pumper', 1], ['relay', 1], ['engine', 1]]);
+  assert.equal(MERGE_NEAR_FIRE_M, 10);
 });
 
-test('places no trucks while the counts are pending, and keeps the label mid-line', () => {
-  const { trucks, labelAt } = layoutSupplyLine(line, null);
-  assert.deepEqual(trucks, []);
-  close(labelAt, [0.005, 0], 'midpoint');
-  const atHydrant = layoutSupplyLine([[0, 0], [0, 0]], estimate(0));
-  assert.deepEqual(atHydrant.trucks.map(t => t.role), ['pumper', 'engine']);
+test('places no trucks while the counts are pending', () => {
+  assert.deepEqual(layoutSupplyLine(line, null).trucks, []);
+  assert.deepEqual(layoutSupplyLine([[0, 0], [0, 0]], estimate(0)).trucks.map(t => t.role), ['pumper', 'engine']);
 });

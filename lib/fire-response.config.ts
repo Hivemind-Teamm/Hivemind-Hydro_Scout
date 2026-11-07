@@ -31,15 +31,15 @@ export interface FireResponseConfig {
   layoutFactor: number | null;
   /** Hydrants within this straight-line distance of the fire are candidates. */
   hydrantSearchRadiusM: number;
+  /** Add this distance until at least one hydrant is found. */
+  hydrantSearchExpansionM: number;
 }
 
 export const FIRE_RESPONSE_CONFIG: FireResponseConfig = {
-  version: '2026-10-12',
-  hosePerTruck: [
-    { lengthFt: 100, count: 10 },
-    { lengthFt: 50, count: 10 },
-  ],
-  maxPumpDistanceM: null,
+  version: '2026-11-07',
+  hosePerTruck: [{ lengthFt: 50, count: 3 }],
+  maxPumpDistanceM: 45.72,
   layoutFactor: 1.3,
-  hydrantSearchRadiusM: 500,
+  hydrantSearchRadiusM: 1000,
+  hydrantSearchExpansionM: 500,
 };

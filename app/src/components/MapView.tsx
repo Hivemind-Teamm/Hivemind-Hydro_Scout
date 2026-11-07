@@ -318,6 +318,9 @@ interface MapViewProps {
     lat: number,
     lng: number
   ) => void;
+
+  /** Hide live unit markers on a responder's map while approaching a fire. */
+  hideUnitLocations?: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -371,9 +374,11 @@ function MapView({
   onFirePin,
 
   onFireMove,
+  hideUnitLocations = false,
 }: MapViewProps) {
   const { isDark } = useTheme();
   const { locations: unitLocations, error: unitLocationError } = useUnitLocations();
+  const visibleUnitLocations = hideUnitLocations ? [] : unitLocations;
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const controllerRef = useRef<MapController | null>(null);
   const handleMapReady = useCallback((controller: MapController) => {
@@ -389,7 +394,7 @@ function MapView({
   }, []);
   const closeStation = () => setSelectedStationId(null);
   const selectStation = (stationId: string) => {
-    const location = unitLocations.find(unit => unit.id === stationId);
+    const location = visibleUnitLocations.find(unit => unit.id === stationId);
     if (!location) return;
     if (firePinMode) { onFirePin?.(location.lat, location.lng); return; }
     if (addHydrantMode) { onMapClick(location.lat, location.lng); return; }
@@ -401,9 +406,9 @@ function MapView({
   };
   const handleBackgroundClick = () => { closeStation(); onMapBackgroundClick(); };
   const handleHydrantSelect = (hydrant: Hydrant) => { closeStation(); onSelectHydrant(hydrant); };
-  const visibleStationId = !addHydrantMode && !firePinMode && unitLocations.some(unit => unit.id === selectedStationId)
+  const visibleStationId = !addHydrantMode && !firePinMode && visibleUnitLocations.some(unit => unit.id === selectedStationId)
     ? selectedStationId : null;
-  const selectedStation = unitLocations.find(unit => unit.id === visibleStationId);
+  const selectedStation = visibleUnitLocations.find(unit => unit.id === visibleStationId);
 
   /*
    * Preload the MapLibre chunk.
@@ -457,7 +462,7 @@ function MapView({
           <DilimanMap
             selectedStationId={visibleStationId}
             onSelectStation={selectStation}
-            unitLocations={unitLocations}
+            unitLocations={visibleUnitLocations}
             hydrants={
               hydrants
             }
@@ -533,7 +538,7 @@ function MapView({
           <MapLibreMap
             selectedStationId={visibleStationId}
             onSelectStation={selectStation}
-            unitLocations={unitLocations}
+            unitLocations={visibleUnitLocations}
             hydrants={
               hydrants
             }

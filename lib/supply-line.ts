@@ -126,7 +126,7 @@ export function estimateSupplyLine(
       sections: used.map(({ lengthFt, count }) => ({ lengthFt, count })),
       laidLengthM: Math.round(used.reduce((sum, size) => sum + size.count * size.cm, 0) / 100),
     },
-    stageLengthM: Math.round(stageCm / 10) / 10,
+    stageLengthM: stageCm / 100,
     distance: { source: lay.source, straightLineM: Math.round(straightLineM) },
     configVersion: config.version,
   };

@@ -34,14 +34,14 @@ changing the formula; each change bumps `version`.
 
 | Key | Value | Source |
 | --- | --- | --- |
-| `version` | `2026-10-12` | Set when values change |
-| `hosePerTruck` | 10 sections of 100 ft (30.48 m) and 10 sections of 50 ft (15.24 m) | Team decision, Mark, October 12, 2026. To be confirmed with BFP |
-| `maxPumpDistanceM` | not set | Optional pressure limit. To be supplied by BFP |
+| `version` | `2026-11-07` | Set when values change |
+| `hosePerTruck` | 3 sections of 50 ft (15.24 m); 100-ft hose is not used | BFP update, November 7, 2026 |
+| `maxPumpDistanceM` | 45.72 m (150 ft) | BFP update: add one relay engine for each additional 150-ft stage |
 | `layoutFactor` | 1.3 | Same detour factor the nearest-hydrant search already uses (`lib/nearest-hydrant.ts`). Not field-verified |
-| `hydrantSearchRadiusM` | 500 | Existing value in `lib/fire-response.ts` |
+| `hydrantSearchRadiusM` | 1,000 m | BFP update; expand in 500-m bands only when no hydrant is found |
 
-One truck therefore carries 10 × 30.48 m + 10 × 15.24 m = **457.2 m**
-(1,500 ft) of hose.
+Each supply stage uses three 50-ft sections: **45.72 m (150 ft)**. The initial
+pumper serves the first stage; each additional stage adds one relay engine.
 
 ## Formula
 
@@ -81,8 +81,7 @@ the end of the route to the fire, is added to the route distance.
 A stage is the longest stretch one pumper can cover. A pumper cannot push
 water farther than the hose it carries, and a pressure limit can shorten that.
 
-`S` = the smaller of the hose one truck carries (457.2 m) and
-`maxPumpDistanceM`. While `maxPumpDistanceM` is not set, `S` = 457.2 m.
+`S` = **45.72 m (150 ft)**. This is the BFP relay-engine interval.
 
 ### Step 3: truck count
 
@@ -90,17 +89,17 @@ water farther than the hose it carries, and a pressure limit can shorten that.
 | --- | --- | --- |
 | Engine at the fire | 1 | Always. It fights the fire and keeps its own hose for attack lines |
 | Pumper at the hydrant | 1 | Always. It pushes water through the first stage |
-| Relay pumpers | `ceil(L / S) − 1`, never below 0 | One more each time the line outgrows another stage |
+| Relay engines | `ceil(L / S) − 1`, never below 0 | One more each time the line outgrows another 150-ft stage |
 
-`fireTrucks` = engine at the fire + pumper at the hydrant + relay pumpers
+`fireTrucks` = engine at the fire + pumper at the hydrant + relay engines
 = `1 + max(1, ceil(L / S))`.
 
 The smallest possible answer is 2 trucks.
 
 ### Step 4: hose sections
 
-The supply line uses the hose carried by the pumper at the hydrant and the
-relay pumpers. The engine at the fire does not contribute hose.
+The supply line uses only 50-ft hose carried by the pumper at the hydrant and
+the relay engines. The engine at the fire does not contribute hose.
 
 1. Take the hose sizes longest first. For each size, use as many whole
    sections as fit in the length still to cover, up to the number available.
@@ -113,24 +112,22 @@ sum of those sections and is always at least `L`.
 
 ## Worked examples
 
-All examples use the config values above (`S` = 457.2 m). They are the test
+All examples use the config values above (`S` = 45.72 m). They are the test
 cases in `test/supply-line.test.mjs`; a change to the config values means
 updating both.
 
-| # | Case | `L` | Trucks: fire + hydrant + relay | 100 ft | 50 ft | Sections | Laid length |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Nearby hydrant | 100 m | 1 + 1 + 0 = **2** | 3 | 1 | 4 | 107 m |
-| 2 | Typical lay | 320 m | 1 + 1 + 0 = **2** | 10 | 1 | 11 | 320 m |
-| 3 | Just inside one stage | 457 m | 1 + 1 + 0 = **2** | 10 | 10 | 20 | 457 m |
-| 4 | Just over one stage | 458 m | 1 + 1 + 1 = **3** | 15 | 1 | 16 | 472 m |
-| 5 | Long lay | 650 m | 1 + 1 + 1 = **3** | 20 | 3 | 23 | 655 m |
-| 6 | Routing failed, 250 m straight-line × 1.3 | 325 m | 1 + 1 + 0 = **2** | 10 | 2 | 12 | 335 m |
-| 7 | Fire at the hydrant | 0 m | 1 + 1 + 0 = **2** | 0 | 1 | 1 | 15 m |
+| # | Case | `L` | Trucks: fire + hydrant + relay | 50 ft | Sections | Laid length |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Nearby hydrant | 45 m | 1 + 1 + 0 = **2** | 3 | 3 | 46 m |
+| 2 | First relay engine | 46 m | 1 + 1 + 1 = **3** | 4 | 4 | 61 m |
+| 3 | Typical lay | 320 m | 1 + 1 + 6 = **8** | 21 | 21 | 320 m |
+| 4 | Long lay | 650 m | 1 + 1 + 14 = **16** | 43 | 43 | 655 m |
+| 5 | Routing failed, 250 m straight-line × 1.3 | 325 m | 1 + 1 + 7 = **9** | 22 | 22 | 335 m |
+| 6 | Fire at the hydrant | 0 m | 1 + 1 + 0 = **2** | 1 | 1 | 15 m |
 
-Example 4 in full: 458 m is longer than one 457.2 m stage, so
-`ceil(458 / 457.2)` = 2 supply pumpers, which is 1 at the hydrant and 1 relay.
-Those two pumpers carry 20 sections of each size. Fifteen 100 ft sections
-cover 457.2 m; the remaining 0.8 m takes one 50 ft section.
+Example 2 in full: 46 m is longer than one 45.72 m stage, so
+`ceil(46 / 45.72)` = 2 supply engines: one at the hydrant and one relay
+engine. Four 50-ft sections cover the 46 m line.
 
 ## Output format
 

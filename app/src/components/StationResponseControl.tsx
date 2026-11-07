@@ -33,6 +33,9 @@ type ResponseRecord = {
   lastLocationAt?: { toDate?: () => Date } | null;
 }
 
+const ADMIN_RESPONSE_STATION_ID = 'SYSTEM_ADMIN';
+const ADMIN_RESPONSE_STATION_NAME = 'System Administration';
+
 function currentPosition(): Promise<GeolocationPosition> {
   if (!navigator.geolocation) return Promise.reject(new Error('This device does not support location sharing.'));
   return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, error => {
@@ -43,7 +46,7 @@ function currentPosition(): Promise<GeolocationPosition> {
 }
 
 export default function StationResponseControl({ fireIncident, actionContainer, onViewFireLocation }: {
-  fireIncident: { id: string; lat: number; lng: number } | null;
+  fireIncident: { id: string; lat: number; lng: number; stationId: string | null } | null;
   actionContainer: HTMLDivElement | null;
   onViewFireLocation: (lat: number, lng: number) => void;
 }) {
@@ -52,13 +55,16 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
     canUseDeviceLocation, openLocationConsent,
   } = useAuth();
   const { stations } = useStations();
-  const station = stations.find(item => item.id === stationId);
   const isGlobalAdmin = role === 'admin';
-  const canRespond = !!user && accountType === 'person' && !!stationId && stationMembershipStatus === 'approved';
+  const isPersonalAdmin = isGlobalAdmin && accountType !== 'station';
+  const assignedStation = stations.find(item => item.id === stationId);
+  const canRespond = !!user && (isPersonalAdmin || (accountType === 'person' && !!stationId && stationMembershipStatus === 'approved'));
   const canViewRoster = isGlobalAdmin || (role === 'head' && !!stationId);
   const canApprove = role === 'head' && !!stationId && accountType !== 'station';
   const [activeResponses, setActiveResponses] = useState<ResponseRecord[]>([]);
   const activeResponseId = activeResponses[0]?.id;
+  const activeResponseStationId = activeResponses[0]?.stationId ?? null;
+  const activeResponseStation = stations.find(item => item.id === activeResponseStationId);
   const [responses, setResponses] = useState<ResponseRecord[]>([]);
   const [responseStation, setResponseStation] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -120,10 +126,10 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   }, [canViewRoster, isGlobalAdmin, stationId]);
 
   useEffect(() => {
-    if (!activeResponseId || !stationId) return;
+    if (!activeResponseId || !activeResponseStationId) return;
     const response = { id: activeResponseId };
     if (!canUseDeviceLocation) {
-      void deleteDoc(doc(db, 'stations', stationId, 'unitLocations', response.id)).catch(err => {
+      void deleteDoc(doc(db, 'stations', activeResponseStationId, 'unitLocations', response.id)).catch(err => {
         console.error('Could not remove the location after consent withdrawal:', err);
       });
       void deleteDoc(doc(db, 'responseLocations', response.id)).catch(err => {
@@ -131,7 +137,9 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       });
       return;
     }
-    if (!station) return;
+    const activeStationName = activeResponseStation?.name
+      ?? (activeResponseStationId === ADMIN_RESPONSE_STATION_ID ? ADMIN_RESPONSE_STATION_NAME : null);
+    if (!activeStationName) return;
     let stopped = false;
     let inFlight = false;
     const refresh = async () => {
@@ -141,10 +149,10 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         const position = await currentPosition();
         if (stopped) return;
         const batch = writeBatch(db);
-        batch.set(doc(db, 'stations', stationId, 'unitLocations', response.id), {
+        batch.set(doc(db, 'stations', activeResponseStationId, 'unitLocations', response.id), {
           responseId: response.id,
-          stationId,
-          stationName: station.name,
+          stationId: activeResponseStationId,
+          stationName: activeStationName,
           public: true,
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -172,12 +180,12 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       window.removeEventListener('focus', resume);
       window.removeEventListener('online', resume);
     };
-  }, [activeResponseId, canUseDeviceLocation, station, stationId]);
+  }, [activeResponseId, activeResponseStation, activeResponseStationId, canUseDeviceLocation]);
 
   const staleAfterMs = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES);
 
   useEffect(() => {
-    if ((role !== 'head' && role !== 'admin') || !stationId || !user) return;
+    if ((role !== 'head' && role !== 'admin') || (!isGlobalAdmin && !stationId) || !user) return;
     const stale = responses.filter(response => response.status === 'active'
       && response.lastLocationAt?.toDate
       && Date.now() - response.lastLocationAt.toDate().getTime() > staleAfterMs);
@@ -192,9 +200,9 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         endReason: 'station-head',
       });
       batch.update(doc(db, 'users', response.uid), { activeResponseId: null });
-      batch.delete(doc(db, 'stations', stationId, 'unitLocations', response.id));
+      batch.delete(doc(db, 'stations', response.stationId, 'unitLocations', response.id));
       batch.delete(doc(db, 'responseLocations', response.id));
-      batch.set(doc(db, 'stations', stationId, 'notifications', `${response.id}_closed`), {
+      batch.set(doc(db, 'stations', response.stationId, 'notifications', `${response.id}_closed`), {
         type: 'station-response-closed',
         uid: user.uid,
         displayName: user.displayName || user.email || 'Station manager',
@@ -207,10 +215,13 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       console.error('Could not close stale station responses:', err);
       setError('Could not close a stale response. Try again from station activity.');
     });
-  }, [role, responses, staleAfterMs, stationId, user]);
+  }, [isGlobalAdmin, role, responses, staleAfterMs, stationId, user]);
 
   async function startResponse() {
-    if (!user || !stationId || !station || !fireIncident) return;
+    if (!user || !fireIncident) return;
+    const responseStationId = isPersonalAdmin ? ADMIN_RESPONSE_STATION_ID : stationId;
+    const responseStationName = isPersonalAdmin ? ADMIN_RESPONSE_STATION_NAME : assignedStation?.name;
+    if (!responseStationId || !responseStationName) return;
     setError(null);
     if (!canUseDeviceLocation) {
       openLocationConsent();
@@ -228,25 +239,25 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         responseId: id,
         uid: user.uid,
         displayName: user.displayName?.trim() || user.email || 'Responder',
-        stationId,
-        stationName: station.name,
+        stationId: responseStationId,
+        stationName: responseStationName,
         status: 'active',
         startedAt: serverTimestamp(),
         endedAt: null,
         lastLocationAt: serverTimestamp(),
       });
       batch.update(doc(db, 'users', user.uid), { activeResponseId: id });
-      batch.set(doc(db, 'stations', stationId, 'unitLocations', id), {
+      batch.set(doc(db, 'stations', responseStationId, 'unitLocations', id), {
         responseId: id,
-        stationId,
-        stationName: station.name,
+        stationId: responseStationId,
+        stationName: responseStationName,
         public: true,
         lat: position.coords.latitude,
         lng: position.coords.longitude,
         accuracy: position.coords.accuracy,
         updatedAt: serverTimestamp(),
       });
-      const notice = doc(db, 'stations', stationId, 'notifications', `${id}_start`);
+      const notice = doc(db, 'stations', responseStationId, 'notifications', `${id}_start`);
       batch.set(notice, {
         type: 'response-started',
         uid: user.uid,
@@ -265,7 +276,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   }
 
   async function endResponse(response: ResponseRecord) {
-    if (!user || !stationId) return;
+    if (!user) return;
     setError(null);
     setBusy(true);
     try {
@@ -278,9 +289,9 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         endReason: 'member',
       });
       batch.update(doc(db, 'users', user.uid), { activeResponseId: null });
-      batch.delete(doc(db, 'stations', stationId, 'unitLocations', response.id));
+      batch.delete(doc(db, 'stations', response.stationId, 'unitLocations', response.id));
       batch.delete(doc(db, 'responseLocations', response.id));
-      const notice = doc(db, 'stations', stationId, 'notifications', `${response.id}_end`);
+      const notice = doc(db, 'stations', response.stationId, 'notifications', `${response.id}_end`);
       batch.set(notice, {
         type: 'response-ended',
         uid: user.uid,
@@ -307,7 +318,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       batch.update(doc(db, 'users', request.uid), {
         stationMembershipStatus: approved ? 'approved' : 'rejected',
         stationId: approved ? stationId : null,
-        station: approved ? (station?.name ?? stationId) : 'Unassigned',
+        station: approved ? (assignedStation?.name ?? stationId) : 'Unassigned',
         requestedStationId: null,
       });
       const notice = doc(db, 'stations', stationId, 'notifications', `join-review-${request.uid}-${approved ? 'approved' : 'rejected'}`);
@@ -327,8 +338,9 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
 
   if (!user) return null;
   const hasPendingStationRequest = stationMembershipStatus === 'pending';
-  const canShowResponseAction = canRespond && !!fireIncident && (!activeResponses.length
-    || !activeResponses[0].firePinId || activeResponses[0].firePinId === fireIncident.id);
+  const activeResponse = activeResponses[0];
+  const canShowResponseAction = canRespond && (!!fireIncident || !!activeResponse) && (!activeResponse
+    || !activeResponse.firePinId || activeResponse.firePinId === fireIncident?.id);
 
   const responseAction = canShowResponseAction ? (
     <button
@@ -349,12 +361,12 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         {hasPendingStationRequest && <span className="px-2 text-xs font-semibold text-amber-700">Station request pending approval</span>}
         {error && <span role="alert" className="max-w-56 text-xs text-red-600">{error}</span>}
       </div>}
-      <StationNotificationPanels key={user.uid + ':' + stationId} stationName={isGlobalAdmin ? 'All stations' : station?.name ?? stationId ?? 'Station'}
+      <StationNotificationPanels key={user.uid + ':' + stationId} stationName={isGlobalAdmin ? 'All stations' : assignedStation?.name ?? stationId ?? 'Station'}
         activityOpen={open} membersOpen={openMemberApprovals && canApprove}
         closeActivity={() => setOpen(false)} closeMembers={() => setOpenMemberApprovals(false)}
         reviewRequest={reviewRequest} onViewFireLocation={onViewFireLocation} />
       {openRoster && canViewRoster && (isGlobalAdmin || stationId) && <StationMembersPanel key={`roster:${user.uid}:${isGlobalAdmin ? 'all-stations' : stationId}`} stationId={isGlobalAdmin ? null : stationId}
-        stationName={isGlobalAdmin ? 'All stations' : station?.name ?? stationId ?? ''} allStations={isGlobalAdmin} onClose={() => setOpenRoster(false)}
+        stationName={isGlobalAdmin ? 'All stations' : assignedStation?.name ?? stationId ?? ''} allStations={isGlobalAdmin} onClose={() => setOpenRoster(false)}
         responsesReady={responseStation === (isGlobalAdmin ? 'all-stations' : stationId)}
         respondingUids={new Set(responses.filter(response => responseStation === (isGlobalAdmin ? 'all-stations' : stationId) && (isGlobalAdmin || response.stationId === stationId) && response.status === 'active').map(response => response.uid))} />}
     </>

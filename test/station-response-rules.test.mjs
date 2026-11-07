@@ -12,7 +12,7 @@ try {
   await env.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
     await db.doc('users/admin').set({
-      uid: 'admin', role: 'admin', accountType: 'person', displayName: 'Admin',
+      uid: 'admin', role: 'admin', accountType: 'person', displayName: 'Admin', activeResponseId: null,
     });
     await db.doc('stations/DILIMAN-01').set({ name: 'Diliman Fire Station', active: true, createdAt: serverTimestamp() });
     await db.doc('firePins/abcdefghijklmnopqrst').set({ lat: 14.65, lng: 121.06, stationId: 'DILIMAN-01', status: 'active', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
@@ -231,6 +231,59 @@ try {
   });
   assert.equal(endedLocation.exists, false);
   await assertSucceeds(headDb.doc(responsePath).get());
+
+  const adminResponseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const adminResponsePath = `stationResponses/${adminResponseId}`;
+  const adminLocationPath = `stations/SYSTEM_ADMIN/unitLocations/${adminResponseId}`;
+  const adminNoticePath = `stations/SYSTEM_ADMIN/notifications/${adminResponseId}_start`;
+  const adminStart = adminDb.batch();
+  adminStart.update(adminDb.doc('users/admin'), { activeResponseId: adminResponseId });
+  adminStart.set(adminDb.doc(adminResponsePath), {
+    firePinId: 'abcdefghijklmnopqrst', incidentLat: 14.65, incidentLng: 121.06,
+    responseId: adminResponseId, uid: 'admin', displayName: 'Admin',
+    stationId: 'SYSTEM_ADMIN', stationName: 'System Administration', status: 'active',
+    startedAt: serverTimestamp(), endedAt: null, lastLocationAt: serverTimestamp(),
+  });
+  adminStart.set(adminDb.doc(adminLocationPath), {
+    responseId: adminResponseId, stationId: 'SYSTEM_ADMIN', stationName: 'System Administration',
+    public: true, lat: 14.65, lng: 121.06, accuracy: 8, updatedAt: serverTimestamp(),
+  });
+  adminStart.set(adminDb.doc(adminNoticePath), {
+    type: 'response-started', uid: 'admin', displayName: 'Admin', responseId: adminResponseId,
+    message: 'Admin started responding.', createdAt: serverTimestamp(),
+  });
+  await assertSucceeds(adminStart.commit());
+
+  const adminEnd = adminDb.batch();
+  adminEnd.update(adminDb.doc(adminResponsePath), {
+    status: 'ended', endedAt: serverTimestamp(), endedByUid: 'admin', endedByName: 'Admin', endReason: 'member',
+  });
+  adminEnd.update(adminDb.doc('users/admin'), { activeResponseId: null });
+  adminEnd.delete(adminDb.doc(adminLocationPath));
+  adminEnd.set(adminDb.doc(`stations/SYSTEM_ADMIN/notifications/${adminResponseId}_end`), {
+    type: 'response-ended', uid: 'admin', displayName: 'Admin', responseId: adminResponseId,
+    message: 'Admin ended responding.', createdAt: serverTimestamp(),
+  });
+  await assertSucceeds(adminEnd.commit());
+
+  const forgedSystemResponse = otherDb.batch();
+  const forgedResponseId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  forgedSystemResponse.update(otherDb.doc('users/member-2'), { activeResponseId: forgedResponseId });
+  forgedSystemResponse.set(otherDb.doc(`stationResponses/${forgedResponseId}`), {
+    firePinId: 'abcdefghijklmnopqrst', incidentLat: 14.65, incidentLng: 121.06,
+    responseId: forgedResponseId, uid: 'member-2', displayName: 'Other Responder',
+    stationId: 'SYSTEM_ADMIN', stationName: 'System Administration', status: 'active',
+    startedAt: serverTimestamp(), endedAt: null, lastLocationAt: serverTimestamp(),
+  });
+  forgedSystemResponse.set(otherDb.doc(`stations/SYSTEM_ADMIN/unitLocations/${forgedResponseId}`), {
+    responseId: forgedResponseId, stationId: 'SYSTEM_ADMIN', stationName: 'System Administration',
+    public: true, lat: 14.65, lng: 121.06, accuracy: 8, updatedAt: serverTimestamp(),
+  });
+  forgedSystemResponse.set(otherDb.doc(`stations/SYSTEM_ADMIN/notifications/${forgedResponseId}_start`), {
+    type: 'response-started', uid: 'member-2', displayName: 'Other Responder', responseId: forgedResponseId,
+    message: 'Other Responder started responding.', createdAt: serverTimestamp(),
+  });
+  await assertFails(forgedSystemResponse.commit());
   console.log('Station response rules: all checks passed');
 } finally {
   await env.cleanup();

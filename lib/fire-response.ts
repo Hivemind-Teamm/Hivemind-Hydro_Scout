@@ -15,6 +15,7 @@ import type { Hydrant } from '../app/src/data/hydrants';
 
 /** Hydrants within this straight-line distance of the fire are candidates. */
 export const FIRE_HYDRANT_RADIUS_M = FIRE_RESPONSE_CONFIG.hydrantSearchRadiusM;
+export const FIRE_HYDRANT_RADIUS_EXPANSION_M = FIRE_RESPONSE_CONFIG.hydrantSearchExpansionM;
 
 // ─── Hydrants near a fire ─────────────────────────────────────────────────────
 
@@ -29,6 +30,11 @@ export interface FireHydrantRanking {
   inRadius: FireHydrantCandidate[];
   /** Closest hydrant outside the radius — shown when none are inside. */
   nearestOutside: FireHydrantCandidate | null;
+}
+
+export interface ExpandedFireHydrantSearch extends FireHydrantRanking {
+  /** Radius actually used after expanding in 500 m bands, if needed. */
+  radiusM: number;
 }
 
 export function rankHydrantsNearFire(
@@ -50,6 +56,26 @@ export function rankHydrantsNearFire(
 
   inRadius.sort((a, b) => a.distanceM - b.distanceM);
   return { inRadius, nearestOutside };
+}
+
+/**
+ * Start at the BFP-requested radius, then expand in fixed bands only when no
+ * hydrant is available. The nearest candidate lets us jump directly to the
+ * first band that can contain one instead of repeatedly scanning the list.
+ */
+export function findHydrantsNearFire(
+  hydrants: Hydrant[],
+  fire: { lat: number; lng: number },
+  initialRadiusM: number = FIRE_HYDRANT_RADIUS_M,
+  expansionM: number = FIRE_HYDRANT_RADIUS_EXPANSION_M,
+): ExpandedFireHydrantSearch {
+  const initial = rankHydrantsNearFire(hydrants, fire, initialRadiusM);
+  if (initial.inRadius.length || !initial.nearestOutside || !Number.isFinite(expansionM) || expansionM <= 0) {
+    return { ...initial, radiusM: initialRadiusM };
+  }
+  const bands = Math.ceil((initial.nearestOutside.distanceM - initialRadiusM) / expansionM);
+  const radiusM = initialRadiusM + Math.max(1, bands) * expansionM;
+  return { ...rankHydrantsNearFire(hydrants, fire, radiusM), radiusM };
 }
 
 /**

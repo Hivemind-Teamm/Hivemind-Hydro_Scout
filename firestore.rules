@@ -85,6 +85,20 @@ service cloud.firestore {
         && currentUserData().stationId == stationId;
     }
 
+    // Global technical administrators are not assigned a station. Their
+    // active responses use this response-only context; it is never stored on
+    // their user profile and cannot be used by station members.
+    function canRespondForStation(stationId) {
+      return (stationId != 'SYSTEM_ADMIN' && isApprovedStationMember(stationId))
+        || (stationId == 'SYSTEM_ADMIN' && isAdmin());
+    }
+
+    function validResponseStationName(stationId, stationName) {
+      return (stationId == 'SYSTEM_ADMIN' && stationName == 'System Administration')
+        || (stationId != 'SYSTEM_ADMIN'
+          && stationName == get(/databases/$(database)/documents/stations/$(stationId)).data.name);
+    }
+
     function validResponsePointerUpdate(uid) {
       let before = resource.data;
       let after = request.resource.data;
@@ -545,8 +559,8 @@ service cloud.firestore {
         && request.resource.data.displayName == currentUserData().displayName
         && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 120
         && request.resource.data.stationId is string
-        && isApprovedStationMember(request.resource.data.stationId)
-        && request.resource.data.stationName == get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.name
+        && canRespondForStation(request.resource.data.stationId)
+        && validResponseStationName(request.resource.data.stationId, request.resource.data.stationName)
         && request.resource.data.status == 'active'
         && request.resource.data.startedAt == request.time
         && request.resource.data.endedAt == null
@@ -559,7 +573,7 @@ service cloud.firestore {
       allow update: if (isSignedIn()
         && resource.data.uid == request.auth.uid
         && resource.data.status == 'active'
-        && isApprovedStationMember(resource.data.stationId)
+        && canRespondForStation(resource.data.stationId)
         && onlyChangedFields(['lastLocationAt'])
         && request.resource.data.lastLocationAt == request.time)
         || (isSignedIn()
@@ -693,7 +707,7 @@ service cloud.firestore {
 
     match /responseLocations/{responseId} {
       allow read: if isSignedIn();
-      allow create, update: if isApprovedStationMember(request.resource.data.stationId)
+      allow create, update: if canRespondForStation(request.resource.data.stationId)
         && isValidUnitLocation(responseId);
       allow delete: if isSignedIn() && (
         isAdmin()
@@ -721,7 +735,7 @@ service cloud.firestore {
         || canManageStation(stationId)
       );
       allow create, update: if (
-        isApprovedStationMember(stationId)
+        canRespondForStation(stationId)
         && isValidStationUnitLocation(stationId, reportId)
       ) || (
         isLegacyAssignedStation(stationId)

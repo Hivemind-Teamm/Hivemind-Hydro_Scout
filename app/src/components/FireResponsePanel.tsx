@@ -217,7 +217,7 @@ function SupplyEstimate({ supply, estimate, routing, onViewHydrant }: {
           value={ready?.fireTrucks}
           detail={ready && [
             `${ready.trucks.pumperAtHydrant} at hydrant`,
-            `${ready.trucks.relayPumpers} relay`,
+            `${ready.trucks.relayPumpers} relay engine${ready.trucks.relayPumpers === 1 ? '' : 's'}`,
             `${ready.trucks.engineAtFire} at fire`,
           ]}
         />
@@ -266,7 +266,7 @@ function SupplyEstimate({ supply, estimate, routing, onViewHydrant }: {
 
 /**
  * The supply line drawn left to right: hydrant and its pumper, each hose
- * stage (to scale) with a relay pumper between stages, then the engine at the
+ * stage (to scale) with a relay engine between stages, then the engine at the
  * fire. Dashed hose means the length is still a straight-line estimate.
  */
 function SupplyDiagram({ estimate, estimated }: { estimate: ReadyEstimate; estimated: boolean }) {
@@ -298,7 +298,7 @@ function SupplyDiagram({ estimate, estimated }: { estimate: ReadyEstimate; estim
       </div>
       {collapsed && (
         <p className="mt-1 text-center text-[9px] font-semibold text-neutral-400 dark:text-neutral-500">
-          {relays} relay pumpers · {stages.length} stages of up to {formatDistance(estimate.stageLengthM)}
+          {relays} relay engine{relays === 1 ? '' : 's'} · {stages.length} stages of up to {formatDistance(estimate.stageLengthM)}
         </p>
       )}
     </div>
