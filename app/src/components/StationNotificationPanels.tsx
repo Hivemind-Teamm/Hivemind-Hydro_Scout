@@ -22,7 +22,7 @@ function UnreadDot({ label }: { label: string }) {
 
 /** A concise, consistently coloured source label for activity from many stations. */
 function StationLabel({ name, id }: { name: string; id?: string | null }) {
-  return <p className="text-[11px] font-semibold text-[#0b5ea8] dark:text-[#60a5fa]">Station: <span className="font-extrabold">{name || id || 'N/A'}</span>{id && id !== name && <span className="font-medium"> ({id})</span>}</p>;
+  return <p className="text-[11px] font-extrabold text-[#0b5ea8] dark:text-[#60a5fa]">{name || id || 'N/A'}</p>;
 }
 
 function NotificationDialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
