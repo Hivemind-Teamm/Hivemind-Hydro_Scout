@@ -16,6 +16,14 @@ function time(value?: { toDate?: () => Date } | null) {
   const date = value?.toDate?.();
   return date ? new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Manila' }).format(date) : 'Not recorded';
 }
+function elapsed(start?: { toDate?: () => Date } | null, end?: { toDate?: () => Date } | null, now = Date.now()) {
+  const started = start?.toDate?.().getTime();
+  const finished = end?.toDate?.().getTime() ?? now;
+  if (!started || !Number.isFinite(finished) || finished < started) return 'Not recorded';
+  const seconds = Math.floor((finished - started) / 1000);
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)} hr ${Math.floor(seconds % 3600 / 60)} min`;
+  return `${Math.floor(seconds / 60)} min ${seconds % 60} sec`;
+}
 function UnreadDot({ label }: { label: string }) {
   return <span role="img" aria-label={label} className="h-2 w-2 shrink-0 rounded-full bg-[#e0353b]" />;
 }
@@ -66,23 +74,16 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     return notifications.filter(item => `${item.stationName ?? ''} ${item.stationId ?? ''}`.toLowerCase().includes(term));
   }, [isGlobalAdmin, notifications, stationSearch]);
   const hasActiveResponse = notifications.some(item => item.response?.status === 'active' || (item.responseGroup?.activeCount ?? 0) > 0);
+  const hasActiveFire = notifications.some(item => item.type === 'fire-pinned');
   const opening = useRef(false);
 
   useEffect(() => {
-    if (!hasActiveResponse || (!activityOpen && !selectedKey)) return;
+    if ((!hasActiveResponse && !hasActiveFire) || (!activityOpen && !selectedKey)) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [hasActiveResponse, activityOpen, selectedKey]);
+  }, [hasActiveResponse, hasActiveFire, activityOpen, selectedKey]);
 
   function openNotification(item: StationNotification) {
-    if ((item.type === 'fire-pinned' || item.type === 'fire-cleared') && typeof item.lat === 'number' && typeof item.lng === 'number'
-      && Number.isFinite(item.lat) && Number.isFinite(item.lng) && Math.abs(item.lat) <= 90 && Math.abs(item.lng) <= 180) {
-      readActivity(item);
-      setSelectedKey(null);
-      closeActivity();
-      onViewFireLocation(item.lat, item.lng);
-      return;
-    }
     setNow(Date.now());
     setSelectedKey(stationNotificationCardKey(item));
     if (!item.responseGroup) readActivity(item);
@@ -146,7 +147,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           const { color, label } = notificationStyle(response || group ? active ? 'response-started' : 'response-ended' : item.type);
           const read = () => readActivity(item);
           return <article key={stationNotificationCardKey(item)} style={{ borderLeftColor: color }} className={`relative border-l-[3px] px-4 py-3 transition-colors hover:bg-neutral-50 focus-within:bg-neutral-50 dark:hover:bg-neutral-800/50 dark:focus-within:bg-neutral-800/50 ${active ? 'response-notification-active' : ''}`}>
-            <button type="button" onClick={() => openNotification(item)} aria-label={`${item.type === 'fire-pinned' || item.type === 'fire-cleared' ? 'View fire incident on map' : 'Open notification'}: ${item.message}`} aria-haspopup={item.type === 'fire-pinned' || item.type === 'fire-cleared' ? undefined : 'dialog'}
+            <button type="button" onClick={() => openNotification(item)} aria-label={`${item.type === 'fire-pinned' || item.type === 'fire-cleared' ? 'Open fire incident details' : 'Open notification'}: ${item.message}`} aria-haspopup="dialog"
               className="absolute inset-0 h-full w-full cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-500" />
             <div className="pointer-events-none relative">
             <div className="mb-1 flex items-center justify-between gap-3">
@@ -261,9 +262,24 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
         })}
       </div>}
       {selected.hydrantId && <p className="mb-2 text-xs font-semibold">Hydrant: {selected.hydrantId}</p>}
-      {typeof selected.lat === 'number' && typeof selected.lng === 'number' && <p className="mb-2 text-xs">Location: {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}</p>}
+      {selected.type !== 'fire-pinned' && selected.type !== 'fire-cleared' && typeof selected.lat === 'number' && typeof selected.lng === 'number' && <p className="mb-2 text-xs">Location: {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}</p>}
       <p className="mb-3 text-[10px] uppercase tracking-wide text-neutral-400">Notification details · Philippine time (PHT)</p>
-      {!selected.responseGroup && <dl className="space-y-3 text-xs">
+      {(selected.type === 'fire-pinned' || selected.type === 'fire-cleared') && <dl className="space-y-3 text-xs">
+        <div><dt className="text-neutral-400">Station</dt><dd className="mt-1"><StationLabel name={selected.stationName || selected.stationId || (isGlobalAdmin ? 'N/A' : stationName)} id={selected.stationId || stationId} /></dd></div>
+        <div><dt className="text-neutral-400">Incident status</dt><dd className="mt-1 font-semibold">{selected.type === 'fire-cleared' ? 'Cleared' : 'Active'}</dd></div>
+        <div><dt className="text-neutral-400">Pinned</dt><dd className="mt-1">{time(selected.type === 'fire-cleared' ? selected.startedAt : selected.createdAt)}</dd></div>
+        {selected.type === 'fire-cleared' && <div><dt className="text-neutral-400">Cleared</dt><dd className="mt-1">{time(selected.createdAt)}</dd></div>}
+        <div><dt className="text-neutral-400">Active duration</dt><dd className="mt-1">{elapsed(selected.type === 'fire-cleared' ? selected.startedAt : selected.createdAt, selected.type === 'fire-cleared' ? selected.createdAt : null, now)}</dd></div>
+        {typeof selected.lat === 'number' && typeof selected.lng === 'number' && <>
+          <div><dt className="text-neutral-400">Latitude</dt><dd className="mt-1">{selected.lat.toFixed(6)}</dd></div>
+          <div><dt className="text-neutral-400">Longitude</dt><dd className="mt-1">{selected.lng.toFixed(6)}</dd></div>
+          <div><button type="button" className="font-semibold text-[#e0353b] hover:underline" onClick={() => {
+            readActivity(selected); setSelectedKey(null); closeActivity(); onViewFireLocation(selected.lat!, selected.lng!);
+          }}>View in map</button></div>
+        </>}
+        {!selected.limited && selected.uid && <div><dt className="text-neutral-400">Updated by</dt><dd className="mt-1">{accountLink(selected.uid, selected.displayName || 'View account', 'Member', () => readActivity(selected))}</dd></div>}
+      </dl>}
+      {!selected.responseGroup && selected.type !== 'fire-pinned' && selected.type !== 'fire-cleared' && <dl className="space-y-3 text-xs">
         <div><dd><StationLabel name={selected.stationName || selected.response?.stationName || selected.stationId || selected.response?.stationId || (isGlobalAdmin ? 'N/A' : stationName)} id={selected.stationId || selected.response?.stationId || stationId} /></dd></div>
         {selected.response ? <>
           {!selected.limited && <div><dt className="text-neutral-400">Responder</dt><dd className="mt-1">{selected.uid ? accountLink(selected.uid, selected.displayName || 'Responder', 'Member', () => readActivity(selected)) : selected.displayName}</dd></div>}

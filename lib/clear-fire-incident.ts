@@ -43,6 +43,7 @@ export async function clearFireIncident(db: Firestore, uid: string, id: string) 
           transaction.set(db.doc(`stations/${stationId}/notifications/fire-${id}-cleared`), {
             type: 'fire-cleared', uid, displayName, firePinId: id,
             lat: data.lat, lng: data.lng,
+            startedAt: data.createdAt ?? now,
             message: `${displayName} cleared a fire incident.`, createdAt: now,
           });
         }

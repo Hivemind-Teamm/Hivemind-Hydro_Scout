@@ -45,6 +45,7 @@ try {
     assert.equal(clearedNotice.firePinId, pinId);
     assert.equal(clearedNotice.lat, 14.65);
     assert.equal(clearedNotice.lng, 121.06);
+    assert.ok(clearedNotice.startedAt);
   }
   for (const [id, station] of [['a','one'],['b','two']]) {
     const response = (await db.doc(`stationResponses/${id}`).get()).data();

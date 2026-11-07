@@ -24,6 +24,7 @@ export function limitedOperationalNotification(item: StationNotification): Stati
     id: item.id, type: item.type,
     message: item.response ? `A station unit ${item.response.status === 'active' ? 'started' : 'ended'} response.` : messages[item.type],
     createdAt: item.createdAt, limited: true,
+    ...(item.startedAt ? { startedAt: item.startedAt } : {}),
     ...(item.hydrantId ? { hydrantId: item.hydrantId } : {}),
     ...(typeof item.lat === 'number' && typeof item.lng === 'number' ? { lat: item.lat, lng: item.lng } : {}),
     ...(item.response ? {
