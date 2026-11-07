@@ -20,13 +20,9 @@ function UnreadDot({ label }: { label: string }) {
   return <span role="img" aria-label={label} className="h-2 w-2 shrink-0 rounded-full bg-[#e0353b]" />;
 }
 
-/** A fixed visual anchor when one account receives notifications from many stations. */
+/** A concise, consistently coloured source label for activity from many stations. */
 function StationLabel({ name, id }: { name: string; id?: string | null }) {
-  return <span className="inline-flex max-w-full items-center gap-1 rounded-md bg-[#0b5ea8] px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white shadow-sm">
-    <span className="shrink-0 text-white/70">Station</span>
-    <span className="truncate">{name}</span>
-    {id && id !== name && <span className="shrink-0 border-l border-white/30 pl-1 text-white/80 normal-case">{id}</span>}
-  </span>;
+  return <p className="text-[11px] font-semibold text-[#0b5ea8] dark:text-[#60a5fa]">Station: <span className="font-extrabold">{name || id || 'N/A'}</span>{id && id !== name && <span className="font-medium"> ({id})</span>}</p>;
 }
 
 function NotificationDialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
@@ -125,7 +121,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     <header className="flex items-center justify-between gap-3 bg-[#e0353b] px-4 py-3 text-white">
       <div>
         <h2 className="text-sm font-extrabold uppercase tracking-wide">{title}</h2>
-        <p className="text-[10px] text-white/75">{stationName} · {subtitle}</p>
+        <p className="text-[10px] text-white/75">{isGlobalAdmin ? subtitle : `${stationName} · ${subtitle}`}</p>
       </div>
       <button onClick={close} aria-label={`Close ${title.toLowerCase()}`} className="rounded p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>
     </header>
@@ -158,7 +154,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
               <NotificationCountBadge count={activityUnreadCount(item)} label="unread activity updates" />
             </div>
             <div className="mb-2">
-              <StationLabel name={item.stationName || response?.stationName || stationName} id={item.stationId || response?.stationId || stationId} />
+              <StationLabel name={item.stationName || response?.stationName || item.stationId || response?.stationId || (isGlobalAdmin ? 'N/A' : stationName)} id={item.stationId || response?.stationId || stationId} />
             </div>
             {group && <div className="mt-2 space-y-1 text-[10px] leading-relaxed text-neutral-500 dark:text-neutral-400">
               <p>{group.day} · {group.entries.length} {group.entries.length === 1 ? 'response' : 'responses'} · {group.activeCount} active · {group.entries.length - group.activeCount} ended</p>
@@ -200,7 +196,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
             <PillBadge dot={notificationStyle('membership-pending').color} color={notificationStyle('membership-pending').color} label="Membership request" />
             {isMemberUnread(request) && <UnreadDot label="Unread member request" />}
           </div>
-          <div className="mb-2"><StationLabel name={stationName} id={request.stationId || stationId} /></div>
+          <div className="mb-2"><StationLabel name={stationName === 'All stations' ? request.stationId || 'N/A' : stationName} id={request.stationId || stationId} /></div>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 text-xs">
               {accountLink(request.uid, request.displayName, 'General User', () => readMember(request))}
@@ -222,7 +218,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       : selected.message} onClose={() => setSelectedKey(null)}>
       {selected.responseGroup && <div className="space-y-3">
         <div className="flex items-center justify-between gap-3 text-xs">
-          <div className="space-y-2"><StationLabel name={selected.stationName || stationName} id={selected.stationId || stationId} /><p className="font-semibold">{selected.responseGroup.day} (PHT)</p></div>
+          <div className="space-y-2"><StationLabel name={selected.stationName || selected.stationId || (isGlobalAdmin ? 'N/A' : stationName)} id={selected.stationId || stationId} /><p className="font-semibold">{selected.responseGroup.day} (PHT)</p></div>
           <NotificationCountBadge count={activityUnreadCount(selected)} label="unread response updates" />
         </div>
         <p className="text-[11px] text-neutral-500">Expand an entry to view its details and mark that update as read.</p>
@@ -268,7 +264,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       {typeof selected.lat === 'number' && typeof selected.lng === 'number' && <p className="mb-2 text-xs">Location: {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}</p>}
       <p className="mb-3 text-[10px] uppercase tracking-wide text-neutral-400">Notification details · Philippine time (PHT)</p>
       {!selected.responseGroup && <dl className="space-y-3 text-xs">
-        <div><dt className="mb-1 text-neutral-400">Station</dt><dd><StationLabel name={selected.stationName || selected.response?.stationName || stationName} id={selected.stationId || selected.response?.stationId || stationId} /></dd></div>
+        <div><dd><StationLabel name={selected.stationName || selected.response?.stationName || selected.stationId || selected.response?.stationId || (isGlobalAdmin ? 'N/A' : stationName)} id={selected.stationId || selected.response?.stationId || stationId} /></dd></div>
         {selected.response ? <>
           {!selected.limited && <div><dt className="text-neutral-400">Responder</dt><dd className="mt-1">{selected.uid ? accountLink(selected.uid, selected.displayName || 'Responder', 'Member', () => readActivity(selected)) : selected.displayName}</dd></div>}
           <div><dt className="text-neutral-400">Status</dt><dd className="mt-1 font-semibold">{selected.response.status === 'active' ? 'Responding' : 'Ended'}</dd></div>
