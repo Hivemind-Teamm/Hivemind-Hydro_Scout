@@ -10,14 +10,14 @@ export function notificationAccess(profile: {
   return { stationId, full, operational };
 }
 
-const operationalTypes = new Set(['hydrant-pinned', 'hydrant-checking', 'fire-pinned', 'response-started', 'response-ended', 'station-response-closed']);
+const operationalTypes = new Set(['hydrant-pinned', 'hydrant-checking', 'fire-pinned', 'fire-cleared', 'response-started', 'response-ended', 'station-response-closed']);
 
 /** Explicit allowlist: never serialize the source object or its free-text message. */
 export function limitedOperationalNotification(item: StationNotification): StationNotification | null {
   if (!operationalTypes.has(item.type)) return null;
   const messages: Record<string, string> = {
     'hydrant-pinned': 'A hydrant was pinned.', 'hydrant-checking': item.checkingStatus === 'completed' ? 'Hydrant checking was completed.' : 'Hydrant checking was started.',
-    'fire-pinned': 'A fire incident was pinned.', 'response-started': 'A station unit started response.',
+    'fire-pinned': 'A fire incident was pinned.', 'fire-cleared': 'A fire incident was cleared.', 'response-started': 'A station unit started response.',
     'response-ended': 'A station unit ended response.', 'station-response-closed': 'A station unit ended response.',
   };
   return {

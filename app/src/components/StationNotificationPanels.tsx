@@ -75,7 +75,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   }, [hasActiveResponse, activityOpen, selectedKey]);
 
   function openNotification(item: StationNotification) {
-    if (item.type === 'fire-pinned' && typeof item.lat === 'number' && typeof item.lng === 'number'
+    if ((item.type === 'fire-pinned' || item.type === 'fire-cleared') && typeof item.lat === 'number' && typeof item.lng === 'number'
       && Number.isFinite(item.lat) && Number.isFinite(item.lng) && Math.abs(item.lat) <= 90 && Math.abs(item.lng) <= 180) {
       readActivity(item);
       setSelectedKey(null);
@@ -146,7 +146,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           const { color, label } = notificationStyle(response || group ? active ? 'response-started' : 'response-ended' : item.type);
           const read = () => readActivity(item);
           return <article key={stationNotificationCardKey(item)} style={{ borderLeftColor: color }} className={`relative border-l-[3px] px-4 py-3 transition-colors hover:bg-neutral-50 focus-within:bg-neutral-50 dark:hover:bg-neutral-800/50 dark:focus-within:bg-neutral-800/50 ${active ? 'response-notification-active' : ''}`}>
-            <button type="button" onClick={() => openNotification(item)} aria-label={`${item.type === 'fire-pinned' ? 'View fire incident on map' : 'Open notification'}: ${item.message}`} aria-haspopup={item.type === 'fire-pinned' ? undefined : 'dialog'}
+            <button type="button" onClick={() => openNotification(item)} aria-label={`${item.type === 'fire-pinned' || item.type === 'fire-cleared' ? 'View fire incident on map' : 'Open notification'}: ${item.message}`} aria-haspopup={item.type === 'fire-pinned' || item.type === 'fire-cleared' ? undefined : 'dialog'}
               className="absolute inset-0 h-full w-full cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-500" />
             <div className="pointer-events-none relative">
             <div className="mb-1 flex items-center justify-between gap-3">

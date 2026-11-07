@@ -29,7 +29,25 @@ export async function clearFireIncident(db: Firestore, uid: string, id: string) 
     // Read profiles before writing; avoid removing a newer response pointer.
     const profiles = await Promise.all(active.map(record => transaction.get(db.doc(`users/${record.data().uid}`))));
     const now = FieldValue.serverTimestamp();
-    if (data.status === 'active') transaction.update(pinRef, { status: 'cleared', updatedAt: now });
+    if (data.status === 'active') {
+      transaction.update(pinRef, { status: 'cleared', updatedAt: now });
+      // Fire clearance is its own immutable station-activity event. Notify
+      // the incident's source station and every station currently responding.
+      // It remains separate from the response-ending events below.
+      const recipients = new Set(active.map(record => record.data().stationId)
+        .filter((stationId): stationId is string => typeof stationId === 'string' && stationId.length > 0));
+      if (typeof data.stationId === 'string' && data.stationId.length > 0) recipients.add(data.stationId);
+      if (recipients.size) {
+        const displayName = profile.displayName || 'Incident coordinator';
+        for (const stationId of recipients) {
+          transaction.set(db.doc(`stations/${stationId}/notifications/fire-${id}-cleared`), {
+            type: 'fire-cleared', uid, displayName, firePinId: id,
+            lat: data.lat, lng: data.lng,
+            message: `${displayName} cleared a fire incident.`, createdAt: now,
+          });
+        }
+      }
+    }
     active.forEach((record, index) => {
       const response = record.data();
       transaction.update(record.ref, { status: 'ended', endedAt: now, endedByUid: uid,

@@ -39,6 +39,13 @@ try {
   assert.equal((await db.doc(`firePins/${pinId}`).get()).data().status, 'active');
   assert.equal((await clearFireIncident(db, 'creator', pinId)).endedResponses, 2);
   assert.equal((await db.doc(`firePins/${pinId}`).get()).data().status, 'cleared');
+  for (const station of ['one', 'two']) {
+    const clearedNotice = (await db.doc(`stations/${station}/notifications/fire-${pinId}-cleared`).get()).data();
+    assert.equal(clearedNotice.type, 'fire-cleared');
+    assert.equal(clearedNotice.firePinId, pinId);
+    assert.equal(clearedNotice.lat, 14.65);
+    assert.equal(clearedNotice.lng, 121.06);
+  }
   for (const [id, station] of [['a','one'],['b','two']]) {
     const response = (await db.doc(`stationResponses/${id}`).get()).data();
     assert.equal(response.status, 'ended');
