@@ -157,6 +157,8 @@ export interface Hydrant {
 
   concessionaire: string;
 
+  address: string;
+
   landmark: string;
 
   hazard: string;
@@ -276,23 +278,24 @@ export const STATUS_META:
 
     reference: {
 
-      color: '#7c3aed',
+      color: '#64748b',
 
-      // Reuse the existing pin artwork with a violet transformation so this
-      // temporary reference category does not need another raster asset.
+      // The BFP inventory is visible for reference, but has not yet been
+      // verified for operational use. Use a muted pin that cannot be confused
+      // with the purple member-role treatment or active hydrant statuses.
       iconUrl:
 
-        '/Hydrant%20Pin%20Gren.png',
+        '/Hydrant%20Pin%20Gray.png',
 
-      iconFilter: 'hue-rotate(145deg) saturate(1.45)',
+      iconFilter: 'opacity(0.72) saturate(0.55)',
 
       legendLabel:
 
-        'BFP Reference — not for use',
+        'BFP Reference — temporarily unavailable',
 
       pillLabel:
 
-        'BFP Reference',
+        'Temporarily Unavailable',
 
     },
 
@@ -1361,6 +1364,20 @@ export function hydrantFromDoc(
 
 
 
+    address:
+
+      typeof d.address ===
+
+      'string' &&
+
+      d.address.trim()
+
+        ? d.address.trim()
+
+        : '-',
+
+
+
     // F1 Station Accounts + AOR.
 
     barangay:
@@ -1403,15 +1420,17 @@ export function hydrantFromDoc(
 
       d.nearestLandmark ||
 
-      (typeof d.address ===
+      (d.referenceOnly === true
 
-        'string' &&
+        ? 'Needs manual landmark verification'
 
-        d.address) ||
+        : (typeof d.address ===
 
-      '—',
+          'string' &&
 
+          d.address) ||
 
+            '-'),
 
     hazard:
 

@@ -267,6 +267,7 @@ function QuickTab({ hydrant, meta, distanceM, isOtw }: { hydrant: Hydrant; meta:
   return (
     <div className="px-4 py-4">
       <InfoTable rows={[
+        { label: 'Address',        value: hydrant.address },
         { label: 'Status',   value: <span className="font-bold" style={{ color: meta.color }}>• {meta.legendLabel}</span> },
         { label: 'Pressure', value: <span className="font-bold" style={{ color: PRESSURE_COLOR[hydrant.pressure] }}>{hydrant.pressure}</span> },
         { label: 'Distance', value: distanceValue },
@@ -302,6 +303,7 @@ function DetailsTab({ hydrant, onViewUser, canAnnotate, canEditPhotos, isGeneral
   return (
     <div className="px-4 py-4">
       <InfoTable rows={[
+        { label: 'Address',        value: hydrant.address },
         { label: 'Type',           value: `${hydrant.type} · ${hydrant.mounting}` },
         { label: 'Key / Wrench',   value: hydrant.keyWrench },
         { label: 'Area',           value: hydrant.area },
