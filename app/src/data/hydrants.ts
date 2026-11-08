@@ -291,7 +291,7 @@ export const STATUS_META:
 
       legendLabel:
 
-        'BFP Reference — temporarily unavailable',
+        'Temporarily Unavailable',
 
       pillLabel:
 

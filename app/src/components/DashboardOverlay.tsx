@@ -373,7 +373,7 @@ function DashboardOverlay({
                         <div key={status} className="flex items-center justify-between px-3 py-1.5">
                           <span className="flex items-center gap-2">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={meta.iconUrl} alt="" width={16} height={21} style={{ filter: HYDRANT_PIN_FILTER, objectFit: 'contain' }} />
+                            <img src={meta.iconUrl} alt="" width={16} height={21} style={{ filter: `${HYDRANT_PIN_FILTER} ${meta.iconFilter ?? ''}`, objectFit: 'contain' }} />
                             <span className="text-sm font-semibold" style={{ color: meta.color }}>{meta.legendLabel}</span>
                           </span>
                           <span className="text-sm font-bold tabular-nums text-neutral-700 dark:text-neutral-200">{counts[status]}</span>
@@ -703,7 +703,7 @@ function DashboardOverlay({
                         alt={meta.legendLabel}
                         width={20}
                         height={26}
-                        style={{ filter: HYDRANT_PIN_FILTER, objectFit: 'contain' }}
+                        style={{ filter: `${HYDRANT_PIN_FILTER} ${meta.iconFilter ?? ''}`, objectFit: 'contain' }}
                       />
                       <span className="text-sm font-semibold" style={{ color: meta.color }}>
                         {meta.legendLabel}
