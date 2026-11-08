@@ -240,14 +240,17 @@ function mountHook(enabled = true) {
   };
 }
 
+
 function setEligibleUser() {
   harness.auth = {
     user: { uid: 'test-sub-admin' },
-    role: 'sub_admin',
-    trustedStationId: 'station-001',
+    accountType: 'station',
+    stationId: 'station-001',
   };
+
   auth.currentUser = { uid: 'test-sub-admin' };
 }
+
 
 function verifyIncident() {
   harness.feed = {
@@ -367,8 +370,8 @@ test('account switch waits for previous account deletion', async () => {
 
   harness.auth = {
     user: { uid: 'different-sub-admin' },
-    role: 'sub_admin',
-    trustedStationId: 'station-002',
+    accountType: 'station',
+    stationId: 'station-002',
   };
 
   try {
