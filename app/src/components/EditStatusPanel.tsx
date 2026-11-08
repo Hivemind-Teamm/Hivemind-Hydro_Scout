@@ -24,7 +24,7 @@ const STATUS_OPTIONS: { value: HydrantStatus; label: string; color: string; bg: 
   { value: 'operational', label: 'Operational',      color: '#ffffff', bg: '#2fbf4f' },
   { value: 'reduced',     label: 'Reduced Pressure', color: '#ffffff', bg: '#f5a623' },
   { value: 'out',         label: 'Out of Service',   color: '#ffffff', bg: '#9aa0a6' },
-  { value: 'reference',   label: 'Temporarily Unavailable (BFP reference)', color: '#ffffff', bg: '#64748b' },
+  { value: 'reference',   label: 'Temporarily Unavailable (BFP reference)', color: '#ffffff', bg: '#4c7a9e' },
 ];
 
 export default function EditStatusPanel({ hydrant, onClose, onOpenAccount }: EditStatusPanelProps) {

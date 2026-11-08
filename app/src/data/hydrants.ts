@@ -278,16 +278,16 @@ export const STATUS_META:
 
     reference: {
 
-      color: '#64748b',
+      color: '#4c7a9e',
 
       // The BFP inventory is visible for reference, but has not yet been
-      // verified for operational use. Use a muted pin that cannot be confused
-      // with the purple member-role treatment or active hydrant statuses.
+      // verified for operational use. Use a muted blue pin so it remains
+      // distinct from gray Out of Service hydrants and purple role styling.
       iconUrl:
 
-        '/Hydrant%20Pin%20Gray.png',
+        '/Hydrant%20Pin%20Gren.png',
 
-      iconFilter: 'opacity(0.72) saturate(0.55)',
+      iconFilter: 'hue-rotate(100deg) saturate(0.45) brightness(0.82) opacity(0.78)',
 
       legendLabel:
 
