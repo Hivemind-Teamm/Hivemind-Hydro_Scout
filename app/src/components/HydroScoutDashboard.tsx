@@ -1062,10 +1062,16 @@ export default function HydroScoutDashboard() {
     setNearestPanelOpen(false);
     setNearestHydrant(null);
     const pin = sharedFires.pins.find(item => item.lat === lat && item.lng === lng);
-    setSelectedFireId(pin?.id ?? null);
+    const nextFireId = pin?.id ?? null;
+
+    if (nextFireId !== selectedFireId) {
+      setFireSupplyChoice(null);
+    }
+
+    setSelectedFireId(nextFireId);
     if (pin) setFirePanelMinimized(false);
     controllerRef.current?.flyTo(lat, lng, 17);
-  }, [sharedFires.pins]);
+  }, [sharedFires.pins, selectedFireId]);
   const handleToggleReports = useCallback(() => setShowReports((v) => !v), []);
   const handleOpenDashboard = useCallback(() => setShowOpsDashboard(true), []);
   const handleOpenAdmin     = useCallback(() => setShowAdminDashboard(true), []);
