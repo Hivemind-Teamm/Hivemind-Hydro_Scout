@@ -317,6 +317,10 @@ export const STATUS_ORDER:
 
   ];
 
+/** Map filter on load: everything except the unverified BFP reference pins. */
+export const DEFAULT_VISIBLE_STATUSES: readonly HydrantStatus[] =
+  STATUS_ORDER.filter((status) => status !== 'reference');
+
 
 
 export function countByStatus(

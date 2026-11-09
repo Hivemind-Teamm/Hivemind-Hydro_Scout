@@ -30,6 +30,7 @@ const AdminDashboard      = dynamic(() => import('./AdminDashboard'),      { ssr
 const PinHydrantModal     = dynamic(() => import('./PinHydrantModal'),     { ssr: false });
 import {
   countByStatus,
+  DEFAULT_VISIBLE_STATUSES,
   STATUS_META,
   type Hydrant,
   type HydrantStatus,
@@ -95,7 +96,7 @@ export default function HydroScoutDashboard() {
   const [mapViewport, setMapViewport] = useState<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const [is3D, setIs3D] = useState(false);
   const [responseActionContainer, setResponseActionContainer] = useState<HTMLDivElement | null>(null);
-  const [activeStatus, setActiveStatus] = useState<HydrantStatus | null>(null);
+  const [activeStatuses, setActiveStatuses] = useState<ReadonlySet<HydrantStatus>>(() => new Set(DEFAULT_VISIBLE_STATUSES));
   const [selectedHydrant, setSelectedHydrant] = useState<Hydrant | null>(null);
   const [showFullDetails, setShowFullDetails] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -497,14 +498,15 @@ export default function HydroScoutDashboard() {
 
   const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
   const visibleHydrants = useMemo(() => {
-    let result = activeStatus ? hydrants.filter((h) => h.status === activeStatus) : hydrants;
+    // The OTW destination stays on the map even when its status is filtered out.
+    let result = hydrants.filter((h) => activeStatuses.has(h.status) || (otwHydrant && h.id === otwHydrant.id));
     if (otwRoute && otwRoute.length >= 2) {
       result = result.filter(
         (h) => (otwHydrant && h.id === otwHydrant.id) || distToRouteM(h.lat, h.lng, otwRoute) <= ROUTE_BUFFER_M,
       );
     }
     return result;
-  }, [activeStatus, hydrants, otwRoute, otwHydrant]);
+  }, [activeStatuses, hydrants, otwRoute, otwHydrant]);
 
   // Compute which hydrant IDs are within the route corridor — used by DilimanMap
   // to visually distinguish route hydrants from off-route ones.
@@ -614,7 +616,11 @@ export default function HydroScoutDashboard() {
   }, [hydrants, selectedHydrant, loading]);
 
   const handleSelectStatus = useCallback((status: HydrantStatus) => {
-    setActiveStatus((prev) => (prev === status ? null : status));
+    setActiveStatuses((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(status)) next.add(status);
+      return next;
+    });
   }, []);
 
   const handleSelectHydrant = useCallback((hydrant: Hydrant) => {
@@ -1238,7 +1244,7 @@ export default function HydroScoutDashboard() {
       )}
 
       <DashboardOverlay
-        activeStatus={activeStatus}
+        activeStatuses={activeStatuses}
         onSelectStatus={handleSelectStatus}
         counts={counts}
         provider={provider}

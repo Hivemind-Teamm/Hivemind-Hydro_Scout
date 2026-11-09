@@ -58,7 +58,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   reviewRequest: (request: JoinRequest, approved: boolean) => Promise<void>;
   onViewFireLocation: (lat: number, lng: number) => void;
 }) {
-  const { notifications, requests, error: notificationError, activityUnreadCount, isMemberUnread, readActivity, readMember, fullDetails } = useStationNotifications();
+  const { notifications, requests, error: notificationError, activityUnreadCount, isMemberUnread, readActivity, readMember, fullDetails, clearNotifications, notificationsCleared } = useStationNotifications();
   const { role, stationId } = useAuth();
   const isGlobalAdmin = role === 'admin';
   const [profile, setProfile] = useState<ViewingUser | null>(null);
@@ -67,6 +67,9 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [stationSearch, setStationSearch] = useState('');
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  // A pending confirmation never survives closing the panel.
+  if (confirmingClear && !activityOpen) setConfirmingClear(false);
   const selected = notifications.find(item => stationNotificationCardKey(item) === selectedKey);
   const visibleNotifications = useMemo(() => {
     const term = stationSearch.trim().toLowerCase();
@@ -134,6 +137,13 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     {(activityOpen || membersOpen) && <section aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}>
       {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates', closeActivity) : header('Member approvals', 'Pending membership requests', closeMembers)}
       <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification to read it. In daily response groups, expand each entry to mark it read. Times are shown in PHT.</p>
+      {activityOpen && notifications.length > 0 && <div className="flex min-h-10 items-center justify-end gap-2 border-b border-neutral-100 px-4 py-1.5 text-[11px] dark:border-neutral-800">
+        {confirmingClear ? <>
+          <p role="alert" className="mr-auto text-neutral-600 dark:text-neutral-300">Clear all {notifications.length} from this device only?</p>
+          <button type="button" autoFocus onClick={() => setConfirmingClear(false)} className="rounded-md px-2.5 py-1 font-semibold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800">Cancel</button>
+          <button type="button" onClick={() => { clearNotifications(); setConfirmingClear(false); setSelectedKey(null); }} className="rounded-md bg-[#e0353b] px-2.5 py-1 font-semibold text-white hover:bg-[#c42d33]">Clear</button>
+        </> : <button type="button" onClick={() => setConfirmingClear(true)} title="Hide these notifications on this device. Nothing is deleted." className="rounded-md px-2.5 py-1 font-semibold text-[#e0353b] hover:bg-red-50 dark:hover:bg-red-950/40">Clear all</button>}
+      </div>}
       {activityOpen && isGlobalAdmin && <div className="border-b border-neutral-100 px-4 py-2.5 dark:border-neutral-800"><input type="search" value={stationSearch} onChange={event => setStationSearch(event.target.value)} aria-label="Filter station activity by station" placeholder="Search station ID or name" className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-xs text-neutral-800 outline-none focus:border-[#e0353b] dark:border-neutral-700 dark:text-neutral-100" /></div>}
       {(error || notificationError) && <p role="alert" className="px-4 py-2 text-xs text-red-600">{error || notificationError}</p>}
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}
@@ -211,7 +221,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           </div>
           </div>
         </article>)}
-        {(activityOpen ? !visibleNotifications.length : !requests.length) && <p className="px-4 py-8 text-center text-xs text-neutral-400">{activityOpen ? (isGlobalAdmin && stationSearch ? 'No activity matches that station.' : 'No station activity yet.') : 'No pending member requests.'}</p>}
+        {(activityOpen ? !visibleNotifications.length : !requests.length) && <p className="px-4 py-8 text-center text-xs text-neutral-400">{activityOpen ? (isGlobalAdmin && stationSearch ? 'No activity matches that station.' : notificationsCleared ? 'All caught up. New activity will appear here.' : 'No station activity yet.') : 'No pending member requests.'}</p>}
       </div>
     </section>}
     {selected && <NotificationDialog title={selected.type === 'personal-station-assigned' && selected.uid && selected.targetUid

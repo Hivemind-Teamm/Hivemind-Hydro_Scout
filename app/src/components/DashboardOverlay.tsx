@@ -19,7 +19,8 @@ import { FiAlertTriangle, FiBell, FiUsers, FiUserCheck } from 'react-icons/fi';
 import { MdLocalFireDepartment } from 'react-icons/md';
 
 interface DashboardOverlayProps {
-  activeStatus: HydrantStatus | null;
+  /** Statuses shown on the map; each pill toggles its own status. */
+  activeStatuses: ReadonlySet<HydrantStatus>;
   onSelectStatus: (status: HydrantStatus) => void;
   counts: Record<HydrantStatus, number>;
   provider: 'mapbox' | 'maplibre';
@@ -57,7 +58,7 @@ interface DashboardOverlayProps {
 }
 
 function DashboardOverlay({
-  activeStatus,
+  activeStatuses,
   onSelectStatus,
   counts,
   provider,
@@ -179,11 +180,12 @@ function DashboardOverlay({
             <div className="flex w-max overflow-hidden rounded-lg">
               {STATUS_ORDER.map((status) => {
                 const meta = STATUS_META[status];
-                const active = activeStatus === status;
+                const active = activeStatuses.has(status);
                 return (
                   <button
                     key={status}
                     onClick={() => onSelectStatus(status)}
+                    aria-pressed={active}
                     className={`shrink-0 px-2 py-1 text-[10px] font-bold transition-all duration-150 ease-out active:scale-95 ${!active ? 'bg-white text-neutral-600 dark:bg-neutral-700 dark:text-neutral-100' : ''}`}
                     style={{
                       background: active ? meta.color : (!isDark ? '#ffffff' : undefined),
@@ -564,11 +566,12 @@ function DashboardOverlay({
         <div className="flex overflow-hidden rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
           {STATUS_ORDER.map((status) => {
             const meta = STATUS_META[status];
-            const active = activeStatus === status;
+            const active = activeStatuses.has(status);
             return (
               <button
                 key={status}
                 onClick={() => onSelectStatus(status)}
+                aria-pressed={active}
                 className={`px-4 py-2 text-xs font-bold transition-all duration-150 ease-out hover:brightness-95 hover:scale-[1.04] active:scale-[0.96] active:duration-75 ${
                   !active ? 'dark:bg-neutral-700 dark:text-neutral-100' : ''
                 }`}

@@ -5,6 +5,7 @@ import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, se
 import { db } from './firebase';
 import { useAuth } from './auth-context';
 import { notificationReadKey, parseReadNotifications } from './notification-read-state';
+import { hideClearedNotifications, nextClearedBefore, notificationClearKey, parseClearedBefore } from './notification-clear-state';
 import { dailyResponseNotifications, unreadActivityCount, stationNotificationFeed, type StationResponseSummary, type StationNotification } from './station-notification-feed';
 import { useLimitedNotifications } from './use-limited-notifications';
 export type { StationNotification } from './station-notification-feed';
@@ -31,6 +32,11 @@ const sessionReads = new Map<string, string>();
 function readStorage(key: string) {
   try { return sessionReads.get(key) ?? localStorage.getItem(key) ?? '[]'; }
   catch { return sessionReads.get(key) ?? '[]'; }
+}
+function writeStorage(key: string, value: string) {
+  try { localStorage.setItem(key, value); sessionReads.delete(key); }
+  catch { sessionReads.set(key, value); }
+  window.dispatchEvent(new Event(changeEvent));
 }
 
 function useManagementNotifications() {
@@ -124,10 +130,7 @@ function useManagementNotifications() {
   const memberKey = (item: JoinRequest) => notificationReadKey('member', item.id, item.createdAt);
   const markRead = (key: string) => {
     if (!scope) return;
-    const next = JSON.stringify([...new Set([...parseReadNotifications(readStorage(storageKey)), key])]);
-    try { localStorage.setItem(storageKey, next); sessionReads.delete(storageKey); }
-    catch { sessionReads.set(storageKey, next); }
-    window.dispatchEvent(new Event(changeEvent));
+    writeStorage(storageKey, JSON.stringify([...new Set([...parseReadNotifications(readStorage(storageKey)), key])]));
   };
   return {
     notifications, requests, error: state.scope === scope ? state.error : null,
@@ -147,7 +150,13 @@ export function useStationNotifications() {
   const management = useManagementNotifications();
   const limited = useLimitedNotifications(user && (role === 'admin' || !fullDetails) ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
   const feed = role === 'head' ? management : limited;
-  const notifications = useMemo(() => dailyResponseNotifications(feed.notifications, stationId), [feed.notifications, stationId]);
+  // Cleared before grouping so cleared events also drop out of unread counts.
+  const clearKey = user ? notificationClearKey(`${user.uid}:${stationId ?? 'all'}`) : null;
+  const clearedBefore = parseClearedBefore(useSyncExternalStore(subscribe, () => clearKey ? readStorage(clearKey) : '', () => ''));
+  const notifications = useMemo(
+    () => dailyResponseNotifications(hideClearedNotifications(feed.notifications, clearedBefore), stationId),
+    [feed.notifications, clearedBefore, stationId],
+  );
   const activityUnreadCount = (item: StationNotification) => unreadActivityCount(item, feed.isActivityUnread);
   const unreadActivities = notifications.reduce((sum, item) => sum + activityUnreadCount(item), 0);
   const unreadMembers = management.requests.filter(item => management.isMemberUnread(item)).length;
@@ -157,6 +166,9 @@ export function useStationNotifications() {
     hasUnreadActivity: unreadActivities > 0,
     isActivityUnread: (item: StationNotification) => activityUnreadCount(item) > 0,
     readActivity: (item: StationNotification) => { if (!item.responseGroup) feed.readActivity(item); },
+    notificationsCleared: clearedBefore > 0,
+    /** Hides every listed notification on this device only; nothing is deleted. */
+    clearNotifications: () => { if (clearKey) writeStorage(clearKey, String(nextClearedBefore(feed.notifications, clearedBefore))); },
     canViewActivity: !!user && role !== 'general',
     canApproveMembers,
   };
