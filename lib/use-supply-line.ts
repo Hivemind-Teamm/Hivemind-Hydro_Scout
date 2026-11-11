@@ -16,6 +16,11 @@ export interface SupplyLine {
    */
   path: [number, number][] | null;
   /**
+   * The part of `path` the supply trucks stand on: from the hydrant to where
+   * the engine parks on the street nearest the fire. `null` with `path`.
+   */
+  supplyPath: [number, number][] | null;
+  /**
    * `loading` while the route is looked up, `failed` when no routing service
    * answered. Either way the estimate is the straight-line fallback.
    */
@@ -78,10 +83,11 @@ export function useSupplyLine(
 
   return useMemo(() => (straightLineM === undefined ? null : {
     estimate: estimateSupplyLine(
-      { straightLineM, route: route && { meters: route.meters, source: route.source } },
+      { straightLineM, route: route && { meters: route.meters, source: route.source, attackLineM: route.attackLineM } },
       FIRE_RESPONSE_CONFIG,
     ),
     path: route?.path ?? null,
+    supplyPath: route?.supplyPath ?? null,
     routing,
   }), [straightLineM, route, routing]);
 }

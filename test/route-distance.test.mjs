@@ -29,14 +29,19 @@ function setup({ streets, mapbox }, overrides = {}) {
   return { dependencies, calls };
 }
 
-test('uses the street network and adds the gap at each end', async () => {
+test('uses the street network: supply hose to the street, attack line from there to the fire', async () => {
   const { dependencies, calls } = setup({ streets: { distanceM: 300, coordinates: snapped }, mapbox: json(ok(600)) });
   const route = await fetchHoseRoute(hydrant, fire, dependencies);
-  const gaps = haversineM(14.65, 121.06, 14.6501, 121.0601) + haversineM(14.6519, 121.0619, 14.652, 121.062);
-  assert.ok(gaps > 20 && gaps < 40);
+  const hydrantGap = haversineM(14.65, 121.06, 14.6501, 121.0601);
+  const fireGap = haversineM(14.6519, 121.0619, 14.652, 121.062);
+  assert.ok(hydrantGap > 10 && hydrantGap < 20 && fireGap > 10 && fireGap < 20);
   assert.equal(route.source, 'streets');
-  assert.equal(route.meters, 300 + gaps);
+  // The engine parks where the route meets the street nearest the fire; the
+  // stretch to a fire set back from the street is not part of the supply line.
+  assert.equal(route.meters, 300 + hydrantGap);
+  assert.equal(route.attackLineM, fireGap);
   assert.deepEqual(route.path, [[121.06, 14.65], ...snapped, [121.062, 14.652]]);
+  assert.deepEqual(route.supplyPath, [[121.06, 14.65], ...snapped]);
   assert.equal(calls[0], 'streets 121.06,14.65 121.062,14.652');
 });
 

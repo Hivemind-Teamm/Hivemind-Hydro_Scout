@@ -1,7 +1,7 @@
 # F3 fire-response formula spec
 
-**Version:** 1.1 · **Status:** Draft, frozen once Mark signs off ·
-**Drafted:** October 12, 2026 · **Revised:** October 22, 2026 ·
+**Version:** 1.2 · **Status:** Draft, frozen once Mark signs off ·
+**Drafted:** October 12, 2026 · **Revised:** November 11, 2026 ·
 **Owner:** Mark Luis Barican
 
 This document defines how Hydro-Scout turns a pinned fire into a hose length
@@ -47,8 +47,8 @@ pumper serves the first stage; each additional stage adds one relay engine.
 
 ### Step 1: hose length `L`
 
-`L` is the distance the hose must cover from the hydrant to the fire, in whole
-metres. The app tries three sources in order and records which one it used.
+`L` is the distance the supply hose must cover from the hydrant to where the
+engine at the fire parks, in whole metres. The app tries three sources in order and records which one it used.
 
 1. **Street network** (`streets`). The shortest path along the mapped
    streets and paths, found by the app itself from OpenStreetMap data (the
@@ -71,10 +71,15 @@ October 22, 2026 (HYD-017 to 14.64539, 121.05491: 461 m around the block
 against 338 m down the street). That is why source 1 exists.
 
 For sources 1 and 2, the route starts and ends on the nearest mapped path.
-The straight-line gap from the hydrant to the start of the route, and from
-the end of the route to the fire, is added to the route distance.
+The straight-line gap from the hydrant to the start of the route is added to
+the route distance. The engine at the fire parks at the end of the route, the
+street point nearest the fire. The straight-line gap from there to the fire
+(a fire inside a building or a lot) is the **attack line** `A`: the engine
+covers it with its own hose, so it is not part of `L` and no relay engine is
+placed on it.
 
 `L` = the resulting distance, rounded to the nearest metre.
+`A` = the attack-line gap, rounded to the nearest metre; 0 for source 3.
 
 ### Step 2: stage length `S`
 
@@ -139,6 +144,7 @@ type SupplyLineEstimate =
   | {
       status: 'ready';
       hoseLengthM: number;
+      attackLineM: number;
       hoseSections: number;
       fireTrucks: number;
       trucks: {
@@ -163,6 +169,7 @@ type SupplyLineEstimate =
 | --- | --- |
 | `status` | `ready` when the numbers are valid. `pending` when a required config value is missing; `missing` names the keys |
 | `hoseLengthM` | `L` from step 1, whole metres |
+| `attackLineM` | `A` from step 1, whole metres: from where the engine parks to the fire |
 | `hoseSections` | Total sections from step 4 |
 | `fireTrucks` | Total trucks from step 3 |
 | `trucks` | The three counts that add up to `fireTrucks` |
@@ -230,6 +237,13 @@ These can change without a new spec version:
   and OSRM is removed because its public server only routes by car and obeys
   one-way streets. `distance.source` becomes
   `'streets' | 'mapbox' | 'straight-line'`. Needs Mark's sign-off.
+
+- **1.2, November 11, 2026.** Step 1: the gap from the end of the route to
+  the fire is no longer part of `L`. The engine at the fire parks on the
+  street nearest the fire and covers that gap with its own attack lines, so
+  no relay engines are placed off the street (a fire inside a building used
+  to put trucks inside it). New output field `attackLineM`. Requested by the
+  team on November 11, 2026; needs Mark's sign-off.
 
 ## Automated checks
 

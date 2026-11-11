@@ -62,6 +62,19 @@ test('reports where the hose length came from', () => {
   }
 });
 
+test('trucks cover only the supply line; the off-street stretch to the fire is an attack line', () => {
+  // 300 m to the street nearest the fire, then 60 m into the building.
+  const result = estimate({ straightLineM: 280, route: { meters: 300, source: 'streets', attackLineM: 60.4 } });
+  assert.equal(result.hoseLengthM, 300);
+  assert.equal(result.attackLineM, 60);
+  assert.equal(result.fireTrucks, estimate(routed(300)).fireTrucks);
+  assert.equal(estimate(routed(300)).attackLineM, 0);
+  assert.equal(estimate({ straightLineM: 250, route: null }).attackLineM, 0);
+  for (const attackLineM of [NaN, -5, Infinity, undefined]) {
+    assert.equal(estimate({ straightLineM: 250, route: { meters: 300, source: 'mapbox', attackLineM } }).attackLineM, 0);
+  }
+});
+
 test('a pressure limit can shorten the 150-ft stage but cannot extend it', () => {
   const limited = estimate(routed(100), { maxPumpDistanceM: 30 });
   assert.equal(limited.stageLengthM, 30);

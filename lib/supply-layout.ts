@@ -19,8 +19,9 @@ export interface SupplyTruck {
 }
 
 /**
- * A relay engine this close to the fire (along the hose) would hide under the
- * fire pin, so it is counted on the engine's badge instead.
+ * A relay engine this close to the engine at the fire (along the hose) would
+ * hide under the engine or the fire pin, so it is counted on the engine's
+ * badge instead.
  */
 export const MERGE_NEAR_FIRE_M = 10;
 
@@ -69,17 +70,19 @@ export function pointAlongPath(path: [number, number][], fraction: number): [num
 }
 
 /**
- * Lays the trucks of `estimate` out along `path` (hydrant first, fire last):
- * the pumper at the hydrant, a relay engine where each full stage ends, and
- * the engine at the fire. Stage ends are placed by their share of the hose
- * length, so they also land in proportion on a straight stand-in line.
+ * Lays the trucks of `estimate` out along `path` (hydrant first, then up to
+ * where the engine at the fire parks — the street point nearest the fire, not
+ * the fire itself when it is off the street): the pumper at the hydrant, a
+ * relay engine where each full stage ends, and the engine at the end. Stage
+ * ends are placed by their share of the hose length, so they also land in
+ * proportion on a straight stand-in line.
  */
 export function layoutSupplyLine(path: [number, number][], estimate: ReadyEstimate | null): SupplyLineLayout {
   const hydrant = path[0];
-  const fire = path[path.length - 1];
+  const engine = path[path.length - 1];
   if (!estimate || estimate.hoseLengthM <= 0) {
     const trucks: SupplyTruck[] = estimate
-      ? [{ role: 'pumper', at: hydrant, count: 1 }, { role: 'engine', at: fire, count: 1 }]
+      ? [{ role: 'pumper', at: hydrant, count: 1 }, { role: 'engine', at: engine, count: 1 }]
       : [];
     return { trucks, labelAt: pointAlongPath(path, 0.5) };
   }
@@ -97,7 +100,7 @@ export function layoutSupplyLine(path: [number, number][], estimate: ReadyEstima
     trucks: [
       { role: 'pumper', at: hydrant, count: 1 },
       ...relays,
-      { role: 'engine', at: fire, count: nearFire ? 2 : 1 },
+      { role: 'engine', at: engine, count: nearFire ? 2 : 1 },
     ],
     labelAt: pointAlongPath(path, share(stages[0] / 2)),
   };

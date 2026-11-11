@@ -6,6 +6,11 @@
  * The street network (hose-network.ts) is tried first, with Mapbox walking
  * directions asked at the same time in case it fails. When neither answers,
  * `null` is returned and the formula falls back to its straight-line estimate.
+ *
+ * The supply line ends where the route reaches the street nearest the fire:
+ * that is where the engine at the fire parks. A fire set back from the street
+ * (inside a building or a lot) is reached from there by the engine's own
+ * attack lines, so no relay engine is ever placed off the street.
  */
 
 export interface RoutePoint {
@@ -16,11 +21,24 @@ export interface RoutePoint {
 export type HoseRouteSource = 'streets' | 'mapbox';
 
 export interface HoseRoute {
-  /** Hose distance in metres: the route plus the gap at each end. */
+  /**
+   * Supply hose distance in metres: the gap from the hydrant to the route,
+   * plus the route up to the street point nearest the fire.
+   */
   meters: number;
+  /**
+   * Straight-line gap from the street point nearest the fire to the fire, in
+   * metres: covered by the engine's attack lines, not the supply line.
+   */
+  attackLineM: number;
   source: HoseRouteSource;
   /** `[lng, lat]` points from the hydrant to the fire, for drawing the line. */
   path: [number, number][];
+  /**
+   * `[lng, lat]` points from the hydrant to the street point nearest the fire,
+   * where the engine parks: the part of `path` the supply trucks stand on.
+   */
+  supplyPath: [number, number][];
 }
 
 /** A route between the points nearest the hydrant and the fire on a network. */
@@ -121,16 +139,18 @@ export async function fetchHoseRoute(
       const route = await pending;
       if (deps.signal?.aborted) return null;
       if (!route) continue;
-      // Routes start and end on the nearest mapped path; the hose still has
-      // to cover the gap from each pin to that path.
+      // Routes start and end on the nearest mapped path. The supply hose
+      // still covers the gap from the hydrant to that path; the gap from
+      // the path to the fire is the engine's attack line.
       const [startLng, startLat] = route.coordinates[0];
       const [endLng, endLat] = route.coordinates[route.coordinates.length - 1];
-      const gapsM = deps.distanceM(hydrant.lat, hydrant.lng, startLat, startLng)
-        + deps.distanceM(endLat, endLng, fire.lat, fire.lng);
+      const supplyPath: [number, number][] = [[hydrant.lng, hydrant.lat], ...route.coordinates];
       return {
-        meters: route.distanceM + gapsM,
+        meters: route.distanceM + deps.distanceM(hydrant.lat, hydrant.lng, startLat, startLng),
+        attackLineM: deps.distanceM(endLat, endLng, fire.lat, fire.lng),
         source,
-        path: [[hydrant.lng, hydrant.lat], ...route.coordinates, [fire.lng, fire.lat]],
+        path: [...supplyPath, [fire.lng, fire.lat]],
+        supplyPath,
       };
     }
     return null;

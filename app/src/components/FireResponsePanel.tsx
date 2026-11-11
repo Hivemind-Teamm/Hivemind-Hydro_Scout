@@ -12,6 +12,9 @@ import type { SupplyLine } from '@/lib/use-supply-line';
 
 type ReadyEstimate = Extract<SupplyLineEstimate, { status: 'ready' }>;
 
+/** A fire at least this far from the street gets a note on its attack line; closer is on the street. */
+const OFF_STREET_NOTE_M = 10;
+
 interface FireResponsePanelProps {
   lat: number;
   lng: number;
@@ -234,6 +237,12 @@ function SupplyEstimate({ supply, estimate, routing, onViewHydrant }: {
           {routing === 'failed'
             ? 'No route found. Counts are estimated from the straight-line distance.'
             : 'Finding the hose route. Counts may change.'}
+        </Note>
+      )}
+      {ready && ready.attackLineM >= OFF_STREET_NOTE_M && (
+        <Note tone="muted">
+          The fire is {formatDistance(ready.attackLineM)} from the nearest street. The engine parks there and
+          reaches the fire with its own attack lines; no trucks are placed off the street.
         </Note>
       )}
       {!ready && <Note tone="muted">Truck and hose counts will appear once the calculation data is configured.</Note>}

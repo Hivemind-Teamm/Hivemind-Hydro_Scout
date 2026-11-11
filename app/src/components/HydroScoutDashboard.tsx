@@ -561,9 +561,11 @@ export default function HydroScoutDashboard() {
     if (fireSupply) {
       const ready = supplyLine?.estimate.status === 'ready' ? supplyLine.estimate : null;
       const path = supplyLine?.path ?? null;
-      // Trucks and label sit on the routed line, or on the straight stand-in.
+      // Trucks and label sit on the routed line up to where the engine parks
+      // on the street (never on the off-street stretch to a fire inside a
+      // building), or on the straight stand-in.
       const { labelAt, trucks } = layoutSupplyLine(
-        path ?? [[fireSupply.hydrant.lng, fireSupply.hydrant.lat], [fireLng, fireLat]],
+        supplyLine?.supplyPath ?? [[fireSupply.hydrant.lng, fireSupply.hydrant.lat], [fireLng, fireLat]],
         ready,
       );
       supply = {

@@ -20,15 +20,29 @@ export interface SupplyLineInput {
    * fetched or when no routing service answered; the straight-line fallback
    * is used then.
    */
-  route: { meters: number; source: Exclude<RouteSource, 'straight-line'> } | null;
+  route: {
+    meters: number;
+    source: Exclude<RouteSource, 'straight-line'>;
+    /** Gap from the street point nearest the fire to the fire, in metres. */
+    attackLineM?: number;
+  } | null;
 }
 
 export type SupplyLineEstimate =
   | { status: 'pending'; missing: string[] }
   | {
       status: 'ready';
-      /** Distance the hose must cover, in whole metres. */
+      /**
+       * Distance the supply hose must cover, from the hydrant to where the
+       * engine at the fire parks on the street, in whole metres.
+       */
       hoseLengthM: number;
+      /**
+       * Distance from where the engine parks to the fire, in whole metres:
+       * covered by the engine's own attack lines, with no trucks on it. 0 for
+       * a fire on the street and for the straight-line fallback.
+       */
+      attackLineM: number;
       /** Total hose sections used. */
       hoseSections: number;
       /** Total fire trucks: the three counts in `trucks` added up. */
@@ -80,6 +94,7 @@ export function estimateSupplyLine(
   if (maxPumpDistanceM !== null && !isPositive(maxPumpDistanceM)) missing.push('maxPumpDistanceM');
   if (!lay) missing.push('layoutFactor');
   if (missing.length || !lay) return { status: 'pending', missing };
+  const attackLineM = routed && isPositive(routed.attackLineM) ? Math.round(routed.attackLineM) : 0;
 
   // Whole centimetres from here on: 50 ft is exactly 1524 cm, so section and
   // stage boundaries never drift with floating-point error.
@@ -119,6 +134,7 @@ export function estimateSupplyLine(
   return {
     status: 'ready',
     hoseLengthM,
+    attackLineM,
     hoseSections: used.reduce((sum, size) => sum + size.count, 0),
     fireTrucks: 1 + supplyPumpers,
     trucks: { engineAtFire: 1, pumperAtHydrant: 1, relayPumpers: supplyPumpers - 1 },
