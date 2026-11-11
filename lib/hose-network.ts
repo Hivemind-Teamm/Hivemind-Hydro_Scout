@@ -8,6 +8,11 @@
  * avoid even on foot. So the street network is read straight from
  * OpenStreetMap vector tiles and the shortest path is found here, with every
  * mapped way open in both directions.
+ *
+ * Trucks only stand on roads. The supply line runs on roads from the hydrant
+ * to where the engine at the fire parks; from there the engine's attack line
+ * may follow footpaths, steps and walkways into a building. So a fire pinned
+ * inside a building never puts a truck inside it.
  */
 
 import Pbf from 'pbf';
@@ -17,10 +22,19 @@ import { VectorTile } from '@mapbox/vector-tile';
 export type LngLat = [number, number];
 
 export interface StreetPath {
-  /** Along the streets, from the first point of `coordinates` to the last, in metres. */
+  /** Along the roads, from the first point of `coordinates` to the last, in metres. */
   distanceM: number;
-  /** From the point on the network nearest the hydrant to the one nearest the fire. */
+  /**
+   * The supply line: from the road point nearest the hydrant to where the
+   * engine at the fire parks, on roads only.
+   */
   coordinates: LngLat[];
+  /**
+   * The attack line: from where the engine parks (the last point of
+   * `coordinates`) to the point on the network nearest the fire, along any
+   * mapped way. Absent when the fire is on a road.
+   */
+  attack?: { distanceM: number; coordinates: LngLat[] };
 }
 
 // ─── Street graph ─────────────────────────────────────────────────────────────
@@ -29,14 +43,18 @@ export interface StreetLine {
   points: LngLat[];
   /** 1 on a bridge, -1 in a tunnel, 0 on the ground. */
   grade: number;
+  /** `false` for a way a fire truck cannot drive (footpath, steps, track). Default `true`. */
+  road?: boolean;
 }
 
 export interface StreetGraph {
   coords: LngLat[];
-  /** Per vertex: `[neighbour, metres]` pairs. Every way runs both ways. */
-  adjacency: [number, number][][];
+  /** Per vertex: `[neighbour, metres, road]` triples. Every way runs both ways. */
+  adjacency: [number, number, boolean][][];
   /** Every street segment, as a pair of vertex indices. */
   segments: [number, number][];
+  /** Per segment: whether a fire truck can drive it. */
+  road: boolean[];
 }
 
 /**
@@ -75,19 +93,24 @@ export function buildStreetGraph(lines: StreetLine[]): StreetGraph {
 
   // Segments, once each: tiles overlap at their edges, so the same one can
   // arrive twice.
-  const raw: { a: number; b: number; grade: number }[] = [];
-  const seen = new Set<string>();
-  for (const { points, grade } of lines) {
+  const raw: { a: number; b: number; grade: number; road: boolean }[] = [];
+  const seen = new Map<string, number>();
+  for (const { points, grade, road = true } of lines) {
     for (let k = 1; k < points.length; k++) {
       const a = vertex(points[k - 1]);
       const b = vertex(points[k]);
       const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-      if (a === b || seen.has(key)) continue;
-      seen.add(key);
-      raw.push({ a, b, grade });
+      if (a === b) continue;
+      const known = seen.get(key);
+      // A road and a footpath mapped on the same segment: trucks can use it.
+      if (known !== undefined) {
+        raw[known].road ||= road;
+        continue;
+      }
+      seen.set(key, raw.push({ a, b, grade, road }) - 1);
     }
   }
-  if (!coords.length) return { coords, adjacency: [], segments: [] };
+  if (!coords.length) return { coords, adjacency: [], segments: [], road: [] };
 
   // Local metres for geometry; plenty accurate a few kilometres across.
   const kx = 111320 * Math.cos((coords[0][1] * Math.PI) / 180);
@@ -181,9 +204,9 @@ export function buildStreetGraph(lines: StreetLine[]): StreetGraph {
   });
 
   // Each segment becomes a chain through its extra vertices.
-  const graph: StreetGraph = { coords, adjacency: coords.map(() => []), segments: [] };
+  const graph: StreetGraph = { coords, adjacency: coords.map(() => []), segments: [], road: [] };
   const linked = new Set<string>();
-  raw.forEach(({ a, b }, s) => {
+  raw.forEach(({ a, b, road }, s) => {
     const chain = [a, ...splits[s].sort((p, q) => p[0] - q[0]).map(([, v]) => v), b];
     for (let k = 1; k < chain.length; k++) {
       const [p, q] = [chain[k - 1], chain[k]];
@@ -191,9 +214,10 @@ export function buildStreetGraph(lines: StreetLine[]): StreetGraph {
       if (p === q || linked.has(key)) continue;
       linked.add(key);
       const length = metres(coords[p], coords[q]);
-      graph.adjacency[p].push([q, length]);
-      graph.adjacency[q].push([p, length]);
+      graph.adjacency[p].push([q, length, road]);
+      graph.adjacency[q].push([p, length, road]);
       graph.segments.push([p, q]);
+      graph.road.push(road);
     }
   });
   return graph;
@@ -204,14 +228,15 @@ interface Snap {
   point: LngLat;
 }
 
-/** The point on the network nearest `point`. */
-function snap(graph: StreetGraph, point: LngLat): Snap | null {
+/** The point on the network (only its roads, with `roadsOnly`) nearest `point`. */
+function snap(graph: StreetGraph, point: LngLat, roadsOnly = false): Snap | null {
   // Planar, with longitude scaled by latitude: plenty for picking the
   // nearest segment a few hundred metres across.
   const kx = Math.cos((point[1] * Math.PI) / 180);
   let best: Snap | null = null;
   let bestD2 = Infinity;
   graph.segments.forEach(([a, b], segment) => {
+    if (roadsOnly && !graph.road[segment]) return;
     const [ax, ay] = graph.coords[a];
     const [bx, by] = graph.coords[b];
     const dx = (bx - ax) * kx;
@@ -230,37 +255,76 @@ function snap(graph: StreetGraph, point: LngLat): Snap | null {
 }
 
 /**
- * Shortest path along the network between the points nearest `from` and `to`,
- * or `null` when they are not connected (or there is no network).
+ * How much one metre of attack line counts against one metre of supply line
+ * when choosing where the engine parks. Attack hose is carried and laid by
+ * hand, so the engine drives as close to the fire as the roads allow, unless
+ * that takes a detour more than this many times longer than the hose saved.
+ * Without it the engine would park wherever the shortest walk into a
+ * building starts, which can be right next to the hydrant.
+ */
+export const ATTACK_LINE_WEIGHT = 10;
+
+/**
+ * Longest straight attack line from a parked engine into a block with no
+ * mapped way to the fire. Farther than this, the road is not really reached
+ * and the lookup reports no connection instead.
+ */
+export const MAX_STRAIGHT_IN_M = 100;
+
+/**
+ * Shortest hose path from the road point nearest `from` (the hydrant) to the
+ * network point nearest `to` (the fire), or `null` when they are not
+ * connected (or there is no network).
+ *
+ * The path has two parts. The supply line runs on roads only, since every
+ * truck in it stands on the road; the engine at the fire parks where it ends.
+ * The attack line then runs on any mapped way. The search walks both parts
+ * at once (each vertex once on the supply side, once on the attack side,
+ * switching sides for free), with attack metres weighted by
+ * `ATTACK_LINE_WEIGHT`. The engine can also park at any road point the
+ * trucks reach within `MAX_STRAIGHT_IN_M` of the fire and run its attack line
+ * straight in from there; the cheapest finish wins.
  */
 export function shortestStreetPath(graph: StreetGraph, from: LngLat, to: LngLat): StreetPath | null {
-  const start = snap(graph, from);
+  const start = snap(graph, from, true) ?? snap(graph, from);
   const end = snap(graph, to);
+  const kerb = snap(graph, to, true);
   if (!start || !end) return null;
 
   // Two extra vertices for the snapped points, joined to the ends of their
   // segments (and to each other when they share one).
   const S = graph.coords.length;
   const T = S + 1;
-  const coords = [...graph.coords, start.point, end.point];
-  const extra = new Map<number, [number, number][]>();
-  const link = (a: number, b: number) => {
+  // The road point nearest the fire, where the engine can park and run its
+  // attack line straight in.
+  const K = S + 2;
+  const N = S + 3;
+  const coords = [...graph.coords, start.point, end.point, kerb?.point ?? end.point];
+  const extra = new Map<number, [number, number, boolean][]>();
+  const link = (a: number, b: number, road: boolean) => {
     const length = metres(coords[a], coords[b]);
     if (!extra.has(a)) extra.set(a, []);
     if (!extra.has(b)) extra.set(b, []);
-    extra.get(a)!.push([b, length]);
-    extra.get(b)!.push([a, length]);
+    extra.get(a)!.push([b, length, road]);
+    extra.get(b)!.push([a, length, road]);
   };
   for (const [v, s] of [[S, start], [T, end]] as const) {
     const [a, b] = graph.segments[s.segment];
-    link(v, a);
-    link(v, b);
+    link(v, a, graph.road[s.segment]);
+    link(v, b, graph.road[s.segment]);
   }
-  if (start.segment === end.segment) link(S, T);
+  if (start.segment === end.segment) link(S, T, graph.road[start.segment]);
+  if (kerb) {
+    const [a, b] = graph.segments[kerb.segment];
+    link(K, a, true);
+    link(K, b, true);
+    if (start.segment === kerb.segment) link(S, K, true);
+  }
 
-  // Dijkstra with a binary heap.
-  const dist = new Float64Array(coords.length).fill(Infinity);
-  const prev = new Int32Array(coords.length).fill(-1);
+  // Dijkstra with a binary heap over states: vertex `v` on the supply side
+  // is `v`, on the attack side `v + N`.
+  const dist = new Float64Array(2 * N).fill(Infinity);
+  const prev = new Int32Array(2 * N).fill(-1);
   const heap: [number, number][] = [];
   const push = (item: [number, number]) => {
     heap.push(item);
@@ -289,29 +353,59 @@ export function shortestStreetPath(graph: StreetGraph, from: LngLat, to: LngLat)
     }
     return top;
   };
+  const relax = (state: number, d: number, from: number) => {
+    if (d < dist[state]) {
+      dist[state] = d;
+      prev[state] = from;
+      push([d, state]);
+    }
+  };
 
   dist[S] = 0;
   push([0, S]);
   while (heap.length) {
-    const [d, v] = pop();
-    if (d > dist[v]) continue;
-    if (v === T) break;
-    for (const [w, length] of [...(graph.adjacency[v] ?? []), ...(extra.get(v) ?? [])]) {
-      if (d + length < dist[w]) {
-        dist[w] = d + length;
-        prev[w] = v;
-        push([dist[w], w]);
-      }
+    const [d, state] = pop();
+    if (d > dist[state]) continue;
+    const attack = state >= N;
+    const v = attack ? state - N : state;
+    // The engine can park here and the attack line start.
+    if (!attack) relax(v + N, d, state);
+    for (const [w, length, road] of [...(graph.adjacency[v] ?? []), ...(extra.get(v) ?? [])]) {
+      if (attack) relax(w + N, d + length * ATTACK_LINE_WEIGHT, state);
+      else if (road) relax(w, d + length, state);
     }
   }
-  if (dist[T] === Infinity) return null;
+  // Each way to finish, with the straight gap left to the fire weighted too:
+  // along the network to the point nearest the fire, or parked at any road
+  // point the trucks reach. Map data can leave the road by a building cut off
+  // from the other roads except by footpaths, so the nearest one is not
+  // always reachable.
+  const gap = (v: number) => metres(coords[v], to) * ATTACK_LINE_WEIGHT;
+  let goal = dist[T] <= dist[T + N] ? T : T + N;
+  let cost = dist[goal] + gap(T);
+  for (let v = 0; v < N; v++) {
+    if (dist[v] === Infinity || v === S || metres(coords[v], to) > MAX_STRAIGHT_IN_M) continue;
+    const finish = dist[v] + gap(v);
+    if (finish < cost) {
+      goal = v;
+      cost = finish;
+    }
+  }
+  if (cost === Infinity) return null;
 
-  const path: LngLat[] = [];
-  for (let v = T; v !== -1; v = prev[v]) path.push(coords[v]);
-  path.reverse();
+  const states: number[] = [];
+  for (let state = goal; state !== -1; state = prev[state]) states.push(state);
+  states.reverse();
+  const supply: LngLat[] = [];
+  const attackLine: LngLat[] = [];
+  for (const state of states) (state >= N ? attackLine : supply).push(coords[state % N]);
+  const along = (points: LngLat[]) => points.slice(1).reduce((sum, point, i) => sum + metres(points[i], point), 0);
   // A route needs two points even when both ends snap to the same spot.
-  if (path.length === 1) path.push(path[0]);
-  return { distanceM: dist[T], coordinates: path };
+  if (supply.length === 1) supply.push(supply[0]);
+  const result: StreetPath = { distanceM: along(supply), coordinates: supply };
+  // The switch repeats the parking point, so the attack line starts there.
+  if (attackLine.length > 1) result.attack = { distanceM: along(attackLine), coordinates: attackLine };
+  return result;
 }
 
 // ─── Streets from vector tiles ────────────────────────────────────────────────
@@ -325,6 +419,18 @@ const MAX_TILES = 9;
 // `transportation` classes a hose cannot be laid along: grade-separated
 // motorways, rail and transit lines, ferries, cable cars, race tracks.
 const NOT_FOR_HOSE = new Set(['motorway', 'rail', 'transit', 'ferry', 'aerialway', 'raceway', 'bus_guideway']);
+// Ways a hose can follow but that are not a street a fire truck stands on:
+// footways, steps, pedestrian walkways and mall corridors (`path`), tracks,
+// piers and roads still being built (`*_construction`). Of service roads,
+// driveways, parking aisles and alleys lead into lots and buildings, and
+// those in a tunnel or on a bridge are basement and car-park ramps.
+const NOT_FOR_TRUCKS = new Set(['path', 'track', 'pier']);
+const OFF_STREET_SERVICE = new Set(['driveway', 'parking_aisle', 'alley']);
+const isRoad = ({ class: kind, service, brunnel }: Record<string, unknown>) => {
+  const name = String(kind);
+  if (NOT_FOR_TRUCKS.has(name) || name.endsWith('_construction')) return false;
+  return name !== 'service' || (!OFF_STREET_SERVICE.has(String(service)) && brunnel !== 'tunnel' && brunnel !== 'bridge');
+};
 
 /**
  * Street lines in one decoded tile's `transportation` layer, as `[lng, lat]`.
@@ -347,7 +453,7 @@ export function streetLinesFromTile(tile: VectorTile, x: number, y: number, z: n
     if (feature.type !== 2 || NOT_FOR_HOSE.has(String(kind)) || indoor === 1 || expressway === 1) continue;
     const grade = brunnel === 'bridge' ? 1 : brunnel === 'tunnel' ? -1 : 0;
     for (const line of feature.loadGeometry()) {
-      if (line.length > 1) lines.push({ points: line.map((point) => toLngLat(point.x, point.y)), grade });
+      if (line.length > 1) lines.push({ points: line.map((point) => toLngLat(point.x, point.y)), grade, road: isRoad(feature.properties) });
     }
   }
   return lines;

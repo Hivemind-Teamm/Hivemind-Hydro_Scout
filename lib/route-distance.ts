@@ -7,10 +7,11 @@
  * directions asked at the same time in case it fails. When neither answers,
  * `null` is returned and the formula falls back to its straight-line estimate.
  *
- * The supply line ends where the route reaches the street nearest the fire:
- * that is where the engine at the fire parks. A fire set back from the street
- * (inside a building or a lot) is reached from there by the engine's own
- * attack lines, so no relay engine is ever placed off the street.
+ * The supply line ends where the engine at the fire parks: the last road
+ * point on the way to the fire. A fire set back from the road (inside a
+ * building or a lot) is reached from there by the engine's own attack line,
+ * along footpaths and walkways or straight in, so no truck is ever placed
+ * off the road.
  */
 
 export interface RoutePoint {
@@ -27,24 +28,28 @@ export interface HoseRoute {
    */
   meters: number;
   /**
-   * Straight-line gap from the street point nearest the fire to the fire, in
-   * metres: covered by the engine's attack lines, not the supply line.
+   * From where the engine parks to the fire, in metres: along any footpaths
+   * past the last road, then straight to the pin. Covered by the engine's
+   * attack line, not the supply line.
    */
   attackLineM: number;
   source: HoseRouteSource;
   /** `[lng, lat]` points from the hydrant to the fire, for drawing the line. */
   path: [number, number][];
   /**
-   * `[lng, lat]` points from the hydrant to the street point nearest the fire,
-   * where the engine parks: the part of `path` the supply trucks stand on.
+   * `[lng, lat]` points from the hydrant to where the engine parks on the
+   * road: the part of `path` the supply trucks stand on.
    */
   supplyPath: [number, number][];
 }
 
 /** A route between the points nearest the hydrant and the fire on a network. */
 export interface NetworkRoute {
+  /** Supply line, up to where the engine parks. */
   distanceM: number;
   coordinates: [number, number][];
+  /** Attack line along the network from where the engine parks, when the fire is off the road. */
+  attack?: { distanceM: number; coordinates: [number, number][] };
 }
 
 export interface RouteDependencies {
@@ -83,10 +88,13 @@ function isPath(value: unknown): value is [number, number][] {
     Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]));
 }
 
+const isLength = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
 function isRoute(value: unknown): value is NetworkRoute {
   const route = value as NetworkRoute | null;
-  return typeof route?.distanceM === 'number' && Number.isFinite(route.distanceM) && route.distanceM >= 0
-    && isPath(route.coordinates);
+  return isLength(route?.distanceM) && isPath(route.coordinates)
+    && (route.attack === undefined || (isLength(route.attack.distanceM) && isPath(route.attack.coordinates)));
 }
 
 async function mapboxRoute(coords: string, token: string, deps: RouteDependencies, signal: AbortSignal): Promise<NetworkRoute | null> {
@@ -140,16 +148,17 @@ export async function fetchHoseRoute(
       if (deps.signal?.aborted) return null;
       if (!route) continue;
       // Routes start and end on the nearest mapped path. The supply hose
-      // still covers the gap from the hydrant to that path; the gap from
-      // the path to the fire is the engine's attack line.
+      // still covers the gap from the hydrant to that path; the attack line
+      // covers any footpaths past the last road and the gap to the fire.
       const [startLng, startLat] = route.coordinates[0];
-      const [endLng, endLat] = route.coordinates[route.coordinates.length - 1];
+      const attack = route.attack?.coordinates.slice(1) ?? [];
+      const [endLng, endLat] = attack.at(-1) ?? route.coordinates[route.coordinates.length - 1];
       const supplyPath: [number, number][] = [[hydrant.lng, hydrant.lat], ...route.coordinates];
       return {
         meters: route.distanceM + deps.distanceM(hydrant.lat, hydrant.lng, startLat, startLng),
-        attackLineM: deps.distanceM(endLat, endLng, fire.lat, fire.lng),
+        attackLineM: (route.attack?.distanceM ?? 0) + deps.distanceM(endLat, endLng, fire.lat, fire.lng),
         source,
-        path: [...supplyPath, [fire.lng, fire.lat]],
+        path: [...supplyPath, ...attack, [fire.lng, fire.lat]],
         supplyPath,
       };
     }

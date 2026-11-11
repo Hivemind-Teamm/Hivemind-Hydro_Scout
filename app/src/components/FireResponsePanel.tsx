@@ -241,8 +241,8 @@ function SupplyEstimate({ supply, estimate, routing, onViewHydrant }: {
       )}
       {ready && ready.attackLineM >= OFF_STREET_NOTE_M && (
         <Note tone="muted">
-          The fire is {formatDistance(ready.attackLineM)} from the nearest street. The engine parks there and
-          reaches the fire with its own attack lines; no trucks are placed off the street.
+          The fire is {formatDistance(ready.attackLineM)} off the street. The engine parks on the street and
+          reaches the fire with its own attack line; no trucks are placed off the street.
         </Note>
       )}
       {!ready && <Note tone="muted">Truck and hose counts will appear once the calculation data is configured.</Note>}

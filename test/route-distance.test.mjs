@@ -45,6 +45,19 @@ test('uses the street network: supply hose to the street, attack line from there
   assert.equal(calls[0], 'streets 121.06,14.65 121.062,14.652');
 });
 
+test('trucks stop where the road ends; walkways into the building are attack line', async () => {
+  const walk = [[121.0619, 14.6519], [121.0619, 14.6522]];
+  const { dependencies } = setup({
+    streets: { distanceM: 300, coordinates: snapped, attack: { distanceM: 33, coordinates: walk } },
+    mapbox: json(ok(600)),
+  });
+  const route = await fetchHoseRoute(hydrant, fire, dependencies);
+  assert.equal(route.meters, 300 + haversineM(14.65, 121.06, 14.6501, 121.0601));
+  assert.equal(route.attackLineM, 33 + haversineM(14.6522, 121.0619, 14.652, 121.062));
+  assert.deepEqual(route.supplyPath, [[121.06, 14.65], ...snapped]);
+  assert.deepEqual(route.path, [[121.06, 14.65], ...snapped, walk[1], [121.062, 14.652]]);
+});
+
 test('asks Mapbox walking at the same time and cancels it once the street network answers', async () => {
   let mapboxSignal;
   const { dependencies, calls } = setup({

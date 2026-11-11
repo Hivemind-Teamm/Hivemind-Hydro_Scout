@@ -58,6 +58,18 @@ engine at the fire parks, in whole metres. The app tries three sources in order 
    tracks and indoor paths are left out. Streets that meet are joined where
    the map joins them, where one ends within 2.5 m of another, and where two
    ground-level streets cross; a bridge or tunnel joins only at its ends.
+
+   Trucks only stand on streets. The supply line (every truck in it) runs
+   on streets only; footpaths, steps, walkways, tracks, piers, roads under
+   construction, and service driveways, parking aisles, alleys and car-park
+   ramps (service roads in a tunnel or on a bridge) are left to the attack
+   line. The engine at the fire parks where the supply line ends: either
+   where the path to the fire leaves the streets, or at any street point
+   within 100 m of the fire, from where its attack line runs straight in.
+   When choosing, each metre of attack line counts as 10 metres of supply
+   line (`ATTACK_LINE_WEIGHT` in `lib/hose-network.ts`): the engine drives as
+   close as the streets allow unless that takes a detour more than ten times
+   the hose it saves.
 2. **Mapbox Directions, walking profile** (`mapbox`), if the street network
    cannot be loaded, times out, or has no connected path. It is requested at
    the same time as source 1. Walking directions ignore one-way streets but
@@ -70,16 +82,17 @@ around the gated part of Malumanay Street, Teachers Village, in a check on
 October 22, 2026 (HYD-017 to 14.64539, 121.05491: 461 m around the block
 against 338 m down the street). That is why source 1 exists.
 
-For sources 1 and 2, the route starts and ends on the nearest mapped path.
-The straight-line gap from the hydrant to the start of the route is added to
-the route distance. The engine at the fire parks at the end of the route, the
-street point nearest the fire. The straight-line gap from there to the fire
-(a fire inside a building or a lot) is the **attack line** `A`: the engine
-covers it with its own hose, so it is not part of `L` and no relay engine is
+For sources 1 and 2, the route starts on the nearest street (source 1) or
+mapped path (source 2). The straight-line gap from the hydrant to the start
+of the route is added to the route distance. The distance from where the
+engine parks to the fire (a fire inside a building or a lot) is the **attack
+line** `A`: for source 1, any walkways past the street plus the straight gap
+to the fire; for source 2, the straight gap from the end of the route. The
+engine covers it with its own hose, so it is not part of `L` and no truck is
 placed on it.
 
 `L` = the resulting distance, rounded to the nearest metre.
-`A` = the attack-line gap, rounded to the nearest metre; 0 for source 3.
+`A` = the attack line, rounded to the nearest metre; 0 for source 3.
 
 ### Step 2: stage length `S`
 
@@ -238,12 +251,13 @@ These can change without a new spec version:
   one-way streets. `distance.source` becomes
   `'streets' | 'mapbox' | 'straight-line'`. Needs Mark's sign-off.
 
-- **1.2, November 11, 2026.** Step 1: the gap from the end of the route to
-  the fire is no longer part of `L`. The engine at the fire parks on the
-  street nearest the fire and covers that gap with its own attack lines, so
-  no relay engines are placed off the street (a fire inside a building used
-  to put trucks inside it). New output field `attackLineM`. Requested by the
-  team on November 11, 2026; needs Mark's sign-off.
+- **1.2, November 11, 2026.** Step 1: no truck is placed off the street.
+  The supply line runs on streets only and ends where the engine at the
+  fire parks; walkways, driveways, parking aisles, alleys and the gap into a
+  building are the engine's attack line, which is not part of `L`. A fire
+  inside a building used to put trucks along walkways and driveways into
+  it. New output field `attackLineM`. Requested by the team on November 11,
+  2026; needs Mark's sign-off.
 
 ## Automated checks
 

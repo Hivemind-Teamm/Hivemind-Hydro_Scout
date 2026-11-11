@@ -3,10 +3,11 @@ import { test } from 'node:test';
 import Pbf from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
 import { fromGeojsonVt } from '@maplibre/vt-pbf';
-import { buildStreetGraph, JOIN_TOLERANCE_M, shortestStreetPath, streetLinesFromTile } from '../lib/hose-network.ts';
+import { buildStreetGraph, JOIN_TOLERANCE_M, MAX_STRAIGHT_IN_M, shortestStreetPath, streetLinesFromTile } from '../lib/hose-network.ts';
 
 // Streets on a small grid near the equator: 0.001° is about 111 m.
 const street = (points, grade = 0) => ({ points, grade });
+const walkway = points => ({ points, grade: 0, road: false });
 const route = (lines, from, to) => shortestStreetPath(buildStreetGraph(lines), from, to);
 const near = (actual, expected, toleranceM, name) =>
   assert.ok(Math.abs(actual - expected) <= toleranceM, `${name}: ${actual} is not within ${toleranceM} m of ${expected}`);
@@ -61,6 +62,51 @@ test('returns null when there is no network or no connection', () => {
   assert.equal(route(islands, [0, 0], [0.004, 0]), null);
 });
 
+test('keeps every truck on the road: the engine parks where the road ends and the attack line goes on', () => {
+  const road = street([[0, 0], [0.003, 0]]);
+  // A driveway or footpath 111 m into a lot, to a fire inside a building.
+  const drive = walkway([[0.003, 0], [0.003, 0.001]]);
+  const result = route([road, drive], [0, 0], [0.003, 0.001]);
+  near(result.distanceM, 333.6, 0.5, 'supply line on the road only');
+  assert.deepEqual(result.coordinates.at(-1), [0.003, 0]);
+  near(result.attack.distanceM, 111.2, 0.5, 'attack line up the driveway');
+  assert.deepEqual(result.attack.coordinates, [[0.003, 0], [0.003, 0.001]]);
+  // A fire on the road has no attack line.
+  assert.equal(route([road, drive], [0, 0], [0.002, 0]).attack, undefined);
+});
+
+test('never drives a truck down a walkway shortcut, but takes a short one on foot rather than a long detour', () => {
+  // The road goes around the block; a walkway cuts straight across it.
+  const around = street([[0, 0], [0, 0.002], [0.002, 0.002], [0.002, 0]]);
+  const across = walkway([[0, 0], [0.002, 0]]);
+  const result = route([around, across], [0, 0], [0.002, 0]);
+  // 667 m by road beats 222 m of hand-laid hose, which counts ten times over.
+  near(result.distanceM, 667.2, 1, 'around by road');
+  assert.equal(result.attack, undefined);
+  // A 20 m walkway beats a 450 m detour.
+  const loop = street([[0, 0], [0, 0.002], [0.00218, 0.002], [0.00218, 0]]);
+  const shortcut = walkway([[0.002, 0], [0.00218, 0]]);
+  const short = route([street([[0, 0], [0.002, 0]]), loop, shortcut], [0, 0], [0.00218, 0]);
+  near(short.distanceM, 222.4, 0.5, 'drives to the shortcut');
+  near(short.attack.distanceM, 20, 0.5, 'walks the rest');
+});
+
+test('parks on a reachable road and runs straight in when no mapped way reaches the fire', () => {
+  const road = street([[0, 0], [0.002, 0]]);
+  // A road island right by the fire, joined to the rest only by a walkway.
+  const island = street([[0.004, 0.0003], [0.005, 0.0003]]);
+  const link = walkway([[0.002, 0], [0.004, 0.0003]]);
+  const fire = [0.0045, 0.0006];
+  const result = route([road, island, link], [0, 0], fire);
+  // The island's road point is 33 m from the fire but no truck can reach it.
+  assert.ok(result.coordinates.every(([lng]) => lng <= 0.002));
+  assert.equal(result.attack.coordinates.at(-1)[0], 0.0045);
+  // With no walkway and the reachable road farther than a straight run in,
+  // there is no connection (the island stays out of reach).
+  assert.ok(MAX_STRAIGHT_IN_M < 250);
+  assert.equal(route([road, island], [0, 0], fire), null);
+});
+
 test('reads hose-usable streets from a vector tile and joins them across tile edges', () => {
   // Two neighbouring zoom-14 tiles, with one street crossing the edge between them.
   const x = 13701, y = 7518, z = 14, extent = 4096;
@@ -76,6 +122,7 @@ test('reads hose-usable streets from a vector tile and joins them across tile ed
   const right = tile([feature([[-64, 2000], [1000, 2000]], { class: 'minor' })]);
   const lines = [...streetLinesFromTile(left, x, y, z), ...streetLinesFromTile(right, x + 1, y, z)];
   assert.deepEqual(lines.map(l => l.grade), [0, 1, 0]);
+  assert.deepEqual(lines.map(l => l.road), [true, true, true]);
 
   const graph = buildStreetGraph(lines);
   const [westEnd] = lines[0].points;
