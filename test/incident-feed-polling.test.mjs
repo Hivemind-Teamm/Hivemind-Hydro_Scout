@@ -483,3 +483,80 @@ test("Fresh verification replaces the old expiry deadline", async () => {
 
   assert.equal(clock.count(15000), 0);
 });
+test("Polls slowly while nothing is assigned and fast once an incident arrives", async () => {
+  const clock = fakeClock();
+  const states = [];
+  const feeds = [[], [incident], []];
+  let requests = 0;
+
+  const controller = createIncidentFeedPollingController({
+    fetchFeed: async () => response(feeds[requests++] ?? []),
+    onChange: state => states.push(state),
+    intervalMs: 5000,
+    idleIntervalMs: 20000,
+    timeoutMs: 4000,
+    verificationMaxAgeMs: 15000,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+  });
+
+  controller.start();
+  await flush();
+
+  // Empty feed: next poll after the idle interval, and the verification
+  // window is stretched past it so the empty state does not flap to expired.
+  assert.deepEqual(states.at(-1), { incidents: [], verified: true, error: null });
+  assert.equal(clock.count(20000), 1);
+  assert.equal(clock.count(5000), 0);
+  assert.equal(clock.count(30000), 1);
+
+  clock.fire(20000);
+  await flush();
+
+  // Assigned incident: back to the fast interval and the normal 15 s window.
+  assert.deepEqual(states.at(-1), { incidents: [incident], verified: true, error: null });
+  assert.equal(clock.count(5000), 1);
+  assert.equal(clock.count(15000), 1);
+  assert.equal(clock.count(30000), 0);
+
+  clock.fire(5000);
+  await flush();
+
+  assert.equal(requests, 3);
+  assert.equal(clock.count(20000), 1);
+  controller.stop();
+});
+
+test("Retries a failed poll at the fast interval even when idle", async () => {
+  const clock = fakeClock();
+  let requests = 0;
+
+  const controller = createIncidentFeedPollingController({
+    fetchFeed: async () => (requests++ === 0 ? response([]) : response([], 503)),
+    onChange: () => {},
+    intervalMs: 5000,
+    idleIntervalMs: 20000,
+    timeoutMs: 4000,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+  });
+
+  controller.start();
+  await flush();
+  clock.fire(20000);
+  await flush();
+
+  assert.equal(requests, 2);
+  assert.equal(clock.count(5000), 1);
+  assert.equal(clock.count(20000), 0);
+  controller.stop();
+});
+
+test("Rejects an idle interval shorter than the active interval", () => {
+  assert.throws(() => createIncidentFeedPollingController({
+    fetchFeed: async () => response([]),
+    onChange: () => {},
+    intervalMs: 5000,
+    idleIntervalMs: 1000,
+  }), /invalid-polling-dependencies/);
+});

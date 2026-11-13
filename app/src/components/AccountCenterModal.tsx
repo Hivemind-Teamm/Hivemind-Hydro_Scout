@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { FiX } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
-import { updatePassword } from 'firebase/auth';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { useAuth } from '@/lib/auth-context';
+import { passwordChangeError, passwordChangeProblem } from '@/lib/password-change';
 import LogoutButton from './LogoutButton';
 import AvatarPlaceholder from './AvatarPlaceholder';
 
@@ -29,14 +30,16 @@ interface AccountCenterModalProps {
 }
 
 export default function AccountCenterModal({ onClose }: AccountCenterModalProps) {
-  const { user, role, accountType, stationId, stationName, stationMembershipStatus } = useAuth();
+  const { user, role, accountType, stationId, stationName, stationMembershipStatus, refreshSession } = useAuth();
   const router = useRouter();
 
   const [changingPassword, setChangingPassword]         = useState(false);
+  const [currentPassword, setCurrentPassword]           = useState('');
   const [newPassword, setNewPassword]                   = useState('');
   const [retypePassword, setRetypePassword]             = useState('');
   const [saving, setSaving]                             = useState(false);
   const [saveError, setSaveError]                       = useState('');
+  const [saveNotice, setSaveNotice]                     = useState('');
   const [showNoChangesConfirm, setShowNoChangesConfirm] = useState(false);
 
   const isSignedIn  = !!user;
@@ -54,40 +57,57 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
   function handleSignUp() { onClose(); router.push('/signup'); }
   function green(val: string) { return val === 'Full' || val === 'Enabled'; }
 
-  function enterChangePassword() {
+  function clearPasswordFields() {
+    setCurrentPassword('');
     setNewPassword('');
     setRetypePassword('');
     setSaveError('');
+  }
+
+  function enterChangePassword() {
+    clearPasswordFields();
+    setSaveNotice('');
     setChangingPassword(true);
   }
 
   async function handleSavePassword() {
     if (!user) return;
-    if (!newPassword && !retypePassword) {
+    if (!currentPassword && !newPassword && !retypePassword) {
       setShowNoChangesConfirm(true);
       return;
     }
-    if (newPassword.length < 6) {
-      setSaveError('Password must be at least 6 characters.');
+    const problem = passwordChangeProblem({ current: currentPassword, next: newPassword, retype: retypePassword });
+    if (problem) {
+      setSaveError(problem);
       return;
     }
-    if (newPassword !== retypePassword) {
-      setSaveError('Passwords do not match.');
+    if (!user.email) {
+      setSaveError('This account has no email sign-in, so its password cannot be changed here.');
       return;
     }
     setSaveError('');
     setSaving(true);
     try {
+      // Firebase requires a recent sign-in to change a password.
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
       await updatePassword(user, newPassword);
-      setChangingPassword(false);
-      setNewPassword('');
-      setRetypePassword('');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update password.';
-      setSaveError(msg.replace('Firebase: ', '').replace(/ \(auth\/.*\)\.?$/, ''));
-    } finally {
+      setSaveError(passwordChangeError(err));
       setSaving(false);
+      return;
     }
+    // The change revokes the old server session; issue a new one so uploads
+    // and other server actions keep working without signing in again.
+    let notice = 'Password updated.';
+    try {
+      await refreshSession();
+    } catch {
+      notice = 'Password updated. Sign out and back in to keep using uploads and reports.';
+    }
+    clearPasswordFields();
+    setChangingPassword(false);
+    setSaveNotice(notice);
+    setSaving(false);
   }
 
   return (
@@ -131,9 +151,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
                   onClick={() => {
                     setShowNoChangesConfirm(false);
                     setChangingPassword(false);
-                    setNewPassword('');
-                    setRetypePassword('');
-                    setSaveError('');
+                    clearPasswordFields();
                   }}
                   className="flex-1 rounded-xl bg-[#e0353b] py-2 text-xs font-bold text-white transition-all duration-150 ease-out hover:scale-[1.02] hover:bg-[#c42d32] hover:shadow-[0_4px_12px_rgba(224,53,59,0.4)] active:scale-[0.97] active:duration-75"
                 >
@@ -186,29 +204,43 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
 
                 {changingPassword ? (
                   <EditableField
-                    label="New Password"
-                    value={newPassword}
-                    onChange={setNewPassword}
+                    label="Current Password"
+                    value={currentPassword}
+                    onChange={setCurrentPassword}
                     type="password"
-                    placeholder="Enter new password"
+                    placeholder="Enter current password"
+                    autoComplete="current-password"
                   />
                 ) : (
                   <ReadonlyField label="Password" value="••••••••••" />
                 )}
 
                 {changingPassword && (
-                  <div className="col-span-2 flex flex-col gap-1">
+                  <>
+                    <EditableField
+                      label="New Password"
+                      value={newPassword}
+                      onChange={setNewPassword}
+                      type="password"
+                      placeholder="Enter new password"
+                      autoComplete="new-password"
+                    />
                     <EditableField
                       label="Retype Password"
                       value={retypePassword}
                       onChange={setRetypePassword}
                       type="password"
                       placeholder="Confirm new password"
+                      autoComplete="new-password"
                     />
-                    {saveError && (
-                      <p className="mt-1 text-[11px] font-semibold text-[#e0353b]">{saveError}</p>
-                    )}
-                  </div>
+                  </>
+                )}
+
+                {changingPassword && saveError && (
+                  <p role="alert" className="col-span-2 -mt-1 text-[11px] font-semibold text-[#e0353b]">{saveError}</p>
+                )}
+                {!changingPassword && saveNotice && (
+                  <p role="status" className="col-span-2 -mt-1 text-[11px] font-semibold text-[#2fbf4f]">{saveNotice}</p>
                 )}
               </div>
             </section>
@@ -296,20 +328,21 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EditableField({ label, value, onChange, type = 'text', placeholder }: {
-  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
+function EditableField({ label, value, onChange, type = 'text', placeholder, autoComplete }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; autoComplete?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <label className="flex flex-col gap-1">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{label}</span>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        autoComplete={autoComplete}
         className="rounded-lg border border-[#e0353b]/40 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 outline-none transition-all focus:border-[#e0353b] focus:ring-1 focus:ring-[#e0353b]/25 dark:border-[#e0353b]/30 dark:bg-neutral-800 dark:text-neutral-200 dark:placeholder-neutral-600 dark:focus:border-[#e0353b]"
       />
-    </div>
+    </label>
   );
 }
 

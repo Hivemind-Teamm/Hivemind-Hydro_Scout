@@ -8,6 +8,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const STATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+// Active incidents across all stations scanned per request; more than this
+// fails closed (503) rather than return a possibly incomplete feed.
+const ACTIVE_INCIDENT_SCAN_LIMIT = 500;
 
 function incidentFeedResponse(
   body: Record<string, unknown>,
@@ -170,20 +173,29 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Only active incidents are read; each one costs a Firestore read on every
+    // poll, and a station's resolved history would otherwise grow without bound.
+    // A single-field equality uses Firestore's built-in index (no composite
+    // index to deploy); the station filter runs below.
     const snapshot = await firestore
       .collection("incidents")
-      .where("assignedStationIds", "array-contains", stationId)
-      .limit(101)
+      .where("status", "==", "active")
+      .limit(ACTIVE_INCIDENT_SCAN_LIMIT + 1)
       .get();
 
-    if (snapshot.size > 100) {
+    const assigned = snapshot.docs.filter(record => {
+      const stations = record.data().assignedStationIds;
+      return Array.isArray(stations) && stations.includes(stationId);
+    });
+
+    if (snapshot.size > ACTIVE_INCIDENT_SCAN_LIMIT || assigned.length > 100) {
       return incidentFeedResponse(
         { error: "Incident assignment feed exceeds supported limit." },
         503
       );
     }
 
-    const incidents = snapshot.docs.flatMap(record => {
+    const incidents = assigned.flatMap(record => {
       const incident = record.data();
       const location = incident.location;
 

@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, Timestamp, where } from 'firebase/firestore';
 import { FiX } from 'react-icons/fi';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { stationMemberFromProfile, searchStationMembers, type StationMember } from '@/lib/station-members';
-import { accountIsPresent, type PresenceRecord } from '@/lib/account-presence-state';
+import { accountIsPresent, PRESENCE_EXPIRY_MS, type PresenceRecord } from '@/lib/account-presence-state';
 import { lastLoggedInLabel } from '@/lib/account-login-status';
 import { useLoginClock } from '@/lib/use-login-clock';
 import UserProfileModal, { type ViewingUser } from './UserProfileModal';
@@ -35,8 +35,11 @@ export default function StationMembersPanel({ stationId, stationName, responding
       });
       setState({ scope, members, loading: false, error: null });
     }, () => setState({ scope, members: [], loading: false, error: 'Station members could not load. Check your connection and station access.' }));
+    // Admins see every station, so skip sessions that had already expired when
+    // the panel opened instead of reading every session ever recorded (the
+    // fixed cutoff keeps one listener; accountIsPresent applies expiry later).
     const presenceQuery = isGlobalAdmin
-      ? collection(db, 'accountPresenceSessions')
+      ? query(collection(db, 'accountPresenceSessions'), where('lastSeenAt', '>', Timestamp.fromMillis(Date.now() - PRESENCE_EXPIRY_MS)))
       : query(collection(db, 'accountPresenceSessions'), where('stationId', '==', stationId));
     const stopPresence = onSnapshot(presenceQuery, snapshot => {
       setPresence({ scope, records: snapshot.docs.map(record => record.data() as PresenceRecord), receivedAt: Date.now() });
