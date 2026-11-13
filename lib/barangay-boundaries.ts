@@ -48,3 +48,36 @@ export function barangayAt(boundaries: BarangayCollection, lat: number, lng: num
 export function barangayNames(boundaries: BarangayCollection): string[] {
   return boundaries.features.map(feature => feature.properties.name);
 }
+
+// Case, accents ("Santo Niño") and punctuation don't matter when searching;
+// "U.P. Campus" matches "UP Campus".
+const foldName = (text: string) =>
+  text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Search-bar matches: names starting with the query, then a word starting with it, then anywhere. */
+export function searchBarangays(boundaries: BarangayCollection, query: string, limit = 3): BarangayFeature[] {
+  const q = foldName(query).replace(/^(barangay|brgy|bgy)\b\s*/, '');
+  if (q.length < 2) return [];
+  const ranked: { feature: BarangayFeature; rank: number }[] = [];
+  for (const feature of boundaries.features) {
+    const name = foldName(feature.properties.name);
+    const rank = name.startsWith(q) ? 0 : name.includes(` ${q}`) ? 1 : q.length >= 3 && name.includes(q) ? 2 : -1;
+    if (rank >= 0) ranked.push({ feature, rank });
+  }
+  ranked.sort((a, b) => a.rank - b.rank || a.feature.properties.name.localeCompare(b.feature.properties.name));
+  return ranked.slice(0, limit).map(({ feature }) => feature);
+}
+
+/** [west, south, east, north] around the barangay's outer rings. */
+export function barangayBounds(feature: BarangayFeature): [number, number, number, number] {
+  const box: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [outer] of feature.geometry.coordinates) {
+    for (const [lng, lat] of outer) {
+      box[0] = Math.min(box[0], lng);
+      box[1] = Math.min(box[1], lat);
+      box[2] = Math.max(box[2], lng);
+      box[3] = Math.max(box[3], lat);
+    }
+  }
+  return box;
+}

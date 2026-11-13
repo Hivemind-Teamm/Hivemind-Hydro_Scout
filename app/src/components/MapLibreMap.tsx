@@ -1,6 +1,7 @@
 'use client';
 import StationUnitIcon from './StationUnitIcon';
 import SharedFirePinMarker from './SharedFirePinMarker';
+import SearchPinMarker, { type SearchPin } from './SearchPinMarker';
 import type { MapFirePin } from '@/lib/use-shared-fire-pins';
 
 // MapLibre mirror of DilimanMap (the Mapbox provider). Same DOM-marker hydrant
@@ -137,6 +138,7 @@ interface MapLibreMapProps {
   firePinMode?: boolean;
   sharedFirePins?: MapFirePin[];
   onSelectFire?: (id: string) => void;
+  searchPin?: SearchPin | null;
   fire?: FireOverlay | null;
   onFirePin?: (lat: number, lng: number) => void;
   onFireMove?: (lat: number, lng: number) => void;
@@ -453,7 +455,7 @@ export default function MapLibreMap({
   unitLocations = [],
   hydrants, aorBarangays, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
-  firePinMode = false, fire = null, onFirePin, onFireMove, sharedFirePins = [], onSelectFire,
+  firePinMode = false, fire = null, onFirePin, onFireMove, sharedFirePins = [], onSelectFire, searchPin = null,
 }: MapLibreMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const otwAnimRef = useRef<number | null>(null);
@@ -964,6 +966,12 @@ export default function MapLibreMap({
       {map && pendingPin && (
         <MapMarker map={map} longitude={pendingPin.lng} latitude={pendingPin.lat} anchor="center">
           <div style={{ width: 14, height: 14, background: '#FED42E', border: '2.5px solid #e0353b', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }} />
+        </MapMarker>
+      )}
+
+      {map && searchPin && (
+        <MapMarker map={map} longitude={searchPin.lng} latitude={searchPin.lat} anchor="bottom" style={{ pointerEvents: 'none' }}>
+          <SearchPinMarker label={searchPin.label} />
         </MapMarker>
       )}
 

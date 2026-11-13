@@ -20,6 +20,7 @@ import { useUnitLocations } from '@/lib/use-unit-locations';
 
 import type { Hydrant } from '../data/hydrants';
 import type { SupplyTruck } from '@/lib/supply-layout';
+import type { SearchPin } from './SearchPinMarker';
 
 /* -------------------------------------------------------------------------- */
 /* MapLibre lazy loading                                                      */
@@ -321,6 +322,8 @@ interface MapViewProps {
 
   /** Hide live unit markers on a responder's map while approaching a fire. */
   hideUnitLocations?: boolean;
+  /** Place chosen in the search bar. */
+  searchPin?: SearchPin | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -375,6 +378,7 @@ function MapView({
 
   onFireMove,
   hideUnitLocations = false,
+  searchPin = null,
 }: MapViewProps) {
   const { isDark } = useTheme();
   const { locations: unitLocations, error: unitLocationError } = useUnitLocations();
@@ -533,6 +537,7 @@ function MapView({
             onFireMove={
               onFireMove
             }
+            searchPin={searchPin}
           />
         ) : (
           <MapLibreMap
@@ -609,6 +614,7 @@ function MapView({
             onFireMove={
               onFireMove
             }
+            searchPin={searchPin}
           />
         )}
       </MapErrorBoundary>

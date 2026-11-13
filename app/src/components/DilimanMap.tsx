@@ -1,6 +1,7 @@
 'use client';
 import StationUnitIcon from './StationUnitIcon';
 import SharedFirePinMarker from './SharedFirePinMarker';
+import SearchPinMarker, { type SearchPin } from './SearchPinMarker';
 import type { MapFirePin } from '@/lib/use-shared-fire-pins';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -107,6 +108,7 @@ interface DilimanMapProps {
   fire?: FireOverlay | null;
   sharedFirePins?: MapFirePin[];
   onSelectFire?: (id: string) => void;
+  searchPin?: SearchPin | null;
   onFirePin?: (lat: number, lng: number) => void;
   onFireMove?: (lat: number, lng: number) => void;
 }
@@ -353,7 +355,7 @@ export default function DilimanMap({
   unitLocations = [],
   hydrants, aorBarangays, selectedHydrantId, onLoad, onError, onMapReady,
   onSelectHydrant, addHydrantMode, onMapClick, onMapBackgroundClick, pendingPin, is3D = false, userLocation, otwHydrant, otwRoute, nearRouteIds, initialCenter, initialZoom, isDark = false, onMapMove,
-  firePinMode = false, fire = null, onFirePin, onFireMove, sharedFirePins = [], onSelectFire,
+  firePinMode = false, fire = null, onFirePin, onFireMove, sharedFirePins = [], onSelectFire, searchPin = null,
 }: DilimanMapProps) {
   const mapRef = useRef<MapRef>(null);
   const otwAnimRef = useRef<number | null>(null);
@@ -817,6 +819,12 @@ export default function DilimanMap({
         {pendingPin && (
           <Marker longitude={pendingPin.lng} latitude={pendingPin.lat} anchor="center">
             <div style={{ width: 14, height: 14, background: '#FED42E', border: '2.5px solid #e0353b', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }} />
+          </Marker>
+        )}
+
+        {searchPin && (
+          <Marker longitude={searchPin.lng} latitude={searchPin.lat} anchor="bottom" style={{ pointerEvents: 'none' }}>
+            <SearchPinMarker label={searchPin.label} />
           </Marker>
         )}
 
