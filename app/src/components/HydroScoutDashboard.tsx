@@ -497,7 +497,7 @@ export default function HydroScoutDashboard() {
   }, [userLocation, showGeoError]);
 
   const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
-  const visibleHydrants = useMemo(() => {
+  const filteredHydrants = useMemo(() => {
     // The OTW destination stays on the map even when its status is filtered out.
     let result = hydrants.filter((h) => activeStatuses.has(h.status) || (otwHydrant && h.id === otwHydrant.id));
     if (otwRoute && otwRoute.length >= 2) {
@@ -507,6 +507,12 @@ export default function HydroScoutDashboard() {
     }
     return result;
   }, [activeStatuses, hydrants, otwRoute, otwHydrant]);
+  // So does the selected hydrant, e.g. one found by ID in the search bar while
+  // its status pill is off. The list is only copied when that pin is missing.
+  const visibleHydrants = useMemo(() => {
+    if (!selectedHydrant || filteredHydrants.some((h) => h.id === selectedHydrant.id)) return filteredHydrants;
+    return [...filteredHydrants, selectedHydrant];
+  }, [filteredHydrants, selectedHydrant]);
 
   // Compute which hydrant IDs are within the route corridor — used by DilimanMap
   // to visually distinguish route hydrants from off-route ones.
@@ -1256,6 +1262,8 @@ export default function HydroScoutDashboard() {
         onZoomOut={handleZoomOut}
         onLocate={handleLocate}
         onFlyTo={handleOverlayFlyTo}
+        hydrants={hydrants}
+        onSelectHydrant={handleSelectHydrant}
         onToggle3D={handleToggle3D}
         is3D={is3D}
         showReports={showReports}
