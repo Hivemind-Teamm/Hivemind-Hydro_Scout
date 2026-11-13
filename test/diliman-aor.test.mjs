@@ -30,6 +30,16 @@ test('the outline is one closed ring with OpenStreetMap attribution', () => {
   assert.match(outline.properties.attribution, /OpenStreetMap/);
 });
 
+test('the outline has no out-and-back spurs, like the old one up West Avenue', () => {
+  const points = ring.slice(0, -1);
+  const metres = ([x1, y1], [x2, y2]) => Math.hypot((x1 - x2) * 0.9675, y1 - y2) * 111_320;
+  points.forEach((point, i) => {
+    const before = points[(i - 1 + points.length) % points.length];
+    const after = points[(i + 1) % points.length];
+    assert.ok(metres(before, after) >= 1, `spur at point ${i} ${point}`);
+  });
+});
+
 test('landmarks fall on the same side as the Google Maps Diliman outline', () => {
   const landmarks = {
     'Quezon Memorial Circle': [121.04929, 14.65145, true],

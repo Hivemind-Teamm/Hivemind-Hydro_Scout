@@ -94,6 +94,27 @@ function simplify(points) {
   return simplify(points.slice(0, index + 1)).slice(0, -1).concat(simplify(points.slice(index)));
 }
 
+/**
+ * Drops out-and-back spurs (…A, B, A…). The cut leaves one where West
+ * Triangle's border along West Avenue sits a few metres off Diliman's.
+ */
+function removeSpurs(ring) {
+  const points = ring.slice(0, -1);
+  for (let i = 0; i < points.length && points.length > 3;) {
+    const before = points[(i - 1 + points.length) % points.length];
+    const after = (i + 1) % points.length;
+    if (metres(before, points[after]) < 1) {
+      // Remove the tip and its return point; the walk resumes at the point before.
+      points.splice(Math.max(i, after), 1);
+      points.splice(Math.min(i, after), 1);
+      i = Math.max(0, Math.min(i, after) - 1);
+    } else {
+      i++;
+    }
+  }
+  return [...points, points[0]];
+}
+
 function ringArea(ring) {
   let area = 0;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) area += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
@@ -124,7 +145,7 @@ for (const name of REMOVED_BARANGAYS) removed = union(removed, polygonsOf(name))
 // can leave metre-wide slivers along shared borders: keep the main area only.
 const pieces = diff(diliman, removed);
 const outer = pieces.map(polygon => polygon[0]).sort((a, b) => ringArea(b) - ringArea(a))[0];
-const ring = simplify(spliceEdge(outer, COMMONWEALTH_TANDANG_SORA)).map(([x, y]) => [round(x), round(y)]);
+const ring = removeSpurs(simplify(spliceEdge(outer, COMMONWEALTH_TANDANG_SORA)).map(([x, y]) => [round(x), round(y)]));
 if (ring[0][0] !== ring.at(-1)[0] || ring[0][1] !== ring.at(-1)[1]) ring.push(ring[0]);
 
 const feature = {
