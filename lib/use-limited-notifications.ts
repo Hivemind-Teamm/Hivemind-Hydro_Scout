@@ -13,11 +13,11 @@ type WireNotification = Omit<StationNotification, 'createdAt' | 'startedAt' | 'e
   response?: Omit<NonNullable<StationNotification['response']>, 'startedAt' | 'endedAt'> & { startedAt: number; endedAt: number };
 };
 type WireFeed = { viewerUid: string; notifications: WireNotification[]; readIds: string[]; receiptTokens?: Record<string, string> };
-// Every poll costs the server roughly one read per feed item. Fire incidents
-// arrive through the real-time fire-pin listener, so this lower-urgency feed
-// refreshes every two minutes, on focus/visibility at most once a minute, and
-// whenever the notification panel is opened.
-const REFRESH_INTERVAL_MS = 2 * 60_000;
+// Every poll costs the server roughly one read per feed item (up to ~250 for
+// an admin). Fire incidents arrive through the real-time fire-pin listener, so
+// this lower-urgency feed refreshes in the background every five minutes, on
+// focus/visibility at most once a minute, and whenever the panel is opened.
+const REFRESH_INTERVAL_MS = 5 * 60_000;
 const FOCUS_MAX_AGE_MS = 60_000;
 const PANEL_OPEN_MAX_AGE_MS = 15_000;
 const panelToggleEvent = 'hydroscout:toggle-station-activity';

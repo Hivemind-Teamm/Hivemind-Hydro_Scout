@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ActiveIncidentLocation } from './incident-location-algorithm';
 import { createIncidentFeedPollingController } from './incident-feed-polling.mjs';
 
+const IDLE_POLL_INTERVAL_MS = 20_000;
+
 interface FeedState {
   session: object | null;
   scope: string;
@@ -46,6 +48,10 @@ export function useAssignedIncidents(
     if (!enabled || !scope) return;
 
     const controller = createIncidentFeedPollingController({
+      // Each poll costs several Firestore reads on the server. With nothing
+      // assigned, a new assignment is picked up within 20 s; while incidents
+      // are active the 5 s default keeps location sharing verified.
+      idleIntervalMs: IDLE_POLL_INTERVAL_MS,
       fetchFeed: (signal: AbortSignal) =>
         fetch('/api/incidents', {
           method: 'GET',

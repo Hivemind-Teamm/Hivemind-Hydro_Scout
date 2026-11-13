@@ -6,8 +6,9 @@
 // It is OpenStreetMap's Diliman boundary (relation 17877944) without its
 // north-west corner between Quezon Avenue and North Avenue (Phil-Am, West
 // Triangle, Bagong Pag-asa, and Project 6 below North Avenue), and with its
-// north-east corner following Commonwealth and Tandang Sora Avenues instead of
-// cutting straight across. That is the Diliman outline Google Maps shows.
+// north-east corner following Commonwealth and Tandang Sora Avenues and its
+// southern edge following Kamuning Road, instead of cutting straight across.
+// That is the Diliman outline Google Maps shows.
 // The barangays come from lib/qc-barangays.json. Data © OpenStreetMap
 // contributors (ODbL).
 //
@@ -46,6 +47,23 @@ const COMMONWEALTH_TANDANG_SORA = [
   [121.073983, 14.66346], [121.074055, 14.663398],
 ];
 
+// Southern edge: from the Obrero notch down Tomas Morato Avenue to Kamuning
+// Road, then along Kamuning Road to EDSA, west to east. Both ends are points of
+// OSM's Diliman boundary; the edge replaces its straight cut just north of the
+// road. From OSM's Kamuning Road ways (shortest path across its carriageways).
+const KAMUNING_ROAD = [
+  [121.033677, 14.627607], [121.033659, 14.627342], [121.033738, 14.627333], [121.033802, 14.627342],
+  [121.033871, 14.627352], [121.033957, 14.627373], [121.034118, 14.627416], [121.034216, 14.627406],
+  [121.034311, 14.627432], [121.034443, 14.62747], [121.034813, 14.627577], [121.034947, 14.627615],
+  [121.03515, 14.627674], [121.036006, 14.62792], [121.036308, 14.628007], [121.036389, 14.62803],
+  [121.036469, 14.628053], [121.03678, 14.628144], [121.03813, 14.628537], [121.038218, 14.628562],
+  [121.038283, 14.628581], [121.038344, 14.628599], [121.038491, 14.628642], [121.038579, 14.628668],
+  [121.038639, 14.628685], [121.038713, 14.628706], [121.039103, 14.628817], [121.04095, 14.629343],
+  [121.043455, 14.630059], [121.043476, 14.630064], [121.04355, 14.630081], [121.043578, 14.630094],
+  [121.044679, 14.63041], [121.044803, 14.630446], [121.044846, 14.630458], [121.045543, 14.630659],
+  [121.045555, 14.630662], [121.045601, 14.630675], [121.045708, 14.630706], [121.045893, 14.630764],
+];
+
 // ~1 m at Manila's latitude, as in build-barangay-boundaries.mjs.
 const TOLERANCE = 0.00001;
 const round = value => Math.round(value * 1e6) / 1e6;
@@ -57,7 +75,7 @@ function spliceEdge(ring, edge) {
   const indexOf = point => open.findIndex(p => metres(p, point) < 2);
   const start = indexOf(edge[0]);
   const end = indexOf(edge.at(-1));
-  if (start < 0 || end < 0) throw new Error('Commonwealth/Tandang Sora edge no longer meets the Diliman boundary.');
+  if (start < 0 || end < 0) throw new Error(`Edge starting at ${edge[0]} no longer meets the Diliman boundary.`);
   const arc = (from, to) => {
     const points = [];
     for (let i = from; ; i = (i + 1) % open.length) {
@@ -145,7 +163,8 @@ for (const name of REMOVED_BARANGAYS) removed = union(removed, polygonsOf(name))
 // can leave metre-wide slivers along shared borders: keep the main area only.
 const pieces = diff(diliman, removed);
 const outer = pieces.map(polygon => polygon[0]).sort((a, b) => ringArea(b) - ringArea(a))[0];
-const ring = removeSpurs(simplify(spliceEdge(outer, COMMONWEALTH_TANDANG_SORA)).map(([x, y]) => [round(x), round(y)]));
+const spliced = spliceEdge(spliceEdge(outer, COMMONWEALTH_TANDANG_SORA), KAMUNING_ROAD);
+const ring = removeSpurs(simplify(spliced).map(([x, y]) => [round(x), round(y)]));
 if (ring[0][0] !== ring.at(-1)[0] || ring[0][1] !== ring.at(-1)[1]) ring.push(ring[0]);
 
 const feature = {
@@ -153,7 +172,7 @@ const feature = {
   properties: {
     name: 'Diliman',
     source: 'OpenStreetMap relation 17877944 without Phil-Am, West Triangle, Bagong Pag-asa and Project 6 south of North Avenue, '
-      + 'following Commonwealth and Tandang Sora Avenues in the north-east',
+      + 'following Commonwealth and Tandang Sora Avenues in the north-east and Kamuning Road in the south',
     attribution: '© OpenStreetMap contributors (ODbL)',
   },
   geometry: { type: 'Polygon', coordinates: [ring] },

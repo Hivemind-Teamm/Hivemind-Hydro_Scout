@@ -54,6 +54,9 @@ test('landmarks fall on the same side as the Google Maps Diliman outline', () =>
     // North-east corner follows Commonwealth and Tandang Sora Avenues.
     'below Commonwealth Ave, near the Tandang Sora interchange': [121.0705, 14.6636, true],
     'across Commonwealth Ave': [121.0705, 14.665, false],
+    // Southern edge follows Kamuning Road from Tomas Morato to EDSA.
+    'just north of Kamuning Road, Sacred Heart side': [121.040, 14.62925, true],
+    'just south of Kamuning Road, Kamuning side': [121.040, 14.6288, false],
   };
   for (const [name, [lng, lat, expected]] of Object.entries(landmarks)) {
     assert.equal(inside(lng, lat), expected, name);
