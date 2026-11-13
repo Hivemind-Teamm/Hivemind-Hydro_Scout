@@ -291,8 +291,8 @@ export default function MapSearchBar({
   const showList = open && (rows.length > 0 || !!error || noPlacesFound);
 
   return (
-    <div ref={containerRef} className={mobile ? 'relative flex-1 min-w-0' : 'relative'}>
-      <div className={`flex items-center gap-1.5 rounded-full bg-white dark:bg-neutral-700 shadow-[0_4px_16px_rgba(0,0,0,0.35)] ${mobile ? 'px-2.5 py-1.5' : 'px-4 py-2'}`}>
+    <div ref={containerRef} className={mobile ? 'relative w-full min-w-0' : 'relative'}>
+      <div className={`flex items-center rounded-full bg-white dark:bg-neutral-700 shadow-[0_4px_16px_rgba(0,0,0,0.35)] ${mobile ? 'h-10 gap-2 px-3.5' : 'gap-1.5 px-4 py-2'}`}>
         {loading ? <SpinnerGlyph mobile={mobile} /> : <SearchGlyph mobile={mobile} />}
         <input
           ref={inputRef}
@@ -306,13 +306,21 @@ export default function MapSearchBar({
           }}
           onFocus={() => { loadBoundaries(); setOpen(true); }}
           onKeyDown={onKeyDown}
-          placeholder={mobile ? 'Search place or hydrant ID' : 'Search place, barangay or hydrant ID'}
+          placeholder="Search place, barangay or hydrant ID"
           aria-label="Search for a place, barangay or hydrant ID"
-          className={`${mobile ? 'w-full flex-1 min-w-0 text-xs' : 'w-64 text-sm'} bg-transparent text-neutral-700 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none`}
+          enterKeyHint="search"
+          autoComplete="off"
+          // 16px on phones (not text-base: the root font is 14px there), since iOS
+          // Safari zooms the page into any smaller input on focus.
+          className={`${mobile ? 'w-full flex-1 min-w-0 text-[16px] leading-normal' : 'w-64 text-sm'} bg-transparent text-neutral-700 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none`}
         />
         {query && (
-          <button onClick={clear} aria-label="Clear search" className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button
+            onClick={clear}
+            aria-label="Clear search"
+            className={`flex shrink-0 items-center justify-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 ${mobile ? '-mr-2.5 h-10 w-10' : ''}`}
+          >
+            <svg width={mobile ? 15 : 13} height={mobile ? 15 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         )}
       </div>
@@ -320,7 +328,7 @@ export default function MapSearchBar({
       {showList && (
         <ul
           ref={listRef}
-          className={`absolute left-0 top-[calc(100%+6px)] z-[2000] ${mobile ? 'w-[calc(100vw-1rem)]' : 'w-96'} max-h-[min(65dvh,34rem)] overflow-y-auto overscroll-contain rounded-xl bg-white dark:bg-neutral-800 shadow-[0_8px_32px_rgba(0,0,0,0.22)]`}
+          className={`absolute left-0 top-[calc(100%+6px)] z-[2000] ${mobile ? 'w-full' : 'w-96'} max-h-[min(65dvh,34rem)] overflow-y-auto overscroll-contain rounded-xl bg-white dark:bg-neutral-800 shadow-[0_8px_32px_rgba(0,0,0,0.22)]`}
         >
           {rows.map((row, i) => {
             const startsSection = i === 0 || SECTION_LABEL[rows[i - 1].type] !== SECTION_LABEL[row.type];
@@ -411,7 +419,7 @@ function AreaGlyph() {
 }
 
 function SearchGlyph({ mobile = false }: { mobile?: boolean }) {
-  const s = mobile ? 13 : 16;
+  const s = mobile ? 15 : 16;
   return (
     <svg width={s} height={s} viewBox="0 0 24 24" className="shrink-0 text-neutral-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="7" />
@@ -421,7 +429,7 @@ function SearchGlyph({ mobile = false }: { mobile?: boolean }) {
 }
 
 function SpinnerGlyph({ mobile = false }: { mobile?: boolean }) {
-  const s = mobile ? 13 : 16;
+  const s = mobile ? 15 : 16;
   return (
     <svg width={s} height={s} viewBox="0 0 24 24" className="shrink-0 animate-spin text-neutral-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <path d="M12 2a10 10 0 0 1 10 10" />

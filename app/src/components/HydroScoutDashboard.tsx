@@ -43,6 +43,7 @@ import { db } from '@/lib/firebase';
 import { useSharedFirePins } from '@/lib/use-shared-fire-pins';
 import { recordHydrantCheck, useHydrantChecking, type HydrantCheckStatus } from '@/lib/hydrant-checking';
 import { useIsMobile } from '@/lib/use-media-query';
+import { MOBILE_TOP_CONTROLS_BOTTOM } from './mapConfig';
 import { useOnlineStatus } from '@/lib/use-online-status';
 import { haversineM, formatDistance, formatDuration, distToRouteM } from '@/lib/haversine';
 import { type RankedHydrant } from '@/lib/nearest-hydrant';
@@ -1081,12 +1082,12 @@ export default function HydroScoutDashboard() {
     setSearchPin(view.pin ? { lat, lng, label: place.name } : null);
     if (view.fit) {
       const [west, south, east, north] = view.fit;
-      // Room for the header + search row on top and the side controls.
-      controllerRef.current?.fitRoute([[west, south], [east, north]], { top: 140, bottom: 60, left: 60, right: 60 });
+      // Room for the header + search row on top (filters + search on phones) and the side controls.
+      controllerRef.current?.fitRoute([[west, south], [east, north]], { top: isMobile ? 170 : 140, bottom: 60, left: 60, right: 60 });
     } else {
       controllerRef.current?.flyTo(lat, lng, view.zoom);
     }
-  }, []);
+  }, [isMobile]);
   const handleClearSearchPlace = useCallback(() => setSearchPin(null), []);
   const handleViewFireNotification = useCallback((lat: number, lng: number) => {
     setSelectedHydrant(null);
@@ -1322,7 +1323,7 @@ export default function HydroScoutDashboard() {
         <div
           className="pointer-events-none absolute left-1/2 z-[2050] -translate-x-1/2 anim-fade-scale"
           style={isMobile
-            ? { top: `calc(${otwHydrant ? '11rem' : '6.75rem'} + env(safe-area-inset-top, 0px))` }
+            ? { top: `calc(${MOBILE_TOP_CONTROLS_BOTTOM} + ${otwHydrant ? '5rem' : '0.75rem'} + env(safe-area-inset-top, 0px))` }
             : { bottom: '1.5rem' }}
         >
           <div className="pointer-events-auto flex items-center gap-2.5 whitespace-nowrap rounded-full bg-neutral-900/90 py-1.5 pl-3 pr-1.5 shadow-xl backdrop-blur-sm">
@@ -1363,7 +1364,7 @@ export default function HydroScoutDashboard() {
       {otwHydrant && (
         <div
           className="pointer-events-auto absolute left-1/2 top-[4.75rem] z-[2000] -translate-x-1/2 w-[calc(100vw-1.5rem)] sm:w-auto anim-fade-scale"
-          style={isMobile ? { top: 'calc(6.5rem + env(safe-area-inset-top, 0px))' } : undefined}
+          style={isMobile ? { top: `calc(${MOBILE_TOP_CONTROLS_BOTTOM} + 0.5rem + env(safe-area-inset-top, 0px))` } : undefined}
         >
 
           {/* Mobile (< sm): 2-row compact card */}
@@ -1531,7 +1532,7 @@ export default function HydroScoutDashboard() {
       {nonOperationalConfirm && (
         <div
           className="pointer-events-auto absolute left-1/2 z-[2100] flex -translate-x-1/2 flex-col gap-2 rounded-2xl bg-white/95 px-4 py-3 shadow-xl ring-1 ring-black/5 backdrop-blur-sm anim-fade-scale max-w-[min(420px,92vw)] dark:bg-neutral-900/90 dark:ring-white/10"
-          style={{ top: isMobile ? 'calc(7rem + env(safe-area-inset-top, 0px))' : '5.25rem' }}
+          style={{ top: isMobile ? `calc(${MOBILE_TOP_CONTROLS_BOTTOM} + 1rem + env(safe-area-inset-top, 0px))` : '5.25rem' }}
         >
           <div className="flex items-start gap-2.5">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={STATUS_META[nonOperationalConfirm.status].color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
@@ -1564,7 +1565,10 @@ export default function HydroScoutDashboard() {
 
       {/* Live-data status pill */}
       {(loading || error) && (
-        <div className="pointer-events-none absolute left-1/2 top-[5.25rem] z-[1200] -translate-x-1/2">
+        <div
+          className="pointer-events-none absolute left-1/2 top-[5.25rem] z-[1200] -translate-x-1/2"
+          style={isMobile ? { top: `calc(${MOBILE_TOP_CONTROLS_BOTTOM} + 0.5rem + env(safe-area-inset-top, 0px))` } : undefined}
+        >
           <span className={`rounded-full px-3 py-1 text-xs font-semibold shadow-md ${
             error ? 'bg-[#e0353b] text-white' : 'bg-white/95 text-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-300'
           }`}>

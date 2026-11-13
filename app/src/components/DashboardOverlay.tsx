@@ -196,11 +196,12 @@ function DashboardOverlay({
           <div className="h-1 w-full" style={{ background: 'repeating-linear-gradient(to right, #FED42E 0px, #FED42E 70px, #e0353b 70px, #e0353b 140px)' }} />
         </header>
 
-        {/* Search + horizontally-scrollable status pills — stays just below the header, above the OTW pill */}
-        <div className="pointer-events-auto absolute inset-x-0 z-[1100] flex flex-row items-center gap-1.5 px-2 pt-2" style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}>
-          <MapSearchBar {...searchBarProps} mobile />
-          <div className="shrink-0 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex w-max overflow-hidden rounded-lg">
+        {/* Status filters across the full width (they scroll sideways when they
+            don't fit), then a full-width search bar under them. Stays just below
+            the header; MOBILE_TOP_CONTROLS_BOTTOM in mapConfig is where it ends. */}
+        <div className="pointer-events-auto absolute inset-x-0 z-[1100] flex flex-col gap-2.5 px-2 pt-2.5" style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}>
+          <div className="overflow-x-auto rounded-lg [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-max min-w-full">
               {STATUS_ORDER.map((status) => {
                 const meta = STATUS_META[status];
                 const active = activeStatuses.has(status);
@@ -209,7 +210,7 @@ function DashboardOverlay({
                     key={status}
                     onClick={() => onSelectStatus(status)}
                     aria-pressed={active}
-                    className={`shrink-0 px-2 py-1 text-[10px] font-bold transition-all duration-150 ease-out active:scale-95 ${!active ? 'bg-white text-neutral-600 dark:bg-neutral-700 dark:text-neutral-100' : ''}`}
+                    className={`flex-auto whitespace-nowrap px-1.5 py-1.5 text-[10px] font-bold leading-4 transition-all duration-150 ease-out active:scale-95 ${!active ? 'bg-white text-neutral-600 dark:bg-neutral-700 dark:text-neutral-100' : ''}`}
                     style={{
                       background: active ? meta.color : (!isDark ? '#ffffff' : undefined),
                       color:      active ? '#ffffff'  : (!isDark ? '#4b5563' : undefined),
@@ -221,6 +222,7 @@ function DashboardOverlay({
               })}
             </div>
           </div>
+          <MapSearchBar {...searchBarProps} mobile />
         </div>
 
         {/* OTW hazard panel — bottom-left above nearest hydrant button, mobile only */}
