@@ -1,8 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { countByStatus, STATUS_META, type Hydrant, type HydrantStatus } from '../data/hydrants';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { STATUS_META, type Hydrant, type HydrantStatus } from '../data/hydrants';
 import { type Report } from '../data/reports';
+import {
+  complianceStats, conditionTrend, statusBreakdown, zoneStats,
+  type StatusBreakdown, type TrendPoint, type ZoneStats,
+} from '../data/operations-stats';
 import { useAuth, type Role } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import PillBadge from './PillBadge';
@@ -15,86 +19,26 @@ interface Props {
   onFindOnMap: (hydrantId: string) => void;
 }
 
-/* ── Zone computation ─────────────────────────────────────────────────────── */
-interface ZoneData {
-  name: string;
-  total: number;
-  operational: number;
-  rating: 'good' | 'moderate' | 'poor';
-}
-
-function computeZones(hydrants: Hydrant[]): ZoneData[] {
-  const map = new Map<string, { total: number; operational: number }>();
-  for (const h of hydrants) {
-    const area = h.area || 'Unknown';
-    const entry = map.get(area) ?? { total: 0, operational: 0 };
-    entry.total++;
-    if (h.status === 'operational') entry.operational++;
-    map.set(area, entry);
-  }
-  return Array.from(map.entries())
-    .map(([name, { total, operational }]) => {
-      const pct = total > 0 ? operational / total : 0;
-      const rating: 'good' | 'moderate' | 'poor' =
-        pct >= 0.75 ? 'good' : pct >= 0.5 ? 'moderate' : 'poor';
-      return { name, total, operational, rating };
-    })
-    .sort((a, b) => b.total - a.total);
-}
-
-/* ── Trend computation ────────────────────────────────────────────────────── */
-function computeTrendData(hydrants: Hydrant[]): { points: number[]; labels: string[] } {
-  const now = new Date();
-  const weeks = Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - (4 - i) * 7);
-    return d;
-  });
-
-  const points = weeks.map(weekEnd => {
-    const weekEndStr = weekEnd.toISOString().slice(0, 10);
-    let operational = 0;
-    let counted = 0;
-    for (const h of hydrants) {
-      counted++;
-      const before = h.register.filter(r => r.date && r.date.slice(0, 10) <= weekEndStr);
-      if (before.length === 0) {
-        if (h.status === 'operational') operational++;
-      } else {
-        const latest = before.reduce((a, b) => (a.date > b.date ? a : b));
-        if (latest.statusColor === '#2fbf4f') operational++;
-      }
-    }
-    return counted > 0 ? Math.round((operational / counted) * 100) : 0;
-  });
-
-  const labels = weeks.map(d =>
-    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  );
-
-  return { points, labels };
-}
-
 /* ── Donut chart ──────────────────────────────────────────────────────────── */
-function DonutChart({
-  operational, reduced, out, total,
-}: { operational: number; reduced: number; out: number; total: number }) {
+// The ring and percentage cover field-checked hydrants only. Temporarily
+// unavailable (BFP reference) hydrants are listed under it but not counted.
+function DonutChart({ breakdown }: { breakdown: StatusBreakdown }) {
   const { isDark } = useTheme();
+  const { operational, reduced, out, checked, pending, operationalPct } = breakdown;
   const r = 40;
   const cx = 56;
   const cy = 56;
   const circumference = 2 * Math.PI * r;
-  const operationalPct = total > 0 ? Math.round((operational / total) * 100) : 0;
 
   const segs = [
-    { color: '#2fbf4f', count: operational },
-    { color: '#f5a623', count: reduced },
-    { color: '#9aa0a6', count: out },
+    { color: STATUS_META.operational.color, count: operational },
+    { color: STATUS_META.reduced.color, count: reduced },
+    { color: STATUS_META.out.color, count: out },
   ];
 
   let cumulativeAngle = -90;
   const arcs = segs.map(seg => {
-    const pct = total > 0 ? seg.count / total : 0;
+    const pct = checked > 0 ? seg.count / checked : 0;
     const dashLen = pct * circumference;
     const startAngle = cumulativeAngle;
     cumulativeAngle += pct * 360;
@@ -119,7 +63,7 @@ function DonutChart({
           ) : null
         )}
         <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="800" fill={isDark ? '#f3f4f6' : '#111827'}>
-          {operationalPct}%
+          {operationalPct === null ? '—' : `${operationalPct}%`}
         </text>
         <text x={cx} y={cy + 11} textAnchor="middle" fontSize="6.5" fontWeight="700" fill="#9ca3af" letterSpacing="0.8">
           OPERATIONAL
@@ -128,9 +72,9 @@ function DonutChart({
 
       <div className="flex flex-col gap-2.5 text-xs">
         {[
-          { color: '#2fbf4f', label: 'Operational',   value: operational },
-          { color: '#f5a623', label: 'Reduced PSI',    value: reduced    },
-          { color: '#9aa0a6', label: 'Out of service', value: out        },
+          { color: STATUS_META.operational.color, label: 'Operational',    value: operational },
+          { color: STATUS_META.reduced.color,     label: 'Reduced PSI',    value: reduced     },
+          { color: STATUS_META.out.color,         label: 'Out of service', value: out         },
         ].map(item => (
           <div key={item.label} className="flex items-center gap-2">
             <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: item.color }} />
@@ -138,50 +82,97 @@ function DonutChart({
             <span className="ml-2 font-bold tabular-nums text-neutral-800 dark:text-neutral-100">{item.value}</span>
           </div>
         ))}
+        <div className="mt-0.5 border-t border-neutral-100 pt-2.5 dark:border-neutral-800">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: STATUS_META.reference.color }} />
+            <span className="text-neutral-500 dark:text-neutral-400">{STATUS_META.reference.legendLabel}</span>
+            <span className="ml-2 font-bold tabular-nums text-neutral-800 dark:text-neutral-100">{pending}</span>
+          </div>
+          <p className="mt-1 pl-4 text-[10px] text-neutral-400 dark:text-neutral-500">Pending field check · not in the %</p>
+        </div>
       </div>
     </div>
   );
 }
 
 /* ── Trend chart ──────────────────────────────────────────────────────────── */
-function TrendChart({ points, labels }: { points: number[]; labels: string[] }) {
+// Drawn at the card's real pixel width (a scaled viewBox blew text and dots
+// up on wide screens) on a fixed 0–100% scale. Weeks with no checked
+// hydrants are left as gaps.
+const TREND_PAD = { top: 24, right: 20, bottom: 30, left: 42 };
+
+function formatTrendDay(day: string) {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+function TrendChart({ points, height = 170 }: { points: TrendPoint[]; height?: number }) {
   const { isDark } = useTheme();
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(640);
 
-  const W = 460;
-  const H = 120;
-  const PAD = { top: 16, right: 12, bottom: 28, left: 36 };
-  const cW = W - PAD.left - PAD.right;
-  const cH = H - PAD.top - PAD.bottom;
-  const minY = Math.max(0, Math.floor(Math.min(...points) / 10) * 10 - 5);
-  const maxY = Math.min(100, Math.ceil(Math.max(...points) / 10) * 10 + 5);
-  const range = maxY - minY || 1;
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(280, Math.round(entry.contentRect.width))));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
-  const toX = (i: number) => PAD.left + (i / (points.length - 1)) * cW;
-  const toY = (v: number) => PAD.top + cH - ((v - minY) / range) * cH;
+  const cW = width - TREND_PAD.left - TREND_PAD.right;
+  const cH = height - TREND_PAD.top - TREND_PAD.bottom;
+  const baseY = TREND_PAD.top + cH;
+  const toX = (i: number) => TREND_PAD.left + (points.length > 1 ? (i / (points.length - 1)) * cW : cW / 2);
+  const toY = (pct: number) => baseY - (pct / 100) * cH;
 
-  const pathD = points.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(v)}`).join(' ');
-  const areaD = `${pathD} L ${toX(points.length - 1)} ${H - PAD.bottom} L ${toX(0)} ${H - PAD.bottom} Z`;
+  // Unbroken runs of weeks that have a value.
+  const runs: { x: number; y: number }[][] = [];
+  points.forEach((p, i) => {
+    if (p.operationalPct === null) { runs.push([]); return; }
+    if (!runs.length) runs.push([]);
+    runs[runs.length - 1].push({ x: toX(i), y: toY(p.operationalPct) });
+  });
+  const lines = runs.filter((run) => run.length > 0);
+  // Every other date label on narrow cards so they don't collide, counted back from Today.
+  const labelEvery = cW / Math.max(1, points.length - 1) < 52 ? 2 : 1;
+  const muted = isDark ? '#6b7280' : '#9ca3af';
 
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
-      {[25, 50, 75].filter(v => v >= minY && v <= maxY).map(v => (
-        <g key={v}>
-          <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)}
-            stroke={isDark ? '#374151' : '#e5e7eb'} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={PAD.left - 5} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{v}%</text>
-        </g>
-      ))}
-      <path d={areaD} fill="#e0353b" opacity={isDark ? 0.18 : 0.06} />
-      <path d={pathD} fill="none" stroke={isDark ? '#e0353b' : '#e0353b'} strokeWidth="2" strokeLinejoin="round" />
-      {points.map((v, i) => (
-        <circle key={i} cx={toX(i)} cy={toY(v)} r="4" fill={isDark ? '#e0353b' : '#e0353b'} stroke={isDark ? '#0b0f14' : 'white'} strokeWidth="1.5" />
-      ))}
-      {labels.map((w, i) => (
-        <text key={w} x={toX(i)} y={H - PAD.bottom + 13} textAnchor="middle" fontSize="9" fill="#9ca3af" fontWeight="600">
-          {w}
-        </text>
-      ))}
-    </svg>
+    <div ref={wrapRef} className="w-full">
+      {lines.length === 0 ? (
+        <p className="py-10 text-center text-xs text-neutral-400 dark:text-neutral-500">No field-checked hydrants yet.</p>
+      ) : (
+        <svg width={width} height={height} role="img" aria-label="Operational percentage of checked hydrants by week">
+          {[0, 25, 50, 75, 100].map((v) => (
+            <g key={v}>
+              <line x1={TREND_PAD.left} y1={toY(v)} x2={width - TREND_PAD.right} y2={toY(v)}
+                stroke={isDark ? '#2f3540' : '#e5e7eb'} strokeWidth="1" strokeDasharray={v === 0 ? undefined : '4 4'} />
+              <text x={TREND_PAD.left - 8} y={toY(v) + 3.5} textAnchor="end" fontSize="10" fill={muted}>{v}%</text>
+            </g>
+          ))}
+          {lines.map((run, i) => {
+            const d = run.map((pt, j) => `${j ? 'L' : 'M'} ${pt.x} ${pt.y}`).join(' ');
+            return (
+              <g key={i}>
+                <path d={`${d} L ${run.at(-1)!.x} ${baseY} L ${run[0].x} ${baseY} Z`} fill="#e0353b" opacity={isDark ? 0.14 : 0.07} />
+                <path d={d} fill="none" stroke="#e0353b" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+              </g>
+            );
+          })}
+          {points.map((p, i) => p.operationalPct === null ? null : (
+            <g key={p.day}>
+              <circle cx={toX(i)} cy={toY(p.operationalPct)} r="3.5" fill="#e0353b" stroke={isDark ? '#171717' : '#ffffff'} strokeWidth="1.5" />
+              <text x={toX(i)} y={toY(p.operationalPct) - 9} textAnchor="middle" fontSize="10" fontWeight="700"
+                fill={isDark ? '#e5e7eb' : '#374151'}>{p.operationalPct}%</text>
+            </g>
+          ))}
+          {points.map((p, i) => (points.length - 1 - i) % labelEvery === 0 && (
+            <text key={p.day} x={toX(i)} y={height - 10} textAnchor="middle" fontSize="10" fontWeight="600" fill={muted}>
+              {i === points.length - 1 ? 'Today' : formatTrendDay(p.day)}
+            </text>
+          ))}
+        </svg>
+      )}
+    </div>
   );
 }
 
@@ -190,9 +181,11 @@ const RATING_META = {
   good:     { color: '#2fbf4f', label: 'GOOD'     },
   moderate: { color: '#f5a623', label: 'MODERATE' },
   poor:     { color: '#e0353b', label: 'POOR'     },
+  // Only temporarily unavailable hydrants so far: nothing to rate yet.
+  pending:  { color: STATUS_META.reference.color, label: 'PENDING' },
 };
 
-function ZoneRow({ name, total, operational, rating, selected, onClick }: ZoneData & { selected: boolean; onClick: () => void }) {
+function ZoneRow({ name, checked, operational, pending, rating, selected, onClick }: ZoneStats & { selected: boolean; onClick: () => void }) {
   const meta = RATING_META[rating];
   return (
     <button
@@ -205,7 +198,9 @@ function ZoneRow({ name, total, operational, rating, selected, onClick }: ZoneDa
         <span className="h-5 w-1 shrink-0 rounded-full" style={{ background: meta.color }} />
         <div>
           <p className={`text-xs font-bold ${selected ? 'text-[#e0353b]' : 'text-neutral-800 dark:text-neutral-100'}`}>{name}</p>
-          <p className="text-[11px] text-neutral-400 dark:text-neutral-500">{total} hyd · {operational} op</p>
+          <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
+            {checked} checked · {operational} op{pending > 0 && ` · ${pending} pending`}
+          </p>
         </div>
       </div>
       <span className="shrink-0">
@@ -230,7 +225,7 @@ interface ActivityItem {
   status: HydrantStatus;
 }
 
-function computeRecentActivity(hydrants: Hydrant[], limit = 8): ActivityItem[] {
+function computeRecentActivity(hydrants: Hydrant[], limit = 12): ActivityItem[] {
   const items: ActivityItem[] = [];
   for (const h of hydrants) {
     const dated = h.register.filter((r) => r.date);
@@ -268,7 +263,7 @@ function ActivityRow({
       <button
         onClick={onToggle}
         aria-expanded={expanded}
-        className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${
+        className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left transition-colors ${
           expanded ? 'bg-red-50 dark:bg-red-950/30' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
         }`}
       >
@@ -281,11 +276,12 @@ function ActivityRow({
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          <span className="hidden text-[11px] font-medium text-neutral-400 tabular-nums dark:text-neutral-500 sm:block">
+        {/* Date under the pill keeps rows narrow enough for a side column. */}
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <PillBadge dot={meta.color} color={meta.color} label={meta.pillLabel} />
+          <span className="text-[10px] font-medium text-neutral-400 tabular-nums dark:text-neutral-500">
             {formatActivityDate(date)}
           </span>
-          <PillBadge dot={meta.color} color={meta.color} label={meta.pillLabel} />
         </div>
       </button>
       {expanded && (
@@ -311,23 +307,27 @@ function PinGlyph() {
 }
 
 /* ── Card wrapper ─────────────────────────────────────────────────────────── */
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+// `className` carries the display (flex/hidden) and grid placement; `scroll`
+// lets a long list scroll inside the card when the grid caps its height.
+function Card({ title, subtitle, className = 'flex', scroll = false, children }: {
+  title: string; subtitle?: string; className?: string; scroll?: boolean; children: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-col rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="border-b border-neutral-100 px-4 py-3 dark:border-neutral-800 md:px-5">
-        <p className="text-sm font-bold text-neutral-800 dark:text-neutral-100">{title}</p>
+    <section className={`${className} min-w-0 flex-col rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900`}>
+      <div className="shrink-0 border-b border-neutral-100 px-4 py-2.5 dark:border-neutral-800">
+        <h2 className="text-sm font-bold text-neutral-800 dark:text-neutral-100">{title}</h2>
         {subtitle && <p className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
       </div>
-      <div className="flex-1 px-4 py-3.5 md:px-5 md:py-4">{children}</div>
-    </div>
+      <div className={`flex-1 px-4 py-3 ${scroll ? 'min-h-0 overflow-y-auto' : ''}`}>{children}</div>
+    </section>
   );
 }
 
 /* ── Stat box ─────────────────────────────────────────────────────────────── */
 function StatBox({ value, label, sub }: { value: number; label: string; sub?: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
-      <span className="text-3xl font-extrabold tabular-nums text-[#e0353b] dark:text-[#e0353b]">{value}</span>
+    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 p-2.5 dark:border-neutral-700">
+      <span className="text-2xl font-extrabold tabular-nums text-[#e0353b] dark:text-[#e0353b]">{value}</span>
       <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">{label}</span>
       {sub && <span className="text-[10px] text-neutral-400 dark:text-neutral-500">{sub}</span>}
     </div>
@@ -335,16 +335,26 @@ function StatBox({ value, label, sub }: { value: number; label: string; sub?: st
 }
 
 /* ── Main component ───────────────────────────────────────────────────────── */
+type OpsTab = 'overview' | 'trend' | 'zones' | 'activity';
+
+const OPS_TABS: { id: OpsTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'trend',    label: 'Trend' },
+  { id: 'zones',    label: 'Zones' },
+  { id: 'activity', label: 'Recent' },
+];
+
 export default function OperationsDashboard({ hydrants, reports, role, onClose, onFindOnMap }: Props) {
   const { user, accountType } = useAuth();
-  const counts = useMemo(() => countByStatus(hydrants), [hydrants]);
   const total = hydrants.length;
-  const openReports  = reports.filter(r => r.status === 'pending').length;
-  const obstructed   = hydrants.filter(h => h.hazard && !['None', '—', '', 'none'].includes(h.hazard)).length;
-  const verified     = hydrants.filter(h => h.register.length > 0).length;
+  const openReports = reports.filter(r => r.status === 'pending').length;
+  // Temporarily unavailable (BFP reference) hydrants are excluded from these;
+  // see app/src/data/operations-stats.ts.
+  const breakdown  = useMemo(() => statusBreakdown(hydrants), [hydrants]);
+  const compliance = useMemo(() => complianceStats(hydrants), [hydrants]);
 
-  const zones    = useMemo(() => computeZones(hydrants), [hydrants]);
-  const trend    = useMemo(() => computeTrendData(hydrants), [hydrants]);
+  const zones    = useMemo(() => zoneStats(hydrants), [hydrants]);
+  const trend    = useMemo(() => conditionTrend(hydrants), [hydrants]);
   const activity = useMemo(() => computeRecentActivity(hydrants), [hydrants]);
   const roleLabel = accountType === 'station' ? 'Station Account' : role === 'admin' ? 'Admin' : 'Head';
 
@@ -354,6 +364,10 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose, 
 
   // Which recent-activity row is expanded to reveal its "Find in Map" action.
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
+
+  // Below xl only the chosen tab's cards show; from xl everything does.
+  const [tab, setTab] = useState<OpsTab>('overview');
+  const shown = (id: OpsTab) => `${tab === id ? 'flex' : 'hidden'} xl:flex`;
 
   const displayName = user?.displayName
     || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User');
@@ -405,58 +419,85 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose, 
           <span className="mx-1.5">·</span>
           <span className="font-bold text-neutral-600 dark:text-neutral-300">{openReports}</span> Open Reports
           <span className="mx-1.5">·</span>
-          <span className="font-bold text-neutral-600 dark:text-neutral-300">{obstructed}</span> Obstructed
+          <span className="font-bold text-neutral-600 dark:text-neutral-300">{compliance.obstructed}</span> Obstructed
         </p>
       </div>
 
-      {/* Grid body */}
-      <div className="scroll-fade grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto bg-neutral-100 p-3 dark:bg-neutral-950 md:grid-cols-3 md:gap-4 md:p-6">
+      {/* Below xl: one tab at a time */}
+      <nav aria-label="Dashboard sections" className="shrink-0 border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 xl:hidden">
+        <div role="tablist" className="flex gap-1.5 overflow-x-auto px-3 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {OPS_TABS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors ${
+                tab === id
+                  ? 'bg-[#e0353b] text-white'
+                  : 'bg-neutral-100 text-neutral-600 active:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
 
-        {/* Status Breakdown */}
-        <Card title="Status Breakdown" subtitle={`LIVE · ${total} HYDRANTS IN AOR`}>
-          <DonutChart
-            operational={counts.operational}
-            reduced={counts.reduced}
-            out={counts.out}
-            total={total}
-          />
-        </Card>
+      {/* xl and up: everything on one screen — status, hazard and trend on top;
+          zones and recent activity fill the rest and scroll inside their cards. */}
+      <div className="scroll-fade min-h-0 flex-1 overflow-y-auto bg-neutral-100 p-3 dark:bg-neutral-950 md:p-4 xl:overflow-hidden">
+        <div className="flex flex-col gap-3 xl:grid xl:h-full xl:grid-cols-12 xl:grid-rows-[auto_minmax(0,1fr)] xl:gap-4">
 
-        {/* Hazard & Compliance */}
-        <Card title="Hazard & Compliance" subtitle="OBSTRUCTION · RA 9514 §8">
-          <div className="grid grid-cols-2 gap-3">
-            <StatBox
-              value={obstructed}
-              label="Obstructed"
-              sub={total > 0 ? `${Math.round((obstructed / total) * 100)}%` : undefined}
-            />
-            <StatBox value={openReports} label="Open Reports" />
-            <StatBox value={verified}    label="Verified"     />
-            <StatBox value={total - obstructed} label="Compliant" />
-          </div>
-        </Card>
+          {/* Status Breakdown */}
+          <Card className={`${shown('overview')} xl:col-span-4`} title="Status Breakdown" subtitle={`LIVE · ${breakdown.checked} CHECKED · ${breakdown.pending} PENDING CHECK`}>
+            <DonutChart breakdown={breakdown} />
+          </Card>
 
-        {/* Coverage by Zone */}
-        <Card title="Coverage by Zone" subtitle="TAP ZONE · OPERATIONAL COUNT">
-          {zones.length > 0 ? (
-            <div className="flex max-h-64 flex-col overflow-y-auto">
-              {zones.map(z => (
-                <ZoneRow
-                  key={z.name}
-                  {...z}
-                  selected={selectedZone === z.name}
-                  onClick={() => toggleZone(z.name)}
-                />
-              ))}
+          {/* Hazard & Compliance — field-checked hydrants only */}
+          <Card className={`${shown('overview')} xl:col-span-3`} title="Hazard & Compliance" subtitle="OBSTRUCTION · RA 9514 §8 · CHECKED">
+            <div className="grid grid-cols-2 gap-2.5">
+              <StatBox
+                value={compliance.obstructed}
+                label="Obstructed"
+                sub={compliance.obstructedPct === null ? undefined : `${compliance.obstructedPct}% of checked`}
+              />
+              <StatBox value={openReports} label="Open Reports" />
+              <StatBox
+                value={compliance.verified}
+                label="Verified"
+                sub={breakdown.pending > 0 ? `${breakdown.pending} pending check` : undefined}
+              />
+              <StatBox value={compliance.compliant} label="Compliant" sub="checked, no obstruction" />
             </div>
-          ) : (
-            <p className="text-xs text-neutral-400 dark:text-neutral-500">No zone data available.</p>
-          )}
-        </Card>
+          </Card>
 
-        {/* Recently Updated */}
-        <div className="md:col-span-3">
-          <Card title="Recently Updated" subtitle="LATEST REGISTER ACTIVITY · NEWEST FIRST">
+          {/* Condition Trend */}
+          <Card className={`${shown('trend')} xl:col-span-5`} title="Condition Trend" subtitle="WEEKLY · OPERATIONAL % OF CHECKED HYDRANTS">
+            <TrendChart points={trend} height={160} />
+          </Card>
+
+          {/* Coverage by Zone */}
+          <Card className={`${shown('zones')} min-h-0 xl:col-span-5`} scroll title="Coverage by Zone" subtitle="BY BARANGAY · OPERATIONAL OF CHECKED">
+            {zones.length > 0 ? (
+              <div className="flex flex-col">
+                {zones.map(z => (
+                  <ZoneRow
+                    key={z.name}
+                    {...z}
+                    selected={selectedZone === z.name}
+                    onClick={() => toggleZone(z.name)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-neutral-400 dark:text-neutral-500">No zone data available.</p>
+            )}
+          </Card>
+
+          {/* Recently Updated */}
+          <Card className={`${shown('activity')} min-h-0 xl:col-span-7`} scroll title="Recently Updated" subtitle="LATEST REGISTER ACTIVITY · NEWEST FIRST">
             {activity.length > 0 ? (
               <div className="flex flex-col">
                 {activity.map((a) => (
@@ -472,13 +513,6 @@ export default function OperationsDashboard({ hydrants, reports, role, onClose, 
             ) : (
               <p className="text-xs text-neutral-400 dark:text-neutral-500">No recent activity recorded.</p>
             )}
-          </Card>
-        </div>
-
-        {/* Condition Trend */}
-        <div className="md:col-span-3">
-          <Card title="Condition Trend" subtitle="OPERATIONAL % OVER TIME">
-            <TrendChart points={trend.points} labels={trend.labels} />
           </Card>
         </div>
       </div>
