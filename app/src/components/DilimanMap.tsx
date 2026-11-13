@@ -10,8 +10,8 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { createMapClusterIndex, mapClusterLayout, type ClusterMarker, type ClusterLayout, type HydrantPlacement } from '@/lib/map-clusters';
 import {
-  DILIMAN_CENTER, DEFAULT_ZOOM, DILIMAN_AOR_OUTLINE, AOR_OUTLINE_SOURCE, AOR_OUTLINE_CASING_LAYER,
-  AOR_OUTLINE_LINE_LAYER, AOR_OUTLINE_COLOR, AOR_OUTLINE_CASING_COLOR, AOR_OUTLINE_DASH,
+  DILIMAN_CENTER, DEFAULT_ZOOM, DILIMAN_AOR_OUTLINE, AOR_OUTLINE_SOURCE, AOR_OUTLINE_LINE_LAYER,
+  AOR_OUTLINE_DASH, aorOutlineStyle,
 } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER, OWN_AOR_PIN_FILTER, OTHER_AOR_PIN_FILTER } from './hydrantIcon';
 import {
@@ -451,13 +451,25 @@ export default function DilimanMap({
   }, [mapInstance]);
 
   // Diliman AOR outline (thesis scope). Added before the OTW route and kept
-  // under the fire overlays, so every other line draws on top of it.
+  // under the fire overlays, so every other line draws on top of it. A theme
+  // change reloads the style, which re-adds it in that theme's colours.
+  const isDarkRef = useRef(isDark);
+  useEffect(() => {
+    isDarkRef.current = isDark;
+    // If the style swap kept the layer instead of reloading, recolour it in place.
+    if (mapInstance?.isStyleLoaded() && mapInstance.getLayer(AOR_OUTLINE_LINE_LAYER)) {
+      const { color, opacity } = aorOutlineStyle(isDark);
+      mapInstance.setPaintProperty(AOR_OUTLINE_LINE_LAYER, 'line-color', color);
+      mapInstance.setPaintProperty(AOR_OUTLINE_LINE_LAYER, 'line-opacity', opacity);
+    }
+  }, [isDark, mapInstance]);
+
   useEffect(() => {
     if (!mapInstance || mapInstance.getSource(AOR_OUTLINE_SOURCE)) return;
+    const { color, opacity } = aorOutlineStyle(isDarkRef.current);
     mapInstance.addSource(AOR_OUTLINE_SOURCE, { type: 'geojson', data: DILIMAN_AOR_OUTLINE });
     const before = [OTW_GLOW_LAYER, 'fire-radius-fill', 'fire-supply-glow'].find((id) => mapInstance.getLayer(id));
-    mapInstance.addLayer({ id: AOR_OUTLINE_CASING_LAYER, type: 'line', source: AOR_OUTLINE_SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-color': AOR_OUTLINE_CASING_COLOR, 'line-opacity': 0.55, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 2.5, 16, 5] } }, before);
-    mapInstance.addLayer({ id: AOR_OUTLINE_LINE_LAYER, type: 'line', source: AOR_OUTLINE_SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-color': AOR_OUTLINE_COLOR, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.2, 16, 2.5], 'line-dasharray': AOR_OUTLINE_DASH } }, before);
+    mapInstance.addLayer({ id: AOR_OUTLINE_LINE_LAYER, type: 'line', source: AOR_OUTLINE_SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-color': color, 'line-opacity': opacity, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1, 16, 2], 'line-dasharray': AOR_OUTLINE_DASH } }, before);
   }, [mapInstance, styleEpoch]);
 
   useEffect(() => {

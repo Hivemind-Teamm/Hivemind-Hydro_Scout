@@ -21,8 +21,8 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { createMapClusterIndex, mapClusterLayout, type ClusterMarker, type ClusterLayout, type HydrantPlacement } from '@/lib/map-clusters';
 import {
-  DILIMAN_CENTER, DEFAULT_ZOOM, DILIMAN_AOR_OUTLINE, AOR_OUTLINE_SOURCE, AOR_OUTLINE_CASING_LAYER,
-  AOR_OUTLINE_LINE_LAYER, AOR_OUTLINE_COLOR, AOR_OUTLINE_CASING_COLOR, AOR_OUTLINE_DASH,
+  DILIMAN_CENTER, DEFAULT_ZOOM, DILIMAN_AOR_OUTLINE, AOR_OUTLINE_SOURCE, AOR_OUTLINE_LINE_LAYER,
+  AOR_OUTLINE_DASH, aorOutlineStyle,
 } from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER, OWN_AOR_PIN_FILTER, OTHER_AOR_PIN_FILTER } from './hydrantIcon';
 import {
@@ -674,10 +674,11 @@ export default function MapLibreMap({
     if (!map || !styleLoadedRef.current) return;
     const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
     if (!map.getSource(AOR_OUTLINE_SOURCE)) {
+      // A theme swap reloads the style (styleEpoch), so this picks up the new theme's colours.
+      const { color, opacity } = aorOutlineStyle(isDark);
       map.addSource(AOR_OUTLINE_SOURCE, { type: 'geojson', data: DILIMAN_AOR_OUTLINE });
       const before = map.getLayer(OTW_GLOW_LAYER) ? OTW_GLOW_LAYER : undefined;
-      map.addLayer({ id: AOR_OUTLINE_CASING_LAYER, type: 'line', source: AOR_OUTLINE_SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-color': AOR_OUTLINE_CASING_COLOR, 'line-opacity': 0.55, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 2.5, 16, 5] } }, before);
-      map.addLayer({ id: AOR_OUTLINE_LINE_LAYER, type: 'line', source: AOR_OUTLINE_SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-color': AOR_OUTLINE_COLOR, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.2, 16, 2.5], 'line-dasharray': AOR_OUTLINE_DASH } }, before);
+      map.addLayer({ id: AOR_OUTLINE_LINE_LAYER, type: 'line', source: AOR_OUTLINE_SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-color': color, 'line-opacity': opacity, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1, 16, 2], 'line-dasharray': AOR_OUTLINE_DASH } }, before);
     }
     if (!map.getSource(OTW_SOURCE)) {
       map.addSource(OTW_SOURCE, { type: 'geojson', data: empty });
@@ -695,7 +696,7 @@ export default function MapLibreMap({
       map.addLayer({ id: FIRE_SUPPLY_GLOW, type: 'line', source: FIRE_SUPPLY_SOURCE, layout: { 'line-cap': 'round' }, paint: { 'line-color': SUPPLY_LINE_COLOR, 'line-width': 10, 'line-opacity': 0.2, 'line-blur': 4 } });
       map.addLayer({ id: FIRE_SUPPLY_LINE, type: 'line', source: FIRE_SUPPLY_SOURCE, layout: { 'line-cap': 'round' }, paint: { 'line-color': SUPPLY_LINE_COLOR, 'line-width': 3.5, 'line-dasharray': SUPPLY_LINE_DASH } });
     }
-  }, [mapInstance, styleEpoch]);
+  }, [mapInstance, styleEpoch, isDark]);
 
   useEffect(() => {
     if (!mapInstance) return;

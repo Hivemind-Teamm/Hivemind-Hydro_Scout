@@ -12,9 +12,13 @@ export const DEFAULT_ZOOM = 15;
 // the Diliman outline Google Maps shows.
 export const DILIMAN_AOR_OUTLINE = dilimanAor as GeoJSON.Feature<GeoJSON.Polygon>;
 export const AOR_OUTLINE_SOURCE = 'diliman-aor';
-export const AOR_OUTLINE_CASING_LAYER = 'diliman-aor-casing';
 export const AOR_OUTLINE_LINE_LAYER = 'diliman-aor-line';
-export const AOR_OUTLINE_COLOR = '#e0353b';
-// White under the dashes keeps the line readable on satellite imagery.
-export const AOR_OUTLINE_CASING_COLOR = '#ffffff';
-export const AOR_OUTLINE_DASH = [2, 1.5];
+export const AOR_OUTLINE_DASH = [2.5, 2];
+
+/**
+ * A quiet guide line, not a border: thin and translucent, and a softer red
+ * on the dark map, where saturated red glares.
+ */
+export function aorOutlineStyle(isDark: boolean) {
+  return isDark ? { color: '#ff8a8a', opacity: 0.45 } : { color: '#e0353b', opacity: 0.55 };
+}
