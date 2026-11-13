@@ -6,7 +6,7 @@ import { MdCenterFocusStrong, MdFireTruck, MdLocalFireDepartment, MdWaterDrop } 
 import { STATUS_META, type Hydrant } from '../data/hydrants';
 import { formatDistance } from '@/lib/haversine';
 import type { FireHydrantCandidate } from '@/lib/fire-response';
-import { supplyStages } from '@/lib/supply-layout';
+import { supplyStages, TRUCK_ROLE_LABELS } from '@/lib/supply-layout';
 import type { SupplyLineEstimate } from '@/lib/supply-line';
 import type { SupplyLine } from '@/lib/use-supply-line';
 
@@ -219,7 +219,7 @@ function SupplyEstimate({ supply, estimate, routing, onViewHydrant }: {
           label="Fire trucks"
           value={ready?.fireTrucks}
           detail={ready && [
-            `${ready.trucks.pumperAtHydrant} at hydrant`,
+            `${ready.trucks.pumperAtHydrant} ${TRUCK_ROLE_LABELS.pumper.toLowerCase()}`,
             `${ready.trucks.relayPumpers} relay engine${ready.trucks.relayPumpers === 1 ? '' : 's'}`,
             `${ready.trucks.engineAtFire} at fire`,
           ]}
@@ -274,21 +274,22 @@ function SupplyEstimate({ supply, estimate, routing, onViewHydrant }: {
 }
 
 /**
- * The supply line drawn left to right: hydrant and its pumper, each hose
- * stage (to scale) with a relay engine between stages, then the engine at the
- * fire. Dashed hose means the length is still a straight-line estimate.
+ * The supply line drawn left to right: hydrant and its relay/spotter engine,
+ * each hose stage (to scale) with a relay engine between stages, then the
+ * engine at the fire. Dashed hose means the length is still a straight-line
+ * estimate.
  */
 function SupplyDiagram({ estimate, estimated }: { estimate: ReadyEstimate; estimated: boolean }) {
   const stages = supplyStages(estimate);
   const relays = estimate.trucks.relayPumpers;
-  const summary = `Hydrant, ${estimate.fireTrucks} fire trucks and ${stages.length} hose ${stages.length === 1 ? 'stage' : 'stages'} to the fire`;
+  const summary = `Hydrant with a relay/spotter engine, ${estimate.fireTrucks} fire trucks in all and ${stages.length} hose ${stages.length === 1 ? 'stage' : 'stages'} to the fire`;
   const collapsed = stages.length > 4;
 
   return (
     <div className="mt-2.5" role="img" aria-label={summary}>
       <div className={`flex items-center ${collapsed ? '' : 'pb-4'}`}>
         <DiagramNode kind="hydrant" />
-        <DiagramNode kind="truck" />
+        <DiagramNode kind="truck" title={TRUCK_ROLE_LABELS.pumper} />
         {collapsed ? (
           <>
             <Hose estimated={estimated} />
@@ -328,14 +329,14 @@ function Hose({ estimated, meters }: { estimated: boolean; meters?: number }) {
   );
 }
 
-function DiagramNode({ kind }: { kind: 'hydrant' | 'truck' | 'fire' }) {
+function DiagramNode({ kind, title }: { kind: 'hydrant' | 'truck' | 'fire'; title?: string }) {
   const look = {
     hydrant: { className: 'bg-sky-500', icon: <MdWaterDrop className="h-3 w-3" /> },
     truck: { className: 'bg-[#e0353b]', icon: <MdFireTruck className="h-3 w-3" /> },
     fire: { className: 'bg-orange-500', icon: <MdLocalFireDepartment className="h-3 w-3" /> },
   }[kind];
   return (
-    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ring-2 ring-white dark:ring-neutral-900 ${look.className}`}>
+    <span title={title} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ring-2 ring-white dark:ring-neutral-900 ${look.className}`}>
       {look.icon}
     </span>
   );

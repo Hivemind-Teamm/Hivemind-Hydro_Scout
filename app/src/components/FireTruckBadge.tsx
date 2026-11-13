@@ -1,17 +1,12 @@
 import { MdFireTruck } from 'react-icons/md';
-import type { SupplyTruck } from '@/lib/supply-layout';
-
-const TITLES: Record<SupplyTruck['role'], string> = {
-  pumper: 'Pumper at the hydrant',
-  relay: 'Relay engine',
-  engine: 'Engine at the fire',
-};
+import { TRUCK_ROLE_LABELS, type SupplyTruck } from '@/lib/supply-layout';
 
 /** A fire truck on the supply line, shared by both map providers. */
 export default function FireTruckBadge({ role, count }: Pick<SupplyTruck, 'role' | 'count'>) {
-  const label = count > 1 ? `${TITLES[role]} and ${count - 1} relay ${count > 2 ? 'engines' : 'engine'}` : TITLES[role];
+  const title = TRUCK_ROLE_LABELS[role];
+  const label = count > 1 ? `${title} and ${count - 1} relay ${count > 2 ? 'engines' : 'engine'}` : title;
   return (
-    <div className={`fire-truck fire-truck-${role}`} role="img" aria-label={label}>
+    <div className={`fire-truck fire-truck-${role}`} role="img" aria-label={label} title={label}>
       <MdFireTruck />
       {count > 1 && <span className="fire-truck-count">{count}</span>}
     </div>
