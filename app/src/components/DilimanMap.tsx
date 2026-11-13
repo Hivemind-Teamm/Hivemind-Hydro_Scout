@@ -9,7 +9,10 @@ import MapGL, { Marker, Layer, Source, type MapRef, type MarkerEvent } from 'rea
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { createMapClusterIndex, mapClusterLayout, type ClusterMarker, type ClusterLayout, type HydrantPlacement } from '@/lib/map-clusters';
-import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
+import {
+  DILIMAN_CENTER, DEFAULT_ZOOM, DILIMAN_AOR_OUTLINE, AOR_OUTLINE_SOURCE, AOR_OUTLINE_CASING_LAYER,
+  AOR_OUTLINE_LINE_LAYER, AOR_OUTLINE_COLOR, AOR_OUTLINE_CASING_COLOR, AOR_OUTLINE_DASH,
+} from './mapConfig';
 import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER, OWN_AOR_PIN_FILTER, OTHER_AOR_PIN_FILTER } from './hydrantIcon';
 import {
   FLAME_PATH, FIRE_COLOR, SUPPLY_LINE_COLOR,
@@ -446,6 +449,16 @@ export default function DilimanMap({
       mapInstance.boxZoom.enable();
     };
   }, [mapInstance]);
+
+  // Diliman AOR outline (thesis scope). Added before the OTW route and kept
+  // under the fire overlays, so every other line draws on top of it.
+  useEffect(() => {
+    if (!mapInstance || mapInstance.getSource(AOR_OUTLINE_SOURCE)) return;
+    mapInstance.addSource(AOR_OUTLINE_SOURCE, { type: 'geojson', data: DILIMAN_AOR_OUTLINE });
+    const before = [OTW_GLOW_LAYER, 'fire-radius-fill', 'fire-supply-glow'].find((id) => mapInstance.getLayer(id));
+    mapInstance.addLayer({ id: AOR_OUTLINE_CASING_LAYER, type: 'line', source: AOR_OUTLINE_SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-color': AOR_OUTLINE_CASING_COLOR, 'line-opacity': 0.55, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 2.5, 16, 5] } }, before);
+    mapInstance.addLayer({ id: AOR_OUTLINE_LINE_LAYER, type: 'line', source: AOR_OUTLINE_SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-color': AOR_OUTLINE_COLOR, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.2, 16, 2.5], 'line-dasharray': AOR_OUTLINE_DASH } }, before);
+  }, [mapInstance, styleEpoch]);
 
   useEffect(() => {
     if (!mapInstance || mapInstance.getSource(OTW_SOURCE)) return;
