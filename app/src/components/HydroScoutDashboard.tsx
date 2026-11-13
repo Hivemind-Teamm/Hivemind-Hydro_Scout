@@ -7,6 +7,8 @@ import dynamic from 'next/dynamic';
 import { doc, onSnapshot } from 'firebase/firestore';
 import MapView, { type MapProvider, type MapController, type FireOverlay } from './MapView';
 import DashboardOverlay from './DashboardOverlay';
+import type { SearchPlaceSelection } from './MapSearchBar';
+import type { SearchPin } from './SearchPinMarker';
 import HydrantInfoPanel from './HydrantInfoPanel';
 import FullDetailsPanel from './FullDetailsPanel';
 import EditStatusPanel from './EditStatusPanel';
@@ -52,6 +54,7 @@ import {
   pickSupplyHydrant,
 } from '@/lib/fire-response';
 import { useSupplyLine } from '@/lib/use-supply-line';
+import { placeView } from '@/lib/place-search';
 import { layoutSupplyLine } from '@/lib/supply-layout';
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
@@ -98,6 +101,9 @@ export default function HydroScoutDashboard() {
   const [responseActionContainer, setResponseActionContainer] = useState<HTMLDivElement | null>(null);
   const [activeStatuses, setActiveStatuses] = useState<ReadonlySet<HydrantStatus>>(() => new Set(DEFAULT_VISIBLE_STATUSES));
   const [selectedHydrant, setSelectedHydrant] = useState<Hydrant | null>(null);
+  // Place chosen in the search bar; shown until the search is cleared. Never
+  // persisted: Mapbox results may not be stored (Product Terms §2.7.2).
+  const [searchPin, setSearchPin] = useState<SearchPin | null>(null);
   const [showFullDetails, setShowFullDetails] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -1067,6 +1073,21 @@ export default function HydroScoutDashboard() {
   const handleZoomIn        = useCallback(() => controllerRef.current?.zoomIn(), []);
   const handleZoomOut       = useCallback(() => controllerRef.current?.zoomOut(), []);
   const handleOverlayFlyTo  = useCallback((lat: number, lng: number, zoom?: number) => controllerRef.current?.flyTo(lat, lng, zoom), []);
+  const handleGetMapCenter  = useCallback(() => controllerRef.current?.getCenter() ?? null, []);
+  // Search bar place/barangay: frame areas and big sites, fly to spots; spots get a pin.
+  const handleSearchPlace = useCallback((place: SearchPlaceSelection) => {
+    const { lat, lng } = place.location;
+    const view = placeView(place.kind, place.location);
+    setSearchPin(view.pin ? { lat, lng, label: place.name } : null);
+    if (view.fit) {
+      const [west, south, east, north] = view.fit;
+      // Room for the header + search row on top and the side controls.
+      controllerRef.current?.fitRoute([[west, south], [east, north]], { top: 140, bottom: 60, left: 60, right: 60 });
+    } else {
+      controllerRef.current?.flyTo(lat, lng, view.zoom);
+    }
+  }, []);
+  const handleClearSearchPlace = useCallback(() => setSearchPin(null), []);
   const handleViewFireNotification = useCallback((lat: number, lng: number) => {
     setSelectedHydrant(null);
     setShowFullDetails(false);
@@ -1195,6 +1216,7 @@ export default function HydroScoutDashboard() {
           firePinMode={firePinMode}
           fire={fireOverlay}
           hideUnitLocations={hideUnitLocationsWhileResponding}
+          searchPin={searchPin}
           onFirePin={handleFirePin}
           onFireMove={canEditFire ? handleFireMove : undefined}
           sharedFirePins={user ? sharedFires.pins.filter(pin => pin.id !== fire?.id) : []}
@@ -1264,6 +1286,9 @@ export default function HydroScoutDashboard() {
         onFlyTo={handleOverlayFlyTo}
         hydrants={hydrants}
         onSelectHydrant={handleSelectHydrant}
+        getMapCenter={handleGetMapCenter}
+        onSelectSearchPlace={handleSearchPlace}
+        onClearSearchPlace={handleClearSearchPlace}
         onToggle3D={handleToggle3D}
         is3D={is3D}
         showReports={showReports}
