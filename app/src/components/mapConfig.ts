@@ -22,3 +22,11 @@ export const AOR_OUTLINE_DASH = [2.5, 2];
 export function aorOutlineStyle(isDark: boolean) {
   return isDark ? { color: '#ff8a8a', opacity: 0.45 } : { color: '#e0353b', opacity: 0.55 };
 }
+
+/**
+ * Phones: where the top controls (status filters, then the search bar under
+ * them) end, measured from below the safe-area inset. Banners and toasts that
+ * sit under those controls start from here. Keep in step with the mobile
+ * layout in DashboardOverlay.
+ */
+export const MOBILE_TOP_CONTROLS_BOTTOM = '9.25rem';
