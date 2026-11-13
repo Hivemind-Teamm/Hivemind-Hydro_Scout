@@ -11,8 +11,8 @@ import { sortAccountDirectory, type AccountSort } from '@/lib/account-directory-
 // Opened as an overlay from the map dashboard. The button that opens it is
 // only rendered for admins; Firestore security rules are the real enforcement.
 
-import { useMemo, useRef, useState, type DragEvent } from 'react';
-import { FiX } from 'react-icons/fi';
+import { useMemo, useRef, useState, type ComponentType, type DragEvent } from 'react';
+import { FiHome, FiMap, FiTag, FiUploadCloud, FiUsers, FiX } from 'react-icons/fi';
 import { useAuth } from '@/lib/auth-context';
 import AvatarPlaceholder from './AvatarPlaceholder';
 import {
@@ -34,10 +34,37 @@ import { useStations, type Station } from '../data/stations';
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
+type AdminSection = 'builds' | 'stations' | 'aor' | 'accounts' | 'import';
+
+const ADMIN_SECTIONS: { id: AdminSection; label: string; short: string; Icon: ComponentType<{ size?: number }> }[] = [
+  { id: 'builds',   label: 'Build Version Log',        short: 'Builds',   Icon: FiTag },
+  { id: 'stations', label: 'Station Directory',        short: 'Stations', Icon: FiHome },
+  { id: 'aor',      label: 'Areas of Responsibility',  short: 'AOR',      Icon: FiMap },
+  { id: 'accounts', label: 'Manage Accounts',          short: 'Accounts', Icon: FiUsers },
+  { id: 'import',   label: 'Bulk Hydrant Data Import', short: 'Import',   Icon: FiUploadCloud },
+];
+
+// Remembers the open section in this browser only.
+const SECTION_KEY = 'hydroscout:admin-section';
+
+function readSavedSection(): AdminSection {
+  try {
+    const saved = localStorage.getItem(SECTION_KEY);
+    return ADMIN_SECTIONS.some((s) => s.id === saved) ? (saved as AdminSection) : 'builds';
+  } catch {
+    return 'builds';
+  }
+}
+
 export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   const { user } = useAuth();
   const { users, loading, error } = useUsers();
   const { hydrants } = useHydrants();
+  const [section, setSection] = useState<AdminSection>(readSavedSection);
+  const openSection = (id: AdminSection) => {
+    setSection(id);
+    try { localStorage.setItem(SECTION_KEY, id); } catch { /* private mode: not remembered */ }
+  };
 
   const adminName = user?.displayName
     || (user?.email ? user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Admin');
@@ -47,10 +74,19 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
     return Math.max(set.size, 1);
   }, [users]);
 
+  const counts: Partial<Record<AdminSection, number>> = { stations: stationCount, accounts: users.length };
+  // Every section stays mounted so a half-filled form or parsed import
+  // survives switching away; only the open one is shown.
+  const panel = (id: AdminSection, children: React.ReactNode) => (
+    <div role="tabpanel" id={`admin-panel-${id}`} aria-labelledby={`admin-tab-${id}`} hidden={section !== id} className="min-w-0">
+      {children}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen w-screen bg-neutral-100 dark:bg-neutral-950">
-      {/* ── Sticky top bar (header + brand line + sub-header) ── */}
-      <div className="sticky top-0 z-10 flex flex-col shadow-sm">
+    <div className="flex h-dvh w-full flex-col bg-neutral-100 dark:bg-neutral-950">
+      {/* ── Top bar (header + brand line + sub-header); the open section scrolls below it ── */}
+      <div className="z-10 flex shrink-0 flex-col shadow-sm">
         <header className="flex items-center justify-between gap-2 bg-white px-4 py-2.5 dark:bg-neutral-900 md:px-6 md:py-3">
           <Logo />
           <div className="flex min-w-0 items-center gap-2 md:gap-3">
@@ -91,24 +127,82 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
             <span className="font-bold text-neutral-600 dark:text-neutral-300">{users.length}</span> Accounts
           </p>
         </div>
+
+        {/* Phone/tablet: section tabs under the header */}
+        <nav aria-label="Admin sections" className="border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 md:hidden">
+          <div role="tablist" className="flex gap-1.5 overflow-x-auto px-3 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {ADMIN_SECTIONS.map(({ id, short, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={section === id}
+                aria-controls={`admin-panel-${id}`}
+                onClick={() => openSection(id)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                  section === id
+                    ? 'bg-[#e0353b] text-white'
+                    : 'bg-neutral-100 text-neutral-600 active:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300'
+                }`}
+              >
+                <Icon size={13} /> {short}
+                {counts[id] !== undefined && (
+                  <span className={`rounded-full px-1.5 text-[10px] tabular-nums ${section === id ? 'bg-white/25' : 'bg-white dark:bg-neutral-700'}`}>{counts[id]}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </nav>
       </div>
 
-      {/* ── Body — grows naturally, window scrolls ── */}
-      <div className="flex flex-col gap-4 p-3 md:gap-5 md:p-6">
-        <div className="grid items-start gap-4 md:gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-          <div className="min-w-0">
-            <BuildVersionLog adminNames={Object.fromEntries(users.map(account => [account.uid, account.displayName]))} />
+      <div className="flex min-h-0 flex-1">
+        {/* Desktop: side menu */}
+        <nav aria-label="Admin sections" className="hidden w-60 shrink-0 flex-col gap-1 overflow-y-auto border-r border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900 md:flex lg:w-64">
+          <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">Administration</p>
+          <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-1">
+            {ADMIN_SECTIONS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                id={`admin-tab-${id}`}
+                type="button"
+                role="tab"
+                aria-selected={section === id}
+                aria-controls={`admin-panel-${id}`}
+                onClick={() => openSection(id)}
+                className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition-colors ${
+                  section === id
+                    ? 'bg-red-50 text-[#e0353b] dark:bg-red-950/40'
+                    : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800'
+                }`}
+              >
+                {section === id && <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-[#e0353b]" />}
+                <Icon size={16} />
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {counts[id] !== undefined && (
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] tabular-nums text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">{counts[id]}</span>
+                )}
+              </button>
+            ))}
           </div>
-          <StationsCard users={users} usersLoading={loading} usersError={error} />
-        </div>
-        <StationAorCard hydrants={hydrants} />
-        <ManageUsersCard
-          users={users}
-          loading={loading}
-          error={error}
-          currentUid={user?.uid ?? null}
-        />
-        <BulkImportCard adminName={adminName} />
+        </nav>
+
+        {/* Open section */}
+        <main className="min-w-0 flex-1 overflow-y-auto p-3 md:p-6">
+          <div className="mx-auto w-full max-w-6xl">
+            {panel('builds', <BuildVersionLog adminNames={Object.fromEntries(users.map(account => [account.uid, account.displayName]))} />)}
+            {panel('stations', <StationsCard users={users} usersLoading={loading} usersError={error} />)}
+            {panel('aor', <StationAorCard hydrants={hydrants} />)}
+            {panel('accounts', (
+              <ManageUsersCard
+                users={users}
+                loading={loading}
+                error={error}
+                currentUid={user?.uid ?? null}
+              />
+            ))}
+            {panel('import', <BulkImportCard adminName={adminName} />)}
+          </div>
+        </main>
       </div>
     </div>
   );
