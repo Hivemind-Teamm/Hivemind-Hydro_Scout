@@ -1,7 +1,8 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useState, useEffect, useMemo, useRef } from 'react';
 import { useStationNotifications } from '@/lib/use-station-notifications';
+import { searchHydrantsById } from '@/lib/hydrant-search';
 import NotificationCountBadge from './NotificationCountBadge';
 import MapSearchBar, { type SearchPlaceSelection } from './MapSearchBar';
 import { useAuth } from '@/lib/auth-context';
@@ -46,11 +47,6 @@ interface DashboardOverlayProps {
   hydrants: Hydrant[];
   /** Flies to a hydrant and opens its details (search bar ID match). */
   onSelectHydrant: (hydrant: Hydrant) => void;
-  /** Search bar: map center for ranking nearby places. */
-  getMapCenter: () => { lat: number; lng: number } | null;
-  /** Search bar: show a chosen place or barangay on the map. */
-  onSelectSearchPlace: (place: SearchPlaceSelection) => void;
-  onClearSearchPlace: () => void;
   loading?: boolean;
   lastSynced?: Date | null;
   isOtw?: boolean;
@@ -91,9 +87,6 @@ function DashboardOverlay({
   onFlyTo,
   hydrants,
   onSelectHydrant,
-  getMapCenter,
-  onSelectSearchPlace,
-  onClearSearchPlace,
   loading = false,
   lastSynced = null,
   isOtw = false,
@@ -198,7 +191,7 @@ function DashboardOverlay({
 
         {/* Search + horizontally-scrollable status pills — stays just below the header, above the OTW pill */}
         <div className="pointer-events-auto absolute inset-x-0 z-[1100] flex flex-row items-center gap-1.5 px-2 pt-2" style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}>
-          <MapSearchBar {...searchBarProps} mobile />
+          <LocationSearch onFlyTo={onFlyTo} hydrants={hydrants} onSelectHydrant={onSelectHydrant} mobile />
           <div className="shrink-0 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex w-max overflow-hidden rounded-lg">
               {STATUS_ORDER.map((status) => {
@@ -584,7 +577,7 @@ function DashboardOverlay({
 
       {/* ---------- Search + status filter pills ---------- */}
       <div className="pointer-events-auto absolute left-4 top-[4.75rem] z-[1100] flex flex-wrap items-center gap-2">
-        <MapSearchBar {...searchBarProps} />
+        <LocationSearch onFlyTo={onFlyTo} hydrants={hydrants} onSelectHydrant={onSelectHydrant} />
 
         <div className="flex overflow-hidden rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
           {STATUS_ORDER.map((status) => {
@@ -759,6 +752,189 @@ function DashboardOverlay({
 // (useCallback/useMemo in HydroScoutDashboard), so this skips a ~950-line
 // overlay tree on those renders.
 export default memo(DashboardOverlay);
+
+/* ---------------------------------------------------------------- */
+/* Location + hydrant ID search                                      */
+/* ---------------------------------------------------------------- */
+
+interface NominatimResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+}
+
+function LocationSearch({ onFlyTo, hydrants, onSelectHydrant, mobile = false }: {
+  onFlyTo: (lat: number, lng: number, zoom?: number) => void;
+  hydrants: Hydrant[];
+  onSelectHydrant: (hydrant: Hydrant) => void;
+  mobile?: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<NominatimResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  // Keyboard highlight across hydrant matches, then places.
+  const [active, setActive] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Hydrant IDs are matched locally, so they show while places still load.
+  const hydrantMatches = useMemo(() => searchHydrantsById(hydrants, query), [hydrants, query]);
+  const total = hydrantMatches.length + results.length;
+
+  // Debounced geocode fetch
+  useEffect(() => {
+    const q = query.trim();
+    // Debounced geocode search: clear stale results as the query is typed.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (q.length < 2) { setResults([]); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&countrycodes=ph`,
+          { headers: { 'Accept-Language': 'en' } },
+        );
+        const data = await res.json() as NominatimResult[];
+        if (!cancelled) setResults(data);
+      } catch {
+        if (!cancelled) setResults([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); setLoading(false); };
+  }, [query]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const reset = () => {
+    setQuery('');
+    setResults([]);
+    setOpen(false);
+    setActive(0);
+  };
+
+  const select = (r: NominatimResult) => {
+    onFlyTo(parseFloat(r.lat), parseFloat(r.lon), 16);
+    reset();
+  };
+
+  // Same as tapping the pin: flies there and opens its details. Blurring
+  // drops the phone keyboard so the details sheet isn't covered.
+  const selectHydrant = (hydrant: Hydrant) => {
+    onSelectHydrant(hydrant);
+    reset();
+    inputRef.current?.blur();
+  };
+
+  const choose = (index: number) => {
+    if (index < hydrantMatches.length) selectHydrant(hydrantMatches[index].hydrant);
+    else if (results[index - hydrantMatches.length]) select(results[index - hydrantMatches.length]);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') { setOpen(false); setQuery(''); return; }
+    if (total === 0) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setOpen(true);
+      setActive((i) => e.key === 'ArrowDown' ? Math.min(i + 1, total - 1) : Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      choose(Math.min(active, total - 1));
+    }
+  };
+
+  const rowClass = (index: number) =>
+    `flex w-full items-start gap-3 px-4 py-3 text-left transition-colors border-b border-neutral-100 dark:border-neutral-700 last:border-0 ${
+      index === active ? 'bg-neutral-50 dark:bg-neutral-700' : 'hover:bg-neutral-50 dark:hover:bg-neutral-700'
+    }`;
+  const sectionLabel = 'px-4 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500';
+
+  return (
+    <div ref={containerRef} className={mobile ? 'relative flex-1 min-w-0' : 'relative'}>
+      <div className={`flex items-center gap-1.5 rounded-full bg-white dark:bg-neutral-700 shadow-[0_4px_16px_rgba(0,0,0,0.35)] ${mobile ? 'px-2.5 py-1.5' : 'px-4 py-2'}`}>
+        {loading ? <SpinnerGlyph mobile={mobile} /> : <SearchGlyph mobile={mobile} />}
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(0); }}
+          onFocus={() => total > 0 && setOpen(true)}
+          onKeyDown={onKeyDown}
+          placeholder={mobile ? 'Search place or hydrant ID' : 'Search location or hydrant ID'}
+          aria-label="Search for a location or a hydrant ID"
+          className={`${mobile ? 'w-full flex-1 min-w-0 text-xs' : 'w-56 text-sm'} bg-transparent text-neutral-700 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none`}
+        />
+        {query && (
+          <button onClick={reset} aria-label="Clear search" className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        )}
+      </div>
+
+      {open && total > 0 && (
+        <ul className={`absolute left-0 top-[calc(100%+6px)] z-[2000] ${mobile ? 'w-full' : 'w-80'} overflow-hidden rounded-xl bg-white dark:bg-neutral-800 shadow-[0_8px_32px_rgba(0,0,0,0.22)]`}>
+          {hydrantMatches.length > 0 && <li className={sectionLabel}>Hydrants</li>}
+          {hydrantMatches.map(({ hydrant: h, exact }, i) => {
+            const meta = STATUS_META[h.status];
+            return (
+              <li key={h.id}>
+                <button onClick={() => selectHydrant(h)} onMouseEnter={() => setActive(i)} className={rowClass(i)}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={meta.iconUrl} alt="" width={14} height={18} className="mt-0.5 shrink-0" style={{ filter: `${HYDRANT_PIN_FILTER} ${meta.iconFilter ?? ''}`, objectFit: 'contain' }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                      <span className="truncate">{h.id}</span>
+                      {exact && <span className="shrink-0 rounded-full bg-[#e0353b]/10 px-1.5 py-px text-[10px] font-bold text-[#e0353b]">Exact match</span>}
+                    </p>
+                    <p className="truncate text-xs text-neutral-400 dark:text-neutral-500">
+                      {h.name !== h.id ? `${h.name} · ` : ''}<span style={{ color: meta.color }}>{meta.legendLabel}</span>
+                    </p>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+          {hydrantMatches.length > 0 && results.length > 0 && <li className={`${sectionLabel} border-t border-neutral-100 dark:border-neutral-700`}>Places</li>}
+          {results.map((r, i) => {
+            const parts = r.display_name.split(', ');
+            const title = parts[0];
+            const subtitle = parts.slice(1, 4).join(', ');
+            const index = hydrantMatches.length + i;
+            return (
+              <li key={i}>
+                <button
+                  onClick={() => select(r)}
+                  onMouseEnter={() => setActive(index)}
+                  className={rowClass(index)}
+                >
+                  <svg className="mt-0.5 shrink-0 text-neutral-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                  </svg>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100">{title}</p>
+                    {subtitle && <p className="truncate text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /* ---------------------------------------------------------------- */
 /* Small presentational helpers                                      */

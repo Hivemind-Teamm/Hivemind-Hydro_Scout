@@ -1286,9 +1286,6 @@ export default function HydroScoutDashboard() {
         onFlyTo={handleOverlayFlyTo}
         hydrants={hydrants}
         onSelectHydrant={handleSelectHydrant}
-        getMapCenter={handleGetMapCenter}
-        onSelectSearchPlace={handleSearchPlace}
-        onClearSearchPlace={handleClearSearchPlace}
         onToggle3D={handleToggle3D}
         is3D={is3D}
         showReports={showReports}
