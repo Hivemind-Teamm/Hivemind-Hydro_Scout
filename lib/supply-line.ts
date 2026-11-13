@@ -111,7 +111,7 @@ export function estimateSupplyLine(
     ? perTruckCm
     : Math.max(1, Math.min(perTruckCm, Math.round(maxPumpDistanceM * 100)));
 
-  // Step 3: one pumper at the hydrant always, one more per extra stage, plus
+  // Step 3: one relay/spotter at the hydrant always, one more per extra stage, plus
   // the engine at the fire.
   const supplyPumpers = Math.max(1, Math.ceil(neededCm / stageCm));
 

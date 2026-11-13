@@ -106,17 +106,17 @@ water farther than the hose it carries, and a pressure limit can shorten that.
 | Truck | Count | Rule |
 | --- | --- | --- |
 | Engine at the fire | 1 | Always. It fights the fire and keeps its own hose for attack lines |
-| Pumper at the hydrant | 1 | Always. It pushes water through the first stage |
+| Relay/spotter at the hydrant | 1 | Always. It hooks up to the hydrant as the spotter and pushes water through the first stage, so it is also the first relay |
 | Relay engines | `ceil(L / S) − 1`, never below 0 | One more each time the line outgrows another 150-ft stage |
 
-`fireTrucks` = engine at the fire + pumper at the hydrant + relay engines
+`fireTrucks` = engine at the fire + relay/spotter at the hydrant + relay engines
 = `1 + max(1, ceil(L / S))`.
 
 The smallest possible answer is 2 trucks.
 
 ### Step 4: hose sections
 
-The supply line uses only 50-ft hose carried by the pumper at the hydrant and
+The supply line uses only 50-ft hose carried by the relay/spotter at the hydrant and
 the relay engines. The engine at the fire does not contribute hose.
 
 1. Take the hose sizes longest first. For each size, use as many whole

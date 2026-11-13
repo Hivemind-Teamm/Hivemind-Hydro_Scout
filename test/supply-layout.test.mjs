@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { layoutSupplyLine, MERGE_NEAR_FIRE_M, pointAlongPath, supplyStages } from '../lib/supply-layout.ts';
+import { layoutSupplyLine, MERGE_NEAR_FIRE_M, pointAlongPath, supplyStages, TRUCK_ROLE_LABELS } from '../lib/supply-layout.ts';
 import { estimateSupplyLine } from '../lib/supply-line.ts';
 import { FIRE_RESPONSE_CONFIG } from '../lib/fire-response.config.ts';
 
@@ -63,4 +63,12 @@ test('merges only a relay within 10 m of the fire into the engine marker', () =>
 test('places no trucks while the counts are pending', () => {
   assert.deepEqual(layoutSupplyLine(line, null).trucks, []);
   assert.deepEqual(layoutSupplyLine([[0, 0], [0, 0]], estimate(0)).trucks.map(t => t.role), ['pumper', 'engine']);
+});
+
+test('the engine beside the hydrant is named as the relay/spotter', () => {
+  assert.deepEqual(TRUCK_ROLE_LABELS, {
+    pumper: 'Relay/spotter at hydrant',
+    relay: 'Relay engine',
+    engine: 'Engine at the fire',
+  });
 });
