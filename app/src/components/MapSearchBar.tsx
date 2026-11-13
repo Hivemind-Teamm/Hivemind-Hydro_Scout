@@ -57,6 +57,9 @@ type Row =
   | { type: 'place'; key: string; place: PlaceResult }
   | { type: 'osm-search'; key: string };
 
+// Created on first use rather than on every render.
+const sessionOf = (ref: { current: SearchSession | null }) => (ref.current ??= new SearchSession());
+
 const SECTION_LABEL: Record<Row['type'], string> = {
   hydrant: 'Hydrants',
   barangay: 'Barangays',
@@ -87,7 +90,10 @@ export default function MapSearchBar({
   const [committed, setCommitted] = useState<string | null>(null);
   const [boundaries, setBoundaries] = useState<BarangayCollection | null>(null);
   const boundariesRequested = useRef(false);
-  const session = useRef(new SearchSession());
+  const sessionRef = useRef<SearchSession | null>(null);
+  // Stops a debounced or in-flight suggest, so choosing a row can't open a new billed session.
+  const cancelSuggestRef = useRef<(() => void) | null>(null);
+  const retrievingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -131,7 +137,7 @@ export default function MapSearchBar({
       try {
         const rows = await suggestMapboxPlaces(q, {
           token: MAPBOX_TOKEN,
-          sessionToken: session.current.forSuggest(),
+          sessionToken: sessionOf(sessionRef).forSuggest(),
           near: getMapCenter(),
           signal: controller.signal,
         });
@@ -145,9 +151,13 @@ export default function MapSearchBar({
         if (!controller.signal.aborted) setLoading(false);
       }
     }, 250);
-    return () => {
+    const cancel = () => {
       clearTimeout(timer);
       controller.abort();
+    };
+    cancelSuggestRef.current = cancel;
+    return () => {
+      cancel();
       setLoading(false);
     };
   }, [placeSource, q, committed, getMapCenter]);
@@ -216,14 +226,19 @@ export default function MapSearchBar({
       commit(place.name, { name: place.name, kind: place.kind, location: place.location });
       return;
     }
+    // A second click or Enter would be billed as a session of its own.
+    if (retrievingRef.current) return;
+    retrievingRef.current = true;
+    cancelSuggestRef.current?.();
     setLoading(true);
     try {
-      const location = await retrieveMapboxPlace(place.id, { token: MAPBOX_TOKEN, sessionToken: session.current.forRetrieve() });
+      const location = await retrieveMapboxPlace(place.id, { token: MAPBOX_TOKEN, sessionToken: sessionOf(sessionRef).forRetrieve() });
       if (location) commit(place.name, { name: place.name, kind: place.kind, location });
       else setError('That place has no map location.');
     } catch {
       setError('Place search is unavailable right now.');
     } finally {
+      retrievingRef.current = false;
       setLoading(false);
     }
   };
@@ -305,7 +320,7 @@ export default function MapSearchBar({
       {showList && (
         <ul
           ref={listRef}
-          className={`absolute left-0 top-[calc(100%+6px)] z-[2000] ${mobile ? 'w-full' : 'w-96'} max-h-[min(65dvh,34rem)] overflow-y-auto overscroll-contain rounded-xl bg-white dark:bg-neutral-800 shadow-[0_8px_32px_rgba(0,0,0,0.22)]`}
+          className={`absolute left-0 top-[calc(100%+6px)] z-[2000] ${mobile ? 'w-[calc(100vw-1rem)]' : 'w-96'} max-h-[min(65dvh,34rem)] overflow-y-auto overscroll-contain rounded-xl bg-white dark:bg-neutral-800 shadow-[0_8px_32px_rgba(0,0,0,0.22)]`}
         >
           {rows.map((row, i) => {
             const startsSection = i === 0 || SECTION_LABEL[rows[i - 1].type] !== SECTION_LABEL[row.type];
