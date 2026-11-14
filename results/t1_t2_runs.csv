@@ -1,0 +1,87 @@
+measure,run,start,lat,lng,dest,route_m,ms,status,iso_time,t1a_ms,t1b_ms,phase,renderer,on_route_hydrants,note
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:12:57.030Z,799,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:13:36.044Z,804,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:14:16.069Z,805,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:14:54.919Z,794,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:15:33.777Z,794,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:16:12.642Z,789,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:16:51.536Z,801,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:17:30.359Z,804,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:18:09.210Z,783,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,,,timeout,2026-11-14T07:18:48.131Z,799,,trial,mapbox,,no [HS-PERF] T1b line within 30 s of the Route click
+T1,1,SP1,14.64096,121.03692,HYD-045,889,1101,ok,2026-11-14T07:29:30.984Z,109,992,trial,mapbox,2,
+T1,2,SP2,14.63319,121.04385,HYD-034,666,2031,ok,2026-11-14T07:29:41.725Z,794,1237,trial,mapbox,5,
+T2,1,SP1,14.64096,121.03692,HYD-045,889,966,ok,2026-11-14T07:29:51.407Z,,,trial,mapbox,2,
+T2,2,SP2,14.63319,121.04385,HYD-034,666,971,ok,2026-11-14T07:30:01.590Z,,,trial,mapbox,5,
+T1,1,SP1,14.64096,121.03692,HYD-045,889,1125,ok,2026-11-14T07:44:18.729Z,138,987,trial,mapbox,2,isochrone: network; route: network
+T2,1,SP1,14.64096,121.03692,HYD-045,889,968,ok,2026-11-14T07:44:28.789Z,,,trial,mapbox,2,isochrone: network; route: network
+T1,1,SP1,14.64096,121.03692,HYD-045,889,1078,ok,2026-11-14T07:46:07.901Z,109,969,real,mapbox,2,isochrone: network; route: network
+T1,2,SP2,14.63319,121.04385,HYD-034,666,1585,ok,2026-11-14T07:46:18.278Z,589,996,real,mapbox,5,isochrone: network; route: network
+T1,3,SP3,14.63648,121.0262,HYD-044,316,1927,ok,2026-11-14T07:46:29.355Z,745,1182,real,mapbox,4,isochrone: network; route: network
+T1,4,SP4,14.64217,121.05466,HYD-018,268,1305,ok,2026-11-14T07:46:38.716Z,220,1085,real,mapbox,5,isochrone: network; route: network
+T1,5,SP5,14.65764,121.06243,HYD-010,45,1299,ok,2026-11-14T07:46:48.190Z,226,1073,real,mapbox,3,isochrone: network; route: network
+T1,6,SP6,14.64866,121.0514,HYD-017,712,1478,ok,2026-11-14T07:46:57.829Z,420,1058,real,mapbox,10,isochrone: network; route: network
+T1,7,SP1,14.64096,121.03692,HYD-045,889,1083,ok,2026-11-14T07:47:07.755Z,107,976,real,mapbox,2,isochrone: network; route: network
+T1,8,SP2,14.63319,121.04385,HYD-034,666,1528,ok,2026-11-14T07:47:18.173Z,576,952,real,mapbox,5,isochrone: network; route: network
+T1,9,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:47:56.196Z,578,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,9,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:48:34.634Z,496,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,9,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:49:12.636Z,505,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,9,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:49:50.717Z,510,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,9,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:50:28.763Z,517,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,9,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:51:06.799Z,500,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,9,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:51:44.841Z,508,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,9,SP3,14.63648,121.0262,HYD-044,316,1501,ok,2026-11-14T07:51:58.857Z,511,990,real,mapbox,4,isochrone: network; route: network
+T1,10,SP4,14.64217,121.05466,HYD-018,268,1171,ok,2026-11-14T07:52:08.232Z,182,989,real,mapbox,5,isochrone: network; route: network
+T1,11,SP5,14.65764,121.06243,HYD-010,45,1172,ok,2026-11-14T07:52:17.448Z,129,1043,real,mapbox,3,isochrone: network; route: network
+T1,12,SP6,14.64866,121.0514,HYD-017,712,1363,ok,2026-11-14T07:52:26.525Z,376,987,real,mapbox,10,isochrone: network; route: network
+T1,13,SP1,14.64096,121.03692,HYD-045,889,1082,ok,2026-11-14T07:52:36.455Z,102,980,real,mapbox,2,isochrone: network; route: network
+T1,14,SP2,14.63319,121.04385,HYD-034,666,1536,ok,2026-11-14T07:52:46.760Z,559,977,real,mapbox,5,isochrone: network; route: network
+T1,15,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:53:24.992Z,516,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,15,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:54:03.088Z,516,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,15,SP3,14.63648,121.0262,HYD-044,,,error,2026-11-14T07:54:41.183Z,506,,real,mapbox,,isochrone: network; route: none; The map did not settle within 30 s after selecting the hydrant.
+T1,15,SP3,14.63648,121.0262,HYD-044,316,1622,ok,2026-11-14T08:10:27.974Z,662,960,real,mapbox,4,isochrone: network; route: network
+T1,16,SP4,14.64217,121.05466,HYD-018,268,1251,ok,2026-11-14T08:10:36.128Z,294,957,real,mapbox,5,isochrone: network; route: network
+T1,17,SP5,14.65764,121.06243,HYD-010,45,1247,ok,2026-11-14T08:10:43.878Z,229,1018,real,mapbox,3,isochrone: network; route: network
+T1,18,SP6,14.64866,121.0514,HYD-017,712,1503,ok,2026-11-14T08:10:52.190Z,520,983,real,mapbox,10,isochrone: network; route: network
+T1,19,SP1,14.64096,121.03692,HYD-045,889,1240,ok,2026-11-14T08:11:00.704Z,244,996,real,mapbox,2,isochrone: network; route: network
+T1,20,SP2,14.63319,121.04385,HYD-034,666,1758,ok,2026-11-14T08:11:09.873Z,788,970,real,mapbox,5,isochrone: network; route: network
+T1,21,SP3,14.63648,121.0262,HYD-044,316,1594,ok,2026-11-14T08:11:18.991Z,643,951,real,mapbox,4,isochrone: network; route: network
+T1,22,SP4,14.64217,121.05466,HYD-018,268,1273,ok,2026-11-14T08:11:27.017Z,313,960,real,mapbox,5,isochrone: network; route: network
+T1,23,SP5,14.65764,121.06243,HYD-010,45,1281,ok,2026-11-14T08:11:34.699Z,232,1049,real,mapbox,3,isochrone: network; route: network
+T1,24,SP6,14.64866,121.0514,HYD-017,712,1426,ok,2026-11-14T08:11:42.842Z,435,991,real,mapbox,10,isochrone: network; route: network
+T1,25,SP1,14.64096,121.03692,HYD-045,889,1280,ok,2026-11-14T08:11:51.358Z,295,985,real,mapbox,2,isochrone: network; route: network
+T1,26,SP2,14.63319,121.04385,HYD-034,666,1945,ok,2026-11-14T08:12:00.538Z,962,983,real,mapbox,5,isochrone: network; route: network
+T1,27,SP3,14.63648,121.0262,HYD-044,316,1586,ok,2026-11-14T08:12:10.501Z,642,944,real,mapbox,4,isochrone: network; route: network
+T1,28,SP4,14.64217,121.05466,HYD-018,268,1231,ok,2026-11-14T08:12:18.428Z,264,967,real,mapbox,5,isochrone: network; route: network
+T1,29,SP5,14.65764,121.06243,HYD-010,45,1220,ok,2026-11-14T08:12:26.134Z,217,1003,real,mapbox,3,isochrone: network; route: network
+T1,30,SP6,14.64866,121.0514,HYD-017,712,1472,ok,2026-11-14T08:12:34.541Z,488,984,real,mapbox,10,isochrone: network; route: network
+T2,1,SP1,14.64096,121.03692,HYD-045,889,1250,ok,2026-11-14T08:12:43.278Z,,,real,mapbox,2,isochrone: network; route: network
+T2,2,SP2,14.63319,121.04385,HYD-034,666,993,ok,2026-11-14T08:12:52.289Z,,,real,mapbox,5,isochrone: network; route: network
+T2,3,SP3,14.63648,121.0262,HYD-044,316,957,ok,2026-11-14T08:13:01.420Z,,,real,mapbox,4,isochrone: network; route: network
+T2,4,SP4,14.64217,121.05466,HYD-018,268,972,ok,2026-11-14T08:13:09.433Z,,,real,mapbox,5,isochrone: network; route: network
+T2,5,SP5,14.65764,121.06243,HYD-010,45,1010,ok,2026-11-14T08:13:17.226Z,,,real,mapbox,3,isochrone: network; route: network
+T2,6,SP6,14.64866,121.0514,HYD-017,712,968,ok,2026-11-14T08:13:25.427Z,,,real,mapbox,10,isochrone: network; route: network
+T2,7,SP1,14.64096,121.03692,HYD-045,889,991,ok,2026-11-14T08:13:34.138Z,,,real,mapbox,2,isochrone: network; route: network
+T2,8,SP2,14.63319,121.04385,HYD-034,666,997,ok,2026-11-14T08:13:43.220Z,,,real,mapbox,5,isochrone: network; route: network
+T2,9,SP3,14.63648,121.0262,HYD-044,316,957,ok,2026-11-14T08:13:52.244Z,,,real,mapbox,4,isochrone: network; route: network
+T2,10,SP4,14.64217,121.05466,HYD-018,268,980,ok,2026-11-14T08:14:00.349Z,,,real,mapbox,5,isochrone: network; route: network
+T2,11,SP5,14.65764,121.06243,HYD-010,45,1012,ok,2026-11-14T08:14:07.990Z,,,real,mapbox,3,isochrone: network; route: network
+T2,12,SP6,14.64866,121.0514,HYD-017,712,962,ok,2026-11-14T08:14:16.211Z,,,real,mapbox,10,isochrone: network; route: network
+T2,13,SP1,14.64096,121.03692,HYD-045,889,968,ok,2026-11-14T08:14:24.626Z,,,real,mapbox,2,isochrone: network; route: network
+T2,14,SP2,14.63319,121.04385,HYD-034,666,969,ok,2026-11-14T08:14:33.630Z,,,real,mapbox,5,isochrone: network; route: network
+T2,15,SP3,14.63648,121.0262,HYD-044,316,963,ok,2026-11-14T08:14:42.637Z,,,real,mapbox,4,isochrone: network; route: network
+T2,16,SP4,14.64217,121.05466,HYD-018,268,946,ok,2026-11-14T08:14:50.575Z,,,real,mapbox,5,isochrone: network; route: network
+T2,17,SP5,14.65764,121.06243,HYD-010,45,997,ok,2026-11-14T08:14:58.133Z,,,real,mapbox,3,isochrone: network; route: network
+T2,18,SP6,14.64866,121.0514,HYD-017,712,978,ok,2026-11-14T08:15:06.507Z,,,real,mapbox,10,isochrone: network; route: network
+T2,19,SP1,14.64096,121.03692,HYD-045,889,981,ok,2026-11-14T08:15:14.980Z,,,real,mapbox,2,isochrone: network; route: network
+T2,20,SP2,14.63319,121.04385,HYD-034,666,990,ok,2026-11-14T08:15:23.860Z,,,real,mapbox,5,isochrone: network; route: network
+T2,21,SP3,14.63648,121.0262,HYD-044,316,974,ok,2026-11-14T08:15:32.869Z,,,real,mapbox,4,isochrone: network; route: network
+T2,22,SP4,14.64217,121.05466,HYD-018,268,948,ok,2026-11-14T08:15:40.795Z,,,real,mapbox,5,isochrone: network; route: network
+T2,23,SP5,14.65764,121.06243,HYD-010,45,1054,ok,2026-11-14T08:15:48.531Z,,,real,mapbox,3,isochrone: network; route: network
+T2,24,SP6,14.64866,121.0514,HYD-017,712,959,ok,2026-11-14T08:15:56.672Z,,,real,mapbox,10,isochrone: network; route: network
+T2,25,SP1,14.64096,121.03692,HYD-045,889,980,ok,2026-11-14T08:16:05.086Z,,,real,mapbox,2,isochrone: network; route: network
+T2,26,SP2,14.63319,121.04385,HYD-034,666,968,ok,2026-11-14T08:16:13.978Z,,,real,mapbox,5,isochrone: network; route: network
+T2,27,SP3,14.63648,121.0262,HYD-044,316,970,ok,2026-11-14T08:16:23.039Z,,,real,mapbox,4,isochrone: network; route: network
+T2,28,SP4,14.64217,121.05466,HYD-018,268,975,ok,2026-11-14T08:16:31.113Z,,,real,mapbox,5,isochrone: network; route: network
+T2,29,SP5,14.65764,121.06243,HYD-010,45,1021,ok,2026-11-14T08:16:38.808Z,,,real,mapbox,3,isochrone: network; route: network
+T2,30,SP6,14.64866,121.0514,HYD-017,712,959,ok,2026-11-14T08:16:47.135Z,,,real,mapbox,10,isochrone: network; route: network

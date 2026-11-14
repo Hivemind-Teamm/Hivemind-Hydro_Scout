@@ -1,0 +1,470 @@
+{
+  "study": "Hydro-Scout thesis timing: T1 (Time-to-Nearest-Hydrant) and T2 (OTW Mode Load Time)",
+  "definitions": {
+    "T1": "T1 = T1a + T1b. T1a: from the Find Nearest Hydrant click until the nearest hydrant is listed and the camera has flown to it. T1b: from the Route click on that hydrant until the route is drawn. The pause between the result appearing and the Route click is not counted.",
+    "T2": "From the Route click (OTW Mode turned on) until the route and the hydrants along it are shown.",
+    "endOfTimer": "When \"until\" is reached is given by timing.endRule in each session."
+  },
+  "notes": [
+    "Times are measured inside the app with performance.now() and recorded in whole milliseconds. The timing code runs only when the page address has ?perf=1.",
+    "With ?perf=1 the app skips its account-presence write (accountPresenceSessions), so the runs write nothing to Firestore. A normal session does write it.",
+    "In this build T1b and T2 cover the same interval (Route click to the end rule being met): the route line and the hydrants along it reach the map in one update.",
+    "The camera move counts in the time: T1a includes the fly-to animation and T1b and T2 include the route-fit animation (see timing.cameraAnimations in each session).",
+    "A session without a \"timing\" field used the earlier end rule: the map's next \"idle\" event. In OTW Mode the route line's dash animation repaints the map continuously, so idle never came after the Route click and those runs timed out.",
+    "Every run routes to the nearest operational hydrant that the app's own search returns from that start point. In T2 runs the search only picks the destination; its time is not part of T2.",
+    "Runs follow the six start points in turn (SP1 to SP6), five rounds, all T1 runs first and then all T2 runs, with 2 s between runs.",
+    "Failed and timed-out runs stay in the CSV with their status and are redone under the same run number. No run is removed and no outlier is excluded.",
+    "Each CSV row belongs to the session whose startedAt to finishedAt range contains its iso_time; each session names the commit that was built and timed."
+  ],
+  "startPoints": [
+    {
+      "label": "SP1",
+      "place": "Sgt. Esguerra Ave. cor. Mother Ignacia Ave., South Triangle",
+      "lat": 14.64096,
+      "lng": 121.03692
+    },
+    {
+      "label": "SP2",
+      "place": "Timog Ave. cor. EDSA",
+      "lat": 14.63319,
+      "lng": 121.04385
+    },
+    {
+      "label": "SP3",
+      "place": "Quezon Ave. cor. Timog Ave.",
+      "lat": 14.63648,
+      "lng": 121.0262
+    },
+    {
+      "label": "SP4",
+      "place": "Kalayaan Ave. cor. Malingap St.",
+      "lat": 14.64217,
+      "lng": 121.05466
+    },
+    {
+      "label": "SP5",
+      "place": "Magsaysay Ave., UP Campus",
+      "lat": 14.65764,
+      "lng": 121.06243
+    },
+    {
+      "label": "SP6",
+      "place": "Elliptical Rd. cor. Kalayaan Ave.",
+      "lat": 14.64866,
+      "lng": 121.0514
+    }
+  ],
+  "sessions": [
+    {
+      "phase": "trial",
+      "date": "2026-11-14",
+      "startedAt": "2026-11-14T07:12:18.790Z",
+      "finishedAt": "2026-11-14T07:18:48.132Z",
+      "app": {
+        "url": "http://localhost:3000/dashboard?perf=1",
+        "target": "test copy (local build of branch perf/t1-t2, not the live app)",
+        "build": "production build"
+      },
+      "git": {
+        "commit": "cf14f59990c648e8a631bc8d9eae841bd63ac19b",
+        "branch": "perf/t1-t2",
+        "uncommittedChanges": []
+      },
+      "browser": {
+        "name": "Google Chrome, headed, driven by Playwright (channel \"chrome\")",
+        "versions": [
+          "Not-A.Brand 99.0.0.0",
+          "Google Chrome 157.0.8103.51",
+          "Chromium 157.0.8103.51"
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+        "webglRenderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "playwright": "1.61.1"
+      },
+      "os": {
+        "platform": "win32",
+        "name": "Windows_NT",
+        "release": "10.0.26200",
+        "version": "Windows 11 Home",
+        "arch": "x64"
+      },
+      "cpu": {
+        "model": "12th Gen Intel(R) Core(TM) i5-12400",
+        "logicalCores": 12
+      },
+      "ramGb": 15.8,
+      "screen": {
+        "resolution": "1920x1080",
+        "viewport": "1366x768",
+        "devicePixelRatio": 1
+      },
+      "onMainsPower": true,
+      "network": {
+        "type": "Ethernet (wired) to a ZTE home router on a Converge fiber connection",
+        "speedTest": "TO BE ENTERED BY HAND",
+        "browserEstimate": {
+          "effectiveType": "4g",
+          "downlinkMbps": 1.45,
+          "rttMs": 100
+        }
+      },
+      "hydrantMarkersShown": 51,
+      "node": "v24.16.0",
+      "runs": {
+        "T1": {
+          "valid": 0,
+          "failed": 10
+        },
+        "T2": {
+          "valid": 0,
+          "failed": 0
+        }
+      },
+      "stopped": "10 failed runs in this session"
+    },
+    {
+      "phase": "trial",
+      "date": "2026-11-14",
+      "startedAt": "2026-11-14T07:29:22.068Z",
+      "finishedAt": "2026-11-14T07:30:03.644Z",
+      "app": {
+        "url": "http://localhost:3000/dashboard?perf=1",
+        "target": "test copy (local build of branch perf/t1-t2, not the live app)",
+        "build": "production build"
+      },
+      "git": {
+        "commit": "18e54b6fe189e3bc2408e906c04d1b78319797d5",
+        "branch": "perf/t1-t2",
+        "uncommittedChanges": []
+      },
+      "timing": {
+        "endRule": "Each timer (T1a, T1b, T2) stops on the first frame the map renders (its \"render\" event) at which all three hold: (1) the new result is on the map with its data loaded: for T1a the nearest hydrant has been listed and selected and the camera has been sent to it; for T1b and T2 the fetched route has been set, the route line's GeoJSON source (\"otw-route\") reports loaded (map.isSourceLoaded) and the on-route hydrant markers have been set; (2) the camera has stopped moving (map.isMoving() is false); (3) all visible tiles are loaded (map.areTilesLoaded() is true). The route line's dash animation keeps running throughout. If no such frame comes within 30 s of the click, the runner records the run as a timeout.",
+        "cameraAnimations": {
+          "T1a": "flyTo the nearest hydrant at zoom 17 with speed 1.4 and the default curve 1.42. flyTo has no fixed duration: the map derives it from the distance and zoom change, so it varies by start point.",
+          "T1b_T2": "fitBounds to the route's bounding box with 60 px padding and a fixed duration of 900 ms.",
+          "note": "The camera move starts before the timer is told to stop and its whole length counts in the time. The map skips camera animations when the browser reports prefers-reduced-motion: see reducedMotion under screen."
+        },
+        "markTimeoutMs": 30000
+      },
+      "browser": {
+        "name": "Google Chrome, headed, driven by Playwright (channel \"chrome\")",
+        "versions": [
+          "Not-A.Brand 99.0.0.0",
+          "Google Chrome 157.0.8103.51",
+          "Chromium 157.0.8103.51"
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+        "webglRenderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "playwright": "1.61.1"
+      },
+      "os": {
+        "platform": "win32",
+        "name": "Windows_NT",
+        "release": "10.0.26200",
+        "version": "Windows 11 Home",
+        "arch": "x64"
+      },
+      "cpu": {
+        "model": "12th Gen Intel(R) Core(TM) i5-12400",
+        "logicalCores": 12
+      },
+      "ramGb": 15.8,
+      "screen": {
+        "resolution": "1920x1080",
+        "viewport": "1366x768",
+        "devicePixelRatio": 1,
+        "reducedMotion": false
+      },
+      "onMainsPower": true,
+      "network": {
+        "type": "Ethernet (wired) to a ZTE home router on a Converge fiber connection",
+        "speedTest": "TO BE ENTERED BY HAND",
+        "browserEstimate": {
+          "effectiveType": "4g",
+          "downlinkMbps": 1.55,
+          "rttMs": 100
+        }
+      },
+      "hydrantMarkersShown": 51,
+      "node": "v24.16.0",
+      "runs": {
+        "T1": {
+          "valid": 2,
+          "failed": 0
+        },
+        "T2": {
+          "valid": 2,
+          "failed": 0
+        }
+      },
+      "stopped": null
+    },
+    {
+      "phase": "trial",
+      "date": "2026-11-14",
+      "startedAt": "2026-11-14T07:44:10.209Z",
+      "finishedAt": "2026-11-14T07:44:30.862Z",
+      "app": {
+        "url": "http://localhost:3000/dashboard?perf=1",
+        "target": "test copy (local build of branch perf/t1-t2, not the live app)",
+        "build": "production build"
+      },
+      "git": {
+        "commit": "8d85e45be9275c51ed3531692ce3e2397ebdd2f9",
+        "branch": "perf/t1-t2",
+        "uncommittedChanges": []
+      },
+      "timing": {
+        "endRule": "Each timer (T1a, T1b, T2) stops on the first frame the map renders (its \"render\" event) at which all three hold: (1) the new result is on the map with its data loaded: for T1a the nearest hydrant has been listed and selected and the camera has been sent to it; for T1b and T2 the fetched route has been set, the route line's GeoJSON source (\"otw-route\") reports loaded (map.isSourceLoaded) and the on-route hydrant markers have been set; (2) the camera has stopped moving (map.isMoving() is false); (3) all visible tiles are loaded (map.areTilesLoaded() is true). The route line's dash animation keeps running throughout. If no such frame comes within 30 s of the click, the runner records the run as a timeout.",
+        "cameraAnimations": {
+          "T1a": "flyTo the nearest hydrant at zoom 17 with speed 1.4 and the default curve 1.42. flyTo has no fixed duration: the map derives it from the distance and zoom change, so it varies by start point.",
+          "T1b_T2": "fitBounds to the route's bounding box with 60 px padding and a fixed duration of 900 ms.",
+          "note": "The camera move starts before the timer is told to stop and its whole length counts in the time. The map skips camera animations when the browser reports prefers-reduced-motion: see reducedMotion under screen."
+        },
+        "cacheRule": "Before every run the browser's HTTP cache is cleared (DevTools protocol Network.clearBrowserCache). The sign-in (cookies and site storage) and the Firestore offline cache (IndexedDB) are kept. Each row's note says where the isochrone and route API responses came from, \"network\" or \"cache\", read from the DevTools protocol network events (a response served from the memory, disk or prefetch cache, by a service worker, or as a 304 revalidation counts as \"cache\"). A run whose isochrone or route response did not come from the network is recorded with status \"aborted\" and stops the session. Not cleared: Mapbox GL's own tile store (Cache Storage \"mapbox-tiles\") and the app's service-worker caches (same-origin scripts and styles, and CARTO tiles used only by the MapLibre fallback), so map tiles already seen in an earlier run can be served from there.",
+        "markTimeoutMs": 30000
+      },
+      "browser": {
+        "name": "Google Chrome, headed, driven by Playwright (channel \"chrome\")",
+        "versions": [
+          "Not-A.Brand 99.0.0.0",
+          "Google Chrome 157.0.8103.51",
+          "Chromium 157.0.8103.51"
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+        "webglRenderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "playwright": "1.61.1"
+      },
+      "os": {
+        "platform": "win32",
+        "name": "Windows_NT",
+        "release": "10.0.26200",
+        "version": "Windows 11 Home",
+        "arch": "x64"
+      },
+      "cpu": {
+        "model": "12th Gen Intel(R) Core(TM) i5-12400",
+        "logicalCores": 12
+      },
+      "ramGb": 15.8,
+      "screen": {
+        "resolution": "1920x1080",
+        "viewport": "1366x768",
+        "devicePixelRatio": 1,
+        "reducedMotion": false
+      },
+      "onMainsPower": true,
+      "network": {
+        "type": "Ethernet (wired) to a ZTE home router on a Converge fiber connection",
+        "speedTest": "TO BE ENTERED BY HAND",
+        "browserEstimate": {
+          "effectiveType": "4g",
+          "downlinkMbps": 1.55,
+          "rttMs": 100
+        }
+      },
+      "hydrantMarkersShown": 51,
+      "node": "v24.16.0",
+      "runs": {
+        "T1": {
+          "valid": 1,
+          "failed": 0
+        },
+        "T2": {
+          "valid": 1,
+          "failed": 0
+        }
+      },
+      "stopped": null
+    },
+    {
+      "phase": "real",
+      "date": "2026-11-14",
+      "startedAt": "2026-11-14T07:45:59.470Z",
+      "finishedAt": "2026-11-14T07:54:41.185Z",
+      "app": {
+        "url": "http://localhost:3000/dashboard?perf=1",
+        "target": "test copy (local build of branch perf/t1-t2, not the live app)",
+        "build": "production build"
+      },
+      "git": {
+        "commit": "2b24c2d229335984b218b081fea26370f999ee67",
+        "branch": "perf/t1-t2",
+        "uncommittedChanges": []
+      },
+      "timing": {
+        "endRule": "Each timer (T1a, T1b, T2) stops on the first frame the map renders (its \"render\" event) at which all three hold: (1) the new result is on the map with its data loaded: for T1a the nearest hydrant has been listed and selected and the camera has been sent to it; for T1b and T2 the fetched route has been set, the route line's GeoJSON source (\"otw-route\") reports loaded (map.isSourceLoaded) and the on-route hydrant markers have been set; (2) the camera has stopped moving (map.isMoving() is false); (3) all visible tiles are loaded (map.areTilesLoaded() is true). The route line's dash animation keeps running throughout. If no such frame comes within 30 s of the click, the runner records the run as a timeout.",
+        "cameraAnimations": {
+          "T1a": "flyTo the nearest hydrant at zoom 17 with speed 1.4 and the default curve 1.42. flyTo has no fixed duration: the map derives it from the distance and zoom change, so it varies by start point.",
+          "T1b_T2": "fitBounds to the route's bounding box with 60 px padding and a fixed duration of 900 ms.",
+          "note": "The camera move starts before the timer is told to stop and its whole length counts in the time. The map skips camera animations when the browser reports prefers-reduced-motion: see reducedMotion under screen."
+        },
+        "cacheRule": "Before every run the browser's HTTP cache is cleared (DevTools protocol Network.clearBrowserCache). The sign-in (cookies and site storage) and the Firestore offline cache (IndexedDB) are kept. Each row's note says where the isochrone and route API responses came from, \"network\" or \"cache\", read from the DevTools protocol network events (a response served from the memory, disk or prefetch cache, by a service worker, or as a 304 revalidation counts as \"cache\"). \"network\" means the response came over the network rather than from the browser; Mapbox's CDN may still have answered it from its own edge cache, which the runner cannot clear. A run whose isochrone or route response did not come from the network is recorded with status \"aborted\" and stops the session. Not cleared: Mapbox GL's own tile store (Cache Storage \"mapbox-tiles\") and the app's service-worker caches (same-origin scripts and styles, and CARTO tiles used only by the MapLibre fallback), so map tiles already seen in an earlier run can be served from there.",
+        "markTimeoutMs": 30000
+      },
+      "browser": {
+        "name": "Google Chrome, headed, driven by Playwright (channel \"chrome\")",
+        "versions": [
+          "Not-A.Brand 99.0.0.0",
+          "Google Chrome 157.0.8103.51",
+          "Chromium 157.0.8103.51"
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+        "webglRenderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "playwright": "1.61.1"
+      },
+      "os": {
+        "platform": "win32",
+        "name": "Windows_NT",
+        "release": "10.0.26200",
+        "version": "Windows 11 Home",
+        "arch": "x64"
+      },
+      "cpu": {
+        "model": "12th Gen Intel(R) Core(TM) i5-12400",
+        "logicalCores": 12
+      },
+      "ramGb": 15.8,
+      "screen": {
+        "resolution": "1920x1080",
+        "viewport": "1366x768",
+        "devicePixelRatio": 1,
+        "reducedMotion": false
+      },
+      "onMainsPower": true,
+      "network": {
+        "type": "Ethernet (wired) to a ZTE home router on a Converge fiber connection",
+        "speedTest": {
+          "tool": "speedtest.net",
+          "resultId": "19908098267",
+          "takenAt": "2026-11-14, around 4:25 PM (UTC+8), after the real runs ended (4:16 PM UTC+8)",
+          "device": "the PC that ran the timing runs, over the same wired Ethernet connection as the runs",
+          "downloadMbps": 347.3,
+          "uploadMbps": 350.76,
+          "pingMs": {
+            "idle": 3,
+            "duringDownload": 5,
+            "duringUpload": 3
+          },
+          "server": "OFiber, Quezon City",
+          "isp": "Converge",
+          "note": "Entered by hand from the speedtest.net result; the IP address is deliberately not recorded. browserEstimate is Chrome's coarse Network Information API estimate, not a measurement."
+        },
+        "browserEstimate": {
+          "effectiveType": "4g",
+          "downlinkMbps": 1.6,
+          "rttMs": 100
+        }
+      },
+      "hydrantMarkersShown": 51,
+      "node": "v24.16.0",
+      "runs": {
+        "T1": {
+          "valid": 14,
+          "failed": 10
+        },
+        "T2": {
+          "valid": 0,
+          "failed": 0
+        }
+      },
+      "stopped": "10 failed runs in this session"
+    },
+    {
+      "phase": "real",
+      "date": "2026-11-14",
+      "startedAt": "2026-11-14T08:10:20.274Z",
+      "finishedAt": "2026-11-14T08:16:49.204Z",
+      "app": {
+        "url": "http://localhost:3000/dashboard?perf=1",
+        "target": "test copy (local build of branch perf/t1-t2, not the live app)",
+        "build": "production build"
+      },
+      "git": {
+        "commit": "871c9f97f6cdba58ecb8fb2fb4ce87aac90f47dd",
+        "branch": "perf/t1-t2",
+        "uncommittedChanges": []
+      },
+      "timing": {
+        "endRule": "Each timer (T1a, T1b, T2) stops on the first frame the map renders (its \"render\" event) at which all three hold: (1) the new result is on the map with its data loaded: for T1a the nearest hydrant has been listed and selected and the camera has been sent to it; for T1b and T2 the fetched route has been set, the route line's GeoJSON source (\"otw-route\") reports loaded (map.isSourceLoaded) and the on-route hydrant markers have been set; (2) the camera has stopped moving (map.isMoving() is false); (3) all visible tiles are loaded (map.areTilesLoaded() is true). The route line's dash animation keeps running throughout. If no such frame comes within 30 s of the click, the runner records the run as a timeout.",
+        "cameraAnimations": {
+          "T1a": "flyTo the nearest hydrant at zoom 17 with speed 1.4 and the default curve 1.42. flyTo has no fixed duration: the map derives it from the distance and zoom change, so it varies by start point.",
+          "T1b_T2": "fitBounds to the route's bounding box with 60 px padding and a fixed duration of 900 ms.",
+          "note": "The camera move starts before the timer is told to stop and its whole length counts in the time. The map skips camera animations when the browser reports prefers-reduced-motion: see reducedMotion under screen."
+        },
+        "cacheRule": "Before every run the browser's HTTP cache is cleared (DevTools protocol Network.clearBrowserCache). The sign-in (cookies and site storage) and the Firestore offline cache (IndexedDB) are kept. Each row's note says where the isochrone and route API responses came from, \"network\" or \"cache\", read from the DevTools protocol network events (a response served from the memory, disk or prefetch cache, by a service worker, or as a 304 revalidation counts as \"cache\"). \"network\" means the response came over the network rather than from the browser; Mapbox's CDN may still have answered it from its own edge cache, which the runner cannot clear. A run whose isochrone or route response did not come from the network is recorded with status \"aborted\" and stops the session. Not cleared: Mapbox GL's own tile store (Cache Storage \"mapbox-tiles\") and the app's service-worker caches (same-origin scripts and styles, and CARTO tiles used only by the MapLibre fallback), so map tiles already seen in an earlier run can be served from there.",
+        "settleRule": "The untimed waits (after the page loads, after locating, and after selecting the hydrant before the Route click) end on the first frame the map renders at which the camera has stopped moving (map.isMoving() is false) and all visible tiles are loaded (map.areTilesLoaded() is true), plus any named source loaded; none is named for these waits, as no route has been requested before the Route click. They are not part of any time. If the map does not settle within 30 s the run is recorded as an error and its note says which condition was still unmet. Sessions whose timing has no settleRule used the map's \"idle\" event for these waits.",
+        "markTimeoutMs": 30000,
+        "settleTimeoutMs": 30000,
+        "stopRule": "A session stops after 10 failed runs, or when the same run fails 3 times in a row."
+      },
+      "browser": {
+        "name": "Google Chrome, headed, driven by Playwright (channel \"chrome\")",
+        "versions": [
+          "Not-A.Brand 99.0.0.0",
+          "Google Chrome 157.0.8103.51",
+          "Chromium 157.0.8103.51"
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+        "webglRenderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "playwright": "1.61.1"
+      },
+      "os": {
+        "platform": "win32",
+        "name": "Windows_NT",
+        "release": "10.0.26200",
+        "version": "Windows 11 Home",
+        "arch": "x64"
+      },
+      "cpu": {
+        "model": "12th Gen Intel(R) Core(TM) i5-12400",
+        "logicalCores": 12
+      },
+      "ramGb": 15.8,
+      "screen": {
+        "resolution": "1920x1080",
+        "viewport": "1366x768",
+        "devicePixelRatio": 1,
+        "reducedMotion": false
+      },
+      "onMainsPower": true,
+      "network": {
+        "type": "Ethernet (wired) to a ZTE home router on a Converge fiber connection",
+        "speedTest": {
+          "tool": "speedtest.net",
+          "resultId": "19908098267",
+          "takenAt": "2026-11-14, around 4:25 PM (UTC+8), after the real runs ended (4:16 PM UTC+8)",
+          "device": "the PC that ran the timing runs, over the same wired Ethernet connection as the runs",
+          "downloadMbps": 347.3,
+          "uploadMbps": 350.76,
+          "pingMs": {
+            "idle": 3,
+            "duringDownload": 5,
+            "duringUpload": 3
+          },
+          "server": "OFiber, Quezon City",
+          "isp": "Converge",
+          "note": "Entered by hand from the speedtest.net result; the IP address is deliberately not recorded. browserEstimate is Chrome's coarse Network Information API estimate, not a measurement."
+        },
+        "browserEstimate": {
+          "effectiveType": "4g",
+          "downlinkMbps": 1.35,
+          "rttMs": 100
+        }
+      },
+      "hydrantMarkersShown": 51,
+      "node": "v24.16.0",
+      "runs": {
+        "T1": {
+          "valid": 16,
+          "failed": 0
+        },
+        "T2": {
+          "valid": 30,
+          "failed": 0
+        }
+      },
+      "stopped": null
+    }
+  ]
+}
