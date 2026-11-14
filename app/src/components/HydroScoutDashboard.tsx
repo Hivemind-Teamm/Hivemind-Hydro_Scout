@@ -57,6 +57,11 @@ import {
 import { useSupplyLine } from '@/lib/use-supply-line';
 import { placeView } from '@/lib/place-search';
 import { layoutSupplyLine } from '@/lib/supply-layout';
+import { perfEnabled, perfStart, perfEnd, perfFail, type PerfMeasure } from '@/lib/perf';
+
+// Thesis timing (?perf=1 only). One Route click closes both marks: the route
+// line (T1b) and the hydrants along it (T2) reach the map in the same update.
+const ROUTE_MEASURES: PerfMeasure[] = ['T1b', 'T2'];
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
 const OTW_ROUTE_KEY    = 'hydroscout_otw_route';
@@ -156,6 +161,15 @@ export default function HydroScoutDashboard() {
   const otwRouteRef     = useRef<[number, number][] | null>(null);
   const lastRouteFetchRef = useRef<number>(0);
   const ROUTE_FETCH_INTERVAL_MS = 10_000;
+  // Thesis timing (?perf=1 only): the Route click still waiting for its route.
+  const perfRouteRef = useRef<{ t0: number; hydrantId: string; routed: boolean; routeM: number | null } | null>(null);
+  // A Route click that cannot produce a route is logged as a failed run.
+  const failRouteMark = useCallback((message: string) => {
+    const pending = perfRouteRef.current;
+    if (!pending) return;
+    perfRouteRef.current = null;
+    perfFail(ROUTE_MEASURES, message, { hydrantId: pending.hydrantId });
+  }, []);
 
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [otwEdgePos, setOtwEdgePos] = useState<{ x: number; y: number; angle: number } | null>(null);
@@ -339,8 +353,14 @@ export default function HydroScoutDashboard() {
       .then((data: { routes?: Array<{ geometry: { coordinates: [number, number][] }; distance: number; duration: number }> }) => {
         if (cancelled) return;
         const route = data.routes?.[0];
+        if (!route?.geometry?.coordinates?.length) failRouteMark('Directions API returned no route');
         if (!route) return;
         if (route.geometry?.coordinates?.length) setOtwRoute(route.geometry.coordinates);
+        const pendingMark = perfRouteRef.current;
+        if (pendingMark?.hydrantId === otwHydrant.id) {
+          pendingMark.routed = true;
+          if (typeof route.distance === 'number') pendingMark.routeM = Math.round(route.distance);
+        }
         // Extract road distance + ETA. The ETA is scaled by the fire-truck
         // response factor since an emergency vehicle beats ordinary-car flow.
         if (typeof route.distance === 'number' && typeof route.duration === 'number') {
@@ -353,10 +373,11 @@ export default function HydroScoutDashboard() {
       .catch((err) => {
         console.warn('[Directions API] fetch failed, keeping last route:', err);
         // Don't clear existing route on error — graceful degradation
+        failRouteMark(err instanceof Error ? err.message : 'Directions request failed');
       });
 
     return () => { cancelled = true; };
-  }, [otwHydrant, userLocation, ROUTE_FETCH_INTERVAL_MS]);
+  }, [otwHydrant, userLocation, ROUTE_FETCH_INTERVAL_MS, failRouteMark]);
 
   const lastFitTargetRef = useRef<string | null>(null);
   useEffect(() => {
@@ -541,6 +562,21 @@ export default function HydroScoutDashboard() {
     return { nearRouteIds: ids, routeHazards: hazards };
   }, [hydrants, otwRoute]);
 
+  // Thesis timing (?perf=1 only). The fetched route and the hydrants along it
+  // arrive in one update: when this runs the map already has the route line
+  // and the on-route markers, and the camera fit has started, so T1b and T2
+  // both end on the map's next idle.
+  useEffect(() => {
+    const pending = perfRouteRef.current;
+    if (!pending?.routed || !otwRoute || !nearRouteIds || otwHydrant?.id !== pending.hydrantId) return;
+    perfRouteRef.current = null;
+    perfEnd(ROUTE_MEASURES, pending.t0, {
+      hydrantId: pending.hydrantId,
+      ...(pending.routeM !== null ? { routeM: pending.routeM } : {}),
+      onRouteHydrants: nearRouteIds.size,
+    });
+  }, [otwRoute, otwHydrant, nearRouteIds]);
+
   // Fire response: hydrants inside the radius, the supply hydrant, and the
   // overlay the map draws. Keyed on the fire's coordinates (not the incident
   // object) so the address arriving doesn't rebuild the map overlay.
@@ -690,7 +726,9 @@ export default function HydroScoutDashboard() {
   // to live directly inside handleRoute. Split out so the non-operational
   // confirm toast can trigger it after the user chooses "Route Anyway".
   const proceedRoute = useCallback((hydrant: Hydrant) => {
-    if (!locationAllowedRef.current) { showGeoError('Enable location sharing in Location privacy first.'); return; }
+    // Routing can't start: tell the user (and close a pending timing mark as failed).
+    const fail = (message: string) => { failRouteMark(message); showGeoError(message); };
+    if (!locationAllowedRef.current) { fail('Enable location sharing in Location privacy first.'); return; }
     // Already have a fix — enter route mode immediately.
     if (userLocation) {
       setOtwHydrant(hydrant);
@@ -701,11 +739,11 @@ export default function HydroScoutDashboard() {
     // We already know location is blocked — don't enter route mode at all.
     const prevErr = geoErrorRef.current;
     if (prevErr && prevErr.code === prevErr.PERMISSION_DENIED) {
-      showGeoError('Location permission is blocked — enable it to route.');
+      fail('Location permission is blocked — enable it to route.');
       return;
     }
     if (!('geolocation' in navigator)) {
-      showGeoError('Location isn’t available on this device — routing needs your position.');
+      fail('Location isn’t available on this device — routing needs your position.');
       return;
     }
 
@@ -720,18 +758,18 @@ export default function HydroScoutDashboard() {
     const onFinalError = (err: GeolocationPositionError) => {
       geoErrorRef.current = err;
       // Location blocked/unavailable → do NOT enter route mode (no En Route banner).
-      showGeoError(
+      fail(
         err.code === err.PERMISSION_DENIED
           ? 'Location permission is blocked — enable it to route.'
           : 'Could not get your location — routing unavailable.',
       );
     };
-    if (!locationAllowedRef.current) { showGeoError("Enable location sharing in Location privacy first."); return; }
+    if (!locationAllowedRef.current) { fail("Enable location sharing in Location privacy first."); return; }
     navigator.geolocation.getCurrentPosition(
       onSuccess,
       (err) => {
         if (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE) {
-          if (!locationAllowedRef.current) { showGeoError("Enable location sharing in Location privacy first."); return; }
+          if (!locationAllowedRef.current) { fail("Enable location sharing in Location privacy first."); return; }
           navigator.geolocation.getCurrentPosition(onSuccess, onFinalError, {
             enableHighAccuracy: false,
             timeout: 15000,
@@ -743,19 +781,24 @@ export default function HydroScoutDashboard() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
     );
-  }, [userLocation, showGeoError, isMobile]);
+  }, [userLocation, showGeoError, isMobile, failRouteMark]);
 
   const handleRoute = useCallback(() => {
+    // Thesis timing (?perf=1 only): T1b and T2 run from this click to the
+    // map's next idle after the route and its on-route hydrants are set.
+    const perfT0 = perfStart();
     if (!selectedHydrant) return;
 
     // Non-operational hydrant — confirm before entering route mode instead of
     // silently sending a responder toward a hydrant that may not work.
     if (selectedHydrant.status !== 'operational') {
+      perfFail(ROUTE_MEASURES, 'Hydrant is not operational: routing waits for a confirmation', { hydrantId: selectedHydrant.id });
       setNonOperationalConfirm(selectedHydrant);
       playHazardChime();
       return;
     }
 
+    if (perfEnabled()) perfRouteRef.current = { t0: perfT0, hydrantId: selectedHydrant.id, routed: false, routeM: null };
     proceedRoute(selectedHydrant);
   }, [selectedHydrant, proceedRoute]);
 

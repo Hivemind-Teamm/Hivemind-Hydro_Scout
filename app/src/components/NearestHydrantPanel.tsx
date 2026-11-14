@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { findNearestHydrants, type RankedHydrant, type NearestHydrantResult } from '../../../lib/nearest-hydrant';
+import { perfStart, perfEnd, perfFail } from '../../../lib/perf';
 import { FiAlertTriangle, FiSearch, FiMap } from 'react-icons/fi';
 
 const IconSearch = () => (
@@ -49,7 +50,11 @@ export default function NearestHydrantPanel({
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = useCallback(async () => {
+    // Thesis timing (?perf=1 only): T1a runs from this click to the map's
+    // next idle after the nearest hydrant is listed and flown to.
+    const perfT0 = perfStart();
     if (!userPosition) {
+      perfFail(['T1a'], 'No GPS fix: location was not enabled before the search');
       setError('Enable GPS location first — click the locate button on the map.');
       onOpen();
       return;
@@ -62,9 +67,18 @@ export default function NearestHydrantPanel({
       const data = await findNearestHydrants(userPosition.lat, userPosition.lng);
       setResult(data);
       if (data.withinRadius.length > 0) {
-        onHydrantSelect(data.withinRadius[0]);
+        const nearest = data.withinRadius[0];
+        onHydrantSelect(nearest);
+        perfEnd(['T1a'], perfT0, {
+          hydrantId: nearest.id,
+          // 'straight-line' means the Isochrone API was unavailable for this search.
+          ranking: nearest.travelMetres !== null ? 'isochrone' : 'straight-line',
+        });
+      } else {
+        perfFail(['T1a'], 'No operational hydrant within the search radius');
       }
     } catch (err) {
+      perfFail(['T1a'], err instanceof Error ? err.message : 'Search failed');
       setError('Search failed. Please try again.');
       console.error('[NearestHydrantPanel]', err);
     } finally {
