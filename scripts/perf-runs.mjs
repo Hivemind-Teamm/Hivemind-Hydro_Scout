@@ -79,6 +79,7 @@ const TIMING = {
     + 'The sign-in (cookies and site storage) and the Firestore offline cache (IndexedDB) are kept. '
     + 'Each row\'s note says where the isochrone and route API responses came from, "network" or "cache", read from the DevTools protocol network events '
     + '(a response served from the memory, disk or prefetch cache, by a service worker, or as a 304 revalidation counts as "cache"). '
+    + '"network" means the response came over the network rather than from the browser; Mapbox\'s CDN may still have answered it from its own edge cache, which the runner cannot clear. '
     + 'A run whose isochrone or route response did not come from the network is recorded with status "aborted" and stops the session. '
     + 'Not cleared: Mapbox GL\'s own tile store (Cache Storage "mapbox-tiles") and the app\'s service-worker caches (same-origin scripts and styles, and CARTO tiles used only by the MapLibre fallback), '
     + 'so map tiles already seen in an earlier run can be served from there.',
