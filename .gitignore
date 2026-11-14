@@ -45,3 +45,6 @@ next-env.d.ts
 
 # firebase admin key - NEVER commit this
 scripts/serviceAccountKey.json
+
+# thesis timing runs: signed-in browser profile used by scripts/perf-runs.mjs
+.perf-profile/
