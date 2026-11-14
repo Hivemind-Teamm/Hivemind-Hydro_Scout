@@ -58,6 +58,23 @@ const VIEWPORT = { width: 1366, height: 768 };
 const PERF_PREFIX = '[HS-PERF] ';
 const BY_HAND = 'TO BE ENTERED BY HAND';
 
+// How the app decides a timed step is over (lib/perf.ts), written into each session of run_meta.json.
+const TIMING = {
+  endRule: 'Each timer (T1a, T1b, T2) stops on the first frame the map renders (its "render" event) at which all three hold: '
+    + '(1) the new result is on the map with its data loaded: for T1a the nearest hydrant has been listed and selected and the camera has been sent to it; '
+    + 'for T1b and T2 the fetched route has been set, the route line\'s GeoJSON source ("otw-route") reports loaded (map.isSourceLoaded) and the on-route hydrant markers have been set; '
+    + '(2) the camera has stopped moving (map.isMoving() is false); '
+    + '(3) all visible tiles are loaded (map.areTilesLoaded() is true). '
+    + 'The route line\'s dash animation keeps running throughout. '
+    + `If no such frame comes within ${MARK_TIMEOUT_MS / 1000} s of the click, the runner records the run as a timeout.`,
+  cameraAnimations: {
+    T1a: 'flyTo the nearest hydrant at zoom 17 with speed 1.4 and the default curve 1.42. flyTo has no fixed duration: the map derives it from the distance and zoom change, so it varies by start point.',
+    T1b_T2: 'fitBounds to the route\'s bounding box with 60 px padding and a fixed duration of 900 ms.',
+    note: 'The camera move starts before the timer is told to stop and its whole length counts in the time. The map skips camera animations when the browser reports prefers-reduced-motion: see reducedMotion under screen.',
+  },
+  markTimeoutMs: MARK_TIMEOUT_MS,
+};
+
 /** A problem that would repeat on every run (signed out, wrong build, no location): stop the session. */
 class AbortRun extends Error {}
 
@@ -148,6 +165,7 @@ function pageEnvironment(page) {
       onMainsPower,
       viewport: `${window.innerWidth}x${window.innerHeight}`,
       devicePixelRatio: window.devicePixelRatio,
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       // Next.js adds this element only when the app runs under `next dev`.
       developmentBuild: !!document.querySelector('nextjs-portal'),
       hydrantMarkers: document.querySelectorAll('[data-hydrant-id]').length,
@@ -175,14 +193,16 @@ function saveMeta(sessions) {
   const meta = {
     study: 'Hydro-Scout thesis timing: T1 (Time-to-Nearest-Hydrant) and T2 (OTW Mode Load Time)',
     definitions: {
-      T1: 'T1 = T1a + T1b. T1a: from the Find Nearest Hydrant click to the map\'s next idle event after the nearest hydrant is listed and the camera has flown to it. T1b: from the Route click on that hydrant to the map\'s next idle event after the route is drawn. The pause between the result appearing and the Route click is not counted.',
-      T2: 'From the Route click (OTW Mode turned on) to the map\'s next idle event after the route and the hydrants along it are shown.',
+      T1: 'T1 = T1a + T1b. T1a: from the Find Nearest Hydrant click until the nearest hydrant is listed and the camera has flown to it. T1b: from the Route click on that hydrant until the route is drawn. The pause between the result appearing and the Route click is not counted.',
+      T2: 'From the Route click (OTW Mode turned on) until the route and the hydrants along it are shown.',
+      endOfTimer: 'When "until" is reached is given by timing.endRule in each session.',
     },
     notes: [
       'Times are measured inside the app with performance.now() and recorded in whole milliseconds. The timing code runs only when the page address has ?perf=1.',
       'With ?perf=1 the app skips its account-presence write (accountPresenceSessions), so the runs write nothing to Firestore. A normal session does write it.',
       'In this build T1b and T2 cover the same interval (Route click to map idle): the route line and the hydrants along it reach the map in one update.',
-      'The map reports idle only after the camera stops, so T1a includes the fly-to animation and T1b and T2 include the 900 ms route-fit animation.',
+      'The camera move counts in the time: T1a includes the fly-to animation and T1b and T2 include the route-fit animation (see timing.cameraAnimations in each session).',
+      'A session without a "timing" field used the earlier end rule: the map\'s next "idle" event. In OTW Mode the route line\'s dash animation repaints the map continuously, so idle never came after the Route click and those runs timed out.',
       'Every run routes to the nearest operational hydrant that the app\'s own search returns from that start point. In T2 runs the search only picks the destination; its time is not part of T2.',
       'Runs follow the six start points in turn (SP1 to SP6), five rounds, all T1 runs first and then all T2 runs, with 2 s between runs.',
       'Failed and timed-out runs stay in the CSV with their status and are redone under the same run number. No run is removed and no outlier is excluded.',
@@ -451,6 +471,7 @@ async function runMode(options) {
       build: environment.developmentBuild ? 'development server (next dev)' : 'production build',
     },
     git: { commit: git('rev-parse', 'HEAD'), branch: git('rev-parse', '--abbrev-ref', 'HEAD'), uncommittedChanges: changes },
+    timing: TIMING,
     browser: {
       name: 'Google Chrome, headed, driven by Playwright (channel "chrome")',
       versions: environment.versions,
@@ -461,7 +482,12 @@ async function runMode(options) {
     os: { platform: process.platform, name: os.type(), release: os.release(), version: os.version(), arch: os.arch() },
     cpu: { model: os.cpus()[0]?.model.trim() ?? null, logicalCores: os.cpus().length },
     ramGb: Math.round((os.totalmem() / 1024 ** 3) * 10) / 10,
-    screen: { resolution: screenResolution() ?? BY_HAND, viewport: environment.viewport, devicePixelRatio: environment.devicePixelRatio },
+    screen: {
+      resolution: screenResolution() ?? BY_HAND,
+      viewport: environment.viewport,
+      devicePixelRatio: environment.devicePixelRatio,
+      reducedMotion: environment.reducedMotion,
+    },
     onMainsPower: environment.onMainsPower,
     network: {
       type: options.network ?? `${BY_HAND} (Wi-Fi or mobile data)`,

@@ -62,6 +62,9 @@ import { perfEnabled, perfStart, perfEnd, perfFail, type PerfMeasure } from '@/l
 // Thesis timing (?perf=1 only). One Route click closes both marks: the route
 // line (T1b) and the hydrants along it (T2) reach the map in the same update.
 const ROUTE_MEASURES: PerfMeasure[] = ['T1b', 'T2'];
+// The route line's GeoJSON source in DilimanMap and MapLibreMap; the route
+// marks wait until it has loaded the fetched route.
+const ROUTE_SOURCE = 'otw-route';
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
 const OTW_ROUTE_KEY    = 'hydroscout_otw_route';
@@ -563,9 +566,10 @@ export default function HydroScoutDashboard() {
   }, [hydrants, otwRoute]);
 
   // Thesis timing (?perf=1 only). The fetched route and the hydrants along it
-  // arrive in one update: when this runs the map already has the route line
-  // and the on-route markers, and the camera fit has started, so T1b and T2
-  // both end on the map's next idle.
+  // arrive in one update: when this runs the route data has been handed to the
+  // map, the on-route markers are set and the camera fit has started, so T1b
+  // and T2 both end on the first rendered frame with the route source loaded,
+  // the camera stopped and all visible tiles loaded.
   useEffect(() => {
     const pending = perfRouteRef.current;
     if (!pending?.routed || !otwRoute || !nearRouteIds || otwHydrant?.id !== pending.hydrantId) return;
@@ -574,7 +578,7 @@ export default function HydroScoutDashboard() {
       hydrantId: pending.hydrantId,
       ...(pending.routeM !== null ? { routeM: pending.routeM } : {}),
       onRouteHydrants: nearRouteIds.size,
-    });
+    }, [ROUTE_SOURCE]);
   }, [otwRoute, otwHydrant, nearRouteIds]);
 
   // Fire response: hydrants inside the radius, the supply hydrant, and the
@@ -785,7 +789,7 @@ export default function HydroScoutDashboard() {
 
   const handleRoute = useCallback(() => {
     // Thesis timing (?perf=1 only): T1b and T2 run from this click to the
-    // map's next idle after the route and its on-route hydrants are set.
+    // first settled frame after the route and its on-route hydrants are set.
     const perfT0 = perfStart();
     if (!selectedHydrant) return;
 

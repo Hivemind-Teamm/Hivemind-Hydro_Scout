@@ -399,7 +399,7 @@ export default function DilimanMap({
     mapInstance.getCanvas().style.cursor = crosshair ? 'crosshair' : '';
   }, [crosshair, mapInstance]);
 
-  // Thesis timing (?perf=1 only): marks end on this map's `idle` event.
+  // Thesis timing (?perf=1 only): marks end on this map's rendered frames.
   useEffect(() => {
     if (!mapInstance) return;
     return perfAttachMap(mapInstance, 'mapbox');

@@ -50,8 +50,8 @@ export default function NearestHydrantPanel({
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = useCallback(async () => {
-    // Thesis timing (?perf=1 only): T1a runs from this click to the map's
-    // next idle after the nearest hydrant is listed and flown to.
+    // Thesis timing (?perf=1 only): T1a runs from this click to the first
+    // settled frame after the nearest hydrant is listed and flown to.
     const perfT0 = perfStart();
     if (!userPosition) {
       perfFail(['T1a'], 'No GPS fix: location was not enabled before the search');

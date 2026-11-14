@@ -3,10 +3,12 @@
  * T2 (OTW Mode load).
  *
  * Inert unless the page URL has `?perf=1`: every export returns early, so a
- * normal session runs no timing code. A mark ends on the map's next `idle`
- * event, which fires once the camera has stopped and everything requested is
- * on screen. Results go to `window.__hsPerf` and to one console line each,
- * prefixed `[HS-PERF]`, for the runner script to collect.
+ * normal session runs no timing code. A mark ends on the first frame the map
+ * renders at which the new result's data is loaded, the camera has stopped and
+ * every visible tile is loaded. (Not on `idle`: in OTW Mode the route line's
+ * dash animation repaints the map forever, so `idle` never fires.) Results go
+ * to `window.__hsPerf` and to one console line each, prefixed `[HS-PERF]`, for
+ * the runner script to collect.
  */
 
 export type PerfMeasure = 'T1a' | 'T1b' | 'T2';
@@ -33,12 +35,18 @@ declare global {
 }
 
 /** The parts of a Mapbox GL / MapLibre map the marks rely on. */
-interface IdleMap {
+interface PerfMap {
   once(type: 'idle', listener: () => void): unknown;
+  on(type: 'render', listener: () => void): unknown;
+  off(type: 'render', listener: () => void): unknown;
   triggerRepaint(): void;
+  isMoving(): boolean;
+  areTilesLoaded(): boolean;
+  getSource(id: string): unknown;
+  isSourceLoaded(id: string): boolean;
 }
 
-let attached: { map: IdleMap; renderer: PerfRenderer } | null = null;
+let attached: { map: PerfMap; renderer: PerfRenderer } | null = null;
 
 export function perfEnabled(): boolean {
   return typeof window !== 'undefined'
@@ -50,8 +58,8 @@ function emit(record: PerfRecord) {
   console.info('[HS-PERF]', JSON.stringify(record));
 }
 
-/** A loaded map registers itself as the one whose `idle` ends the marks. Returns the cleanup. */
-export function perfAttachMap(map: IdleMap, renderer: PerfRenderer): () => void {
+/** A loaded map registers itself as the one whose frames end the marks. Returns the cleanup. */
+export function perfAttachMap(map: PerfMap, renderer: PerfRenderer): () => void {
   if (!perfEnabled()) return () => {};
   const entry = { map, renderer };
   attached = entry;
@@ -72,24 +80,31 @@ export function perfStart(): number {
 }
 
 /**
- * Close the marks on the map's next `idle`. Call right after the change being
- * timed has been handed to the map (camera move started, source data set).
+ * Close the marks on the first rendered frame at which every source in
+ * `sources` has its data loaded, the camera has stopped and all visible tiles
+ * are loaded. Call right after the change being timed has been handed to the
+ * map (camera move started, source data set).
  */
-export function perfEnd(measures: PerfMeasure[], t0: number, detail: PerfDetail = {}) {
+export function perfEnd(measures: PerfMeasure[], t0: number, detail: PerfDetail = {}, sources: string[] = []) {
   if (!perfEnabled()) return;
   const target = attached;
   if (!target) {
     perfFail(measures, 'Map is not ready', detail);
     return;
   }
-  target.map.once('idle', () => {
+  const { map, renderer } = target;
+  const onRender = () => {
+    if (map.isMoving() || !map.areTilesLoaded()) return;
+    if (!sources.every(id => map.getSource(id) && map.isSourceLoaded(id))) return;
+    map.off('render', onRender);
     const ms = Math.round(performance.now() - t0);
     const ts = new Date().toISOString();
-    for (const measure of measures) emit({ measure, ms, ts, renderer: target.renderer, ...detail });
-  });
-  // An already-settled map renders no further frame on its own, so it would
-  // never report idle. While it is moving or loading this is a no-op.
-  target.map.triggerRepaint();
+    for (const measure of measures) emit({ measure, ms, ts, renderer, ...detail });
+  };
+  map.on('render', onRender);
+  // An already-settled map renders no further frame on its own. While it is
+  // moving or loading this is a no-op.
+  map.triggerRepaint();
 }
 
 /** Record a flow that failed (no hydrant found, no route, API error) instead of timing it. */

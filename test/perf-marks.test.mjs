@@ -2,15 +2,27 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { perfAttachMap, perfEnabled, perfEnd, perfFail, perfStart } from '../lib/perf.ts';
 
-// A stand-in for the Mapbox GL / MapLibre map: `idle` fires only when the test says so.
+// A stand-in for the Mapbox GL / MapLibre map: `idle` and frames happen only
+// when the test says so, and the test sets the camera, tile and source state.
 function fakeMap() {
-  const listeners = [];
+  const idleListeners = [];
+  const renderListeners = new Set();
   return {
     repaints: 0,
-    once(type, listener) { assert.equal(type, 'idle'); listeners.push(listener); },
+    moving: false,
+    tilesLoaded: true,
+    sources: {},           // id -> loaded?
+    once(type, listener) { assert.equal(type, 'idle'); idleListeners.push(listener); },
+    on(type, listener) { assert.equal(type, 'render'); renderListeners.add(listener); },
+    off(type, listener) { assert.equal(type, 'render'); renderListeners.delete(listener); },
     triggerRepaint() { this.repaints += 1; },
-    idle() { listeners.splice(0).forEach(listener => listener()); },
-    get waiting() { return listeners.length; },
+    isMoving() { return this.moving; },
+    areTilesLoaded() { return this.tilesLoaded; },
+    getSource(id) { return id in this.sources ? {} : undefined; },
+    isSourceLoaded(id) { return this.sources[id] === true; },
+    idle() { idleListeners.splice(0).forEach(listener => listener()); },
+    render() { [...renderListeners].forEach(listener => listener()); },
+    get waiting() { return idleListeners.length + renderListeners.size; },
   };
 }
 
@@ -62,17 +74,27 @@ test('the runner hook resolves on the next map idle and goes away with the map',
   assert.equal(window.__hsPerfIdle, undefined);
 });
 
-test('a mark is recorded on the next map idle, not before', () => {
+test('a mark is recorded on the first frame with the camera stopped and all tiles loaded', () => {
   const map = fakeMap();
   const detach = perfAttachMap(map, 'mapbox');
   const t0 = perfStart();
   assert.ok(t0 > 0);
 
+  map.moving = true;
   perfEnd(['T1a'], t0, { hydrantId: 'HYD-001' });
-  assert.equal(window.__hsPerf, undefined, 'no record until the map is idle');
+  assert.equal(window.__hsPerf, undefined, 'no record before a frame is rendered');
   assert.equal(map.repaints, 1, 'a settled map is asked for one more frame');
 
+  map.render();
+  assert.equal(window.__hsPerf, undefined, 'not while the camera is moving');
+  map.moving = false;
+  map.tilesLoaded = false;
+  map.render();
+  assert.equal(window.__hsPerf, undefined, 'not while visible tiles are loading');
   map.idle();
+  assert.equal(window.__hsPerf, undefined, 'idle alone does not end a mark');
+  map.tilesLoaded = true;
+  map.render();
   assert.equal(window.__hsPerf.length, 1);
   const [record] = window.__hsPerf;
   assert.equal(record.measure, 'T1a');
@@ -86,16 +108,34 @@ test('a mark is recorded on the next map idle, not before', () => {
   assert.equal(logged[0][0], '[HS-PERF]');
   assert.deepEqual(JSON.parse(logged[0][1]), record);
 
-  map.idle();
-  assert.equal(window.__hsPerf.length, 1, 'later idles add nothing');
+  map.render();
+  assert.equal(window.__hsPerf.length, 1, 'later frames add nothing');
+  assert.equal(map.waiting, 0, 'the frame listener is removed');
+  detach();
+});
+
+test('a mark keeps waiting while the map repaints (OTW dash animation) until its source has loaded', () => {
+  const map = fakeMap();
+  const detach = perfAttachMap(map, 'mapbox');
+  perfEnd(['T1b'], perfStart(), { hydrantId: 'HYD-004' }, ['otw-route']);
+  for (let frame = 0; frame < 5; frame += 1) map.render();
+  assert.equal(window.__hsPerf, undefined, 'not while the source does not exist yet');
+  map.sources['otw-route'] = false;
+  map.render();
+  assert.equal(window.__hsPerf, undefined, 'not while the new route data is still loading');
+  map.sources['otw-route'] = true;
+  map.render();
+  assert.equal(window.__hsPerf.length, 1);
+  assert.equal(window.__hsPerf[0].measure, 'T1b');
   detach();
 });
 
 test('one Route click closes T1b and T2 with the same elapsed time', () => {
   const map = fakeMap();
   const detach = perfAttachMap(map, 'maplibre');
-  perfEnd(['T1b', 'T2'], perfStart(), { hydrantId: 'HYD-002', routeM: 812, onRouteHydrants: 3 });
-  map.idle();
+  map.sources['otw-route'] = true;
+  perfEnd(['T1b', 'T2'], perfStart(), { hydrantId: 'HYD-002', routeM: 812, onRouteHydrants: 3 }, ['otw-route']);
+  map.render();
   const [t1b, t2] = window.__hsPerf;
   assert.deepEqual([t1b.measure, t2.measure], ['T1b', 'T2']);
   assert.equal(t1b.ms, t2.ms);
