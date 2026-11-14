@@ -6,7 +6,6 @@ import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { PRESENCE_HEARTBEAT_MS, presenceSession } from '@/lib/account-presence-state';
-import { perfEnabled } from '@/lib/perf';
 
 const SESSION_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
@@ -32,9 +31,7 @@ export default function AccountPresenceReporter() {
   const { user, role, loading, stationId } = useAuth();
   const uid = !loading && role !== null ? user?.uid : undefined;
   useEffect(() => {
-    // Thesis timing runs (?perf=1) must not write to Firestore, so a page
-    // loaded with the flag reports no presence at all.
-    if (!uid || perfEnabled()) return;
+    if (!uid) return;
     const ref = doc(db, 'accountPresenceSessions', presenceSessionId(uid));
     const ready = previousStop;
     const session = presenceSession(
