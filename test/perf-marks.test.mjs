@@ -20,6 +20,7 @@ function fakeMap() {
     areTilesLoaded() { return this.tilesLoaded; },
     getSource(id) { return id in this.sources ? {} : undefined; },
     isSourceLoaded(id) { return this.sources[id] === true; },
+    getStyle() { return { sources: Object.fromEntries(Object.keys(this.sources).map(id => [id, {}])) }; },
     idle() { idleListeners.splice(0).forEach(listener => listener()); },
     render() { [...renderListeners].forEach(listener => listener()); },
     get waiting() { return idleListeners.length + renderListeners.size; },
@@ -53,25 +54,25 @@ test('without ?perf=1 nothing is timed, recorded or attached', () => {
     assert.equal(map.waiting, 0);
     assert.equal(map.repaints, 0);
     assert.equal(window.__hsPerf, undefined);
-    assert.equal(window.__hsPerfIdle, undefined);
+    assert.equal(window.__hsPerfSettle, undefined);
+    assert.equal(window.__hsPerfState, undefined);
   }
   assert.deepEqual(logged, []);
 });
 
-test('the runner hook resolves on the next map idle and goes away with the map', async () => {
+test('the runner settle hook ignores idle and needs a rendered frame', async () => {
   const map = fakeMap();
   const detach = perfAttachMap(map, 'mapbox');
   let settled = false;
-  const waiting = window.__hsPerfIdle().then(() => { settled = true; });
+  const waiting = window.__hsPerfSettle().then(() => { settled = true; });
+  assert.equal(map.repaints, 1, 'a settled map is asked for one more frame');
+  map.idle();
   await Promise.resolve();
   assert.equal(settled, false);
-  assert.equal(map.repaints, 1);
-  map.idle();
+  map.render();
   await waiting;
   assert.equal(settled, true);
-  assert.equal(window.__hsPerf, undefined, 'settling records nothing');
   detach();
-  assert.equal(window.__hsPerfIdle, undefined);
 });
 
 test('a mark is recorded on the first frame with the camera stopped and all tiles loaded', () => {
@@ -166,4 +167,31 @@ test('ending a mark with no map attached is an error, never a made-up time', () 
   assert.equal(window.__hsPerf.length, 1);
   assert.equal(window.__hsPerf[0].status, 'error');
   assert.equal(window.__hsPerf[0].ms, undefined);
+});
+
+test('the runner settle hook waits for a settled frame and reports what is still unmet', async () => {
+  const map = fakeMap();
+  map.getStyle = () => ({ sources: { composite: {}, 'otw-route': {} } });
+  map.sources = { composite: false, 'otw-route': true };
+  const detach = perfAttachMap(map, 'mapbox');
+  let settled = false;
+  const waiting = window.__hsPerfSettle().then(() => { settled = true; });
+  map.moving = true;
+  map.tilesLoaded = false;
+  map.render();
+  await Promise.resolve();
+  assert.equal(settled, false);
+  assert.deepEqual(window.__hsPerfState(['otw-route', 'gone']), {
+    cameraMoving: true, visibleTilesLoaded: false, sourcesLoading: ['composite'], sourcesMissing: ['gone'],
+  });
+  map.moving = false;
+  map.tilesLoaded = true;
+  map.sources.composite = true;
+  map.render();
+  await waiting;
+  assert.equal(settled, true);
+  assert.equal(window.__hsPerf, undefined, 'settling records nothing');
+  detach();
+  assert.equal(window.__hsPerfSettle, undefined);
+  assert.equal(window.__hsPerfState, undefined);
 });

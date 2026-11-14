@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CSV_COLUMNS, CSV_HEADER, csvLine, parseCsv } from '../scripts/perf-csv.mjs';
-import { stats, summarize } from '../scripts/perf-summary.mjs';
+import { failedAttempts, stats, summarize } from '../scripts/perf-summary.mjs';
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} is not ${expected}`);
 
@@ -83,4 +83,20 @@ test('summary keeps every valid run, counts failures, and leaves trial rows out'
   const trial = summarize(rows, 'trial');
   assert.equal(trial[0].n, 1);
   assert.equal(trial[3].n, 0);
+});
+
+test('failed attempts are listed on their own and never reach the statistics', () => {
+  const row = (measure, status, ms, extra = {}) => ({ measure, status, ms: String(ms ?? ''), t1a_ms: '', t1b_ms: '', phase: 'real', ...extra });
+  const rows = [
+    row('T2', 'ok', 1000),
+    row('T2', 'aborted', 50, { note: 'isochrone: cache' }),  // has a time, still excluded
+    row('T2', 'error', undefined, { note: 'did not settle' }),
+    row('T2', 'timeout', undefined, { phase: 'trial' }),
+  ];
+  assert.deepEqual(failedAttempts(rows).map(r => r.note), ['isochrone: cache', 'did not settle']);
+  assert.equal(failedAttempts(rows, 'trial').length, 1);
+  const t2 = summarize(rows).at(-1);
+  assert.equal(t2.n, 1);
+  assert.equal(t2.failed, 2);
+  near(t2.mean, 1000);
 });

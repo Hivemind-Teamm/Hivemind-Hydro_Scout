@@ -55,8 +55,10 @@ const SETTLE_TIMEOUT_MS = 30_000;
 const LOAD_TIMEOUT_MS = 60_000;
 const PAUSE_BETWEEN_RUNS_MS = 2_000;
 // Every run is a page load that reads the whole hydrant collection, so a
-// session stops rather than keep redoing runs past this many failures.
+// session stops rather than keep redoing runs past this many failures, or
+// once the same run has failed this many times in a row.
 const MAX_FAILED_RUNS = 10;
+const MAX_FAILED_IN_A_ROW = 3;
 const VIEWPORT = { width: 1366, height: 768 };
 const PERF_PREFIX = '[HS-PERF] ';
 const BY_HAND = 'TO BE ENTERED BY HAND';
@@ -83,7 +85,14 @@ const TIMING = {
     + 'A run whose isochrone or route response did not come from the network is recorded with status "aborted" and stops the session. '
     + 'Not cleared: Mapbox GL\'s own tile store (Cache Storage "mapbox-tiles") and the app\'s service-worker caches (same-origin scripts and styles, and CARTO tiles used only by the MapLibre fallback), '
     + 'so map tiles already seen in an earlier run can be served from there.',
+  settleRule: 'The untimed waits (after the page loads, after locating, and after selecting the hydrant before the Route click) end on the first frame the map renders at which '
+    + 'the camera has stopped moving (map.isMoving() is false) and all visible tiles are loaded (map.areTilesLoaded() is true), plus any named source loaded; '
+    + 'none is named for these waits, as no route has been requested before the Route click. They are not part of any time. '
+    + `If the map does not settle within ${SETTLE_TIMEOUT_MS / 1000} s the run is recorded as an error and its note says which condition was still unmet. `
+    + 'Sessions whose timing has no settleRule used the map\'s "idle" event for these waits.',
   markTimeoutMs: MARK_TIMEOUT_MS,
+  settleTimeoutMs: SETTLE_TIMEOUT_MS,
+  stopRule: `A session stops after ${MAX_FAILED_RUNS} failed runs, or when the same run fails ${MAX_FAILED_IN_A_ROW} times in a row.`,
 };
 
 /** A problem that would repeat on every run (signed out, wrong build, no location): stop the session. */
@@ -221,6 +230,7 @@ function saveMeta(sessions) {
       'Every run routes to the nearest operational hydrant that the app\'s own search returns from that start point. In T2 runs the search only picks the destination; its time is not part of T2.',
       'Runs follow the six start points in turn (SP1 to SP6), five rounds, all T1 runs first and then all T2 runs, with 2 s between runs.',
       'Failed and timed-out runs stay in the CSV with their status and are redone under the same run number. No run is removed and no outlier is excluded.',
+      'Each CSV row belongs to the session whose startedAt to finishedAt range contains its iso_time; each session names the commit that was built and timed.',
     ],
     startPoints: START_POINTS,
     sessions,
@@ -327,13 +337,30 @@ async function waitForMark(marks, measure, fromIndex) {
   }
 }
 
-/** Wait until the map is idle, so the next timed step starts from a settled map. */
-async function settle(page, when) {
-  const idle = page.evaluate(() => (window.__hsPerfIdle ? window.__hsPerfIdle().then(() => 'idle') : 'missing'));
-  idle.catch(() => {});
-  const outcome = await Promise.race([idle, sleep(SETTLE_TIMEOUT_MS).then(() => 'timeout')]);
+/** Which settle conditions a timed-out wait was stuck on, from window.__hsPerfState. */
+function describeSettleState(state) {
+  if (!state) return 'its state could not be read';
+  const unmet = [];
+  if (state.cameraMoving) unmet.push('camera still moving');
+  if (!state.visibleTilesLoaded) unmet.push('visible tiles still loading');
+  if (state.sourcesLoading.length) unmet.push(`sources still loading: ${state.sourcesLoading.join(' ')}`);
+  if (state.sourcesMissing.length) unmet.push(`sources missing: ${state.sourcesMissing.join(' ')}`);
+  return unmet.length ? unmet.join(', ') : 'every condition held when checked, but no frame was rendered';
+}
+
+/**
+ * Untimed wait for a settled map: camera stopped, all visible tiles loaded and
+ * every source in `sources` loaded, so the next timed step starts from rest.
+ */
+async function settle(page, when, sources = []) {
+  const settled = page.evaluate(list => (window.__hsPerfSettle ? window.__hsPerfSettle(list).then(() => 'settled') : 'missing'), sources);
+  settled.catch(() => {});
+  const outcome = await Promise.race([settled, sleep(SETTLE_TIMEOUT_MS).then(() => 'timeout')]);
   if (outcome === 'missing') throw new AbortRun('The page lost its timing code (the map was replaced or the address lost ?perf=1).');
-  if (outcome === 'timeout') throw new Error(`The map did not settle within ${SETTLE_TIMEOUT_MS / 1000} s ${when}.`);
+  if (outcome === 'timeout') {
+    const state = await page.evaluate(list => window.__hsPerfState?.(list) ?? null, sources).catch(() => null);
+    throw new Error(`The map did not settle within ${SETTLE_TIMEOUT_MS / 1000} s ${when}: ${describeSettleState(state)}.`);
+  }
 }
 
 /** Fresh load of the dashboard with ?perf=1 at the given start point. */
@@ -350,7 +377,7 @@ async function openDashboard(page, context, perfUrl, startPoint) {
   }
   // The splash covers the map until both the map and the hydrants have loaded.
   await page.getByText('Loading map…').waitFor({ state: 'detached', timeout: LOAD_TIMEOUT_MS });
-  const timed = await page.waitForFunction(() => typeof window.__hsPerfIdle === 'function', null, { timeout: 15_000 })
+  const timed = await page.waitForFunction(() => typeof window.__hsPerfSettle === 'function', null, { timeout: 15_000 })
     .then(() => true, () => false);
   if (!timed) {
     throw new AbortRun('This page has no timing code. The app must be a build of branch perf/t1-t2, opened with ?perf=1.');
@@ -587,6 +614,7 @@ async function runMode(options) {
 
   const written = [];
   let failedRuns = 0;
+  let failedInARow = 0;
   try {
     for (const measure of MEASURES) {
       let valid = validSoFar[measure];
@@ -599,12 +627,16 @@ async function runMode(options) {
         console.log(describeRow(row));
         if (row.status === 'ok') {
           valid += 1;
+          failedInARow = 0;
           session.runs[measure].valid += 1;
         } else {
           failedRuns += 1;
+          failedInARow += 1;
           session.runs[measure].failed += 1;
           if (row.status === 'aborted') session.stopped = row.note;
-          else if (failedRuns >= MAX_FAILED_RUNS) session.stopped = `${MAX_FAILED_RUNS} failed runs in this session`;
+          else if (failedInARow >= MAX_FAILED_IN_A_ROW) {
+            session.stopped = `${measure} run ${run} (${startPoint.label}) failed ${MAX_FAILED_IN_A_ROW} times in a row`;
+          } else if (failedRuns >= MAX_FAILED_RUNS) session.stopped = `${MAX_FAILED_RUNS} failed runs in this session`;
         }
         saveMeta(sessions);
         if (!session.stopped) await sleep(PAUSE_BETWEEN_RUNS_MS);

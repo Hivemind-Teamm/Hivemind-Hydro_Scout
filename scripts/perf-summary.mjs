@@ -49,6 +49,11 @@ export function summarize(rows, phase = 'real') {
   return lines;
 }
 
+/** Every attempt that did not end ok, in CSV order. None of them is in the timing statistics. */
+export function failedAttempts(rows, phase = 'real') {
+  return rows.filter(row => row.phase === phase && row.status !== 'ok');
+}
+
 function format(value, decimals) {
   return value === null ? 'n/a' : value.toFixed(decimals);
 }
@@ -88,6 +93,13 @@ function main() {
     console.log(row.map((text, column) => (column === 0 ? text.padEnd(widths[column]) : text.padStart(widths[column]))).join('  '));
   }
   if (!lines.some(line => line.n > 0)) console.log(`\nNo valid ${phase} runs in the file yet.`);
+
+  const failed = failedAttempts(rows, phase);
+  console.log(`\nFailed attempts (${failed.length}), not included in the statistics above:`);
+  if (!failed.length) console.log('  none');
+  for (const row of failed) {
+    console.log(`  ${row.measure} run ${row.run.padStart(2)} ${row.start}  ${row.status.padEnd(7)}  ${row.iso_time}  ${row.note}`);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

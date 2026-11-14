@@ -29,14 +29,28 @@ export interface PerfRecord {
 declare global {
   interface Window {
     __hsPerf?: PerfRecord[];
-    /** For the runner: resolves on the map's next idle, so every timed step starts from a settled map. */
-    __hsPerfIdle?: () => Promise<void>;
+    /**
+     * For the runner's untimed waits: resolves on the first rendered frame at
+     * which the camera has stopped, all visible tiles are loaded and every
+     * source in `sources` has loaded, so every timed step starts from a settled map.
+     */
+    __hsPerfSettle?: (sources?: string[]) => Promise<void>;
+    /** For the runner: the settle conditions right now, to say which one a timed-out wait was stuck on. */
+    __hsPerfState?: (sources?: string[]) => PerfMapState;
   }
+}
+
+export interface PerfMapState {
+  cameraMoving: boolean;
+  visibleTilesLoaded: boolean;
+  /** Style sources whose visible tiles or data are still loading. */
+  sourcesLoading: string[];
+  /** The requested sources that are missing from the map. */
+  sourcesMissing: string[];
 }
 
 /** The parts of a Mapbox GL / MapLibre map the marks rely on. */
 interface PerfMap {
-  once(type: 'idle', listener: () => void): unknown;
   on(type: 'render', listener: () => void): unknown;
   off(type: 'render', listener: () => void): unknown;
   triggerRepaint(): void;
@@ -44,6 +58,7 @@ interface PerfMap {
   areTilesLoaded(): boolean;
   getSource(id: string): unknown;
   isSourceLoaded(id: string): boolean;
+  getStyle(): { sources?: Record<string, unknown> } | undefined;
 }
 
 let attached: { map: PerfMap; renderer: PerfRenderer } | null = null;
@@ -63,14 +78,33 @@ export function perfAttachMap(map: PerfMap, renderer: PerfRenderer): () => void 
   if (!perfEnabled()) return () => {};
   const entry = { map, renderer };
   attached = entry;
-  const idle = () => new Promise<void>((resolve) => {
-    map.once('idle', () => resolve());
+  const settled = (sources: string[]) => !map.isMoving() && map.areTilesLoaded()
+    && sources.every(id => map.getSource(id) && map.isSourceLoaded(id));
+  const settle = (sources: string[] = []) => new Promise<void>((resolve) => {
+    const onRender = () => {
+      if (!settled(sources)) return;
+      map.off('render', onRender);
+      resolve();
+    };
+    map.on('render', onRender);
     map.triggerRepaint();
   });
-  window.__hsPerfIdle = idle;
+  const state = (sources: string[] = []): PerfMapState => {
+    const styleSources = Object.keys(map.getStyle()?.sources ?? {});
+    return {
+      cameraMoving: map.isMoving(),
+      visibleTilesLoaded: map.areTilesLoaded(),
+      sourcesLoading: [...new Set([...styleSources, ...sources])]
+        .filter(id => map.getSource(id) && !map.isSourceLoaded(id)),
+      sourcesMissing: sources.filter(id => !map.getSource(id)),
+    };
+  };
+  window.__hsPerfSettle = settle;
+  window.__hsPerfState = state;
   return () => {
     if (attached === entry) attached = null;
-    if (window.__hsPerfIdle === idle) delete window.__hsPerfIdle;
+    if (window.__hsPerfSettle === settle) delete window.__hsPerfSettle;
+    if (window.__hsPerfState === state) delete window.__hsPerfState;
   };
 }
 
