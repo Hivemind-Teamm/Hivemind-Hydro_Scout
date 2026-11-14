@@ -3,7 +3,7 @@
 // T2 (OTW Mode Load Time), 30 scripted runs each, timed by the app itself.
 //
 //   node scripts/perf-runs.mjs --login     sign in by hand once; the session is kept in .perf-profile/
-//   node scripts/perf-runs.mjs --trial     2 trial runs per measure, marked "trial" in the CSV
+//   node scripts/perf-runs.mjs --trial     trial runs (2 per measure, or --trial-runs <n>), marked "trial" in the CSV
 //   node scripts/perf-runs.mjs             the real runs: 30 valid T1 runs, then 30 valid T2 runs
 //
 // Options:
@@ -12,10 +12,13 @@
 //   --speedtest "<text>"  speed test result entered by hand, e.g. "48 Mbps down / 21 Mbps up, 12 ms"
 //   --target "<text>"     what the address is, e.g. "test copy (local production build)"
 //   --allow-dirty         let real runs start with uncommitted source changes (recorded in run_meta.json)
+//   --trial-runs <n>      trial runs per measure (default 2)
 //
 // The app must be a build of branch perf/t1-t2 (the timing code is only there)
 // and is opened with ?perf=1. The script holds no passwords and writes nothing
 // to Firestore; it only drives the UI and collects the app's [HS-PERF] lines.
+// The browser's HTTP cache is cleared before every run, and each row's note
+// says whether the isochrone and route responses came from the network or a cache.
 // Outputs: results/t1_t2_runs.csv and results/run_meta.json.
 
 import { chromium } from 'playwright';
@@ -72,6 +75,13 @@ const TIMING = {
     T1b_T2: 'fitBounds to the route\'s bounding box with 60 px padding and a fixed duration of 900 ms.',
     note: 'The camera move starts before the timer is told to stop and its whole length counts in the time. The map skips camera animations when the browser reports prefers-reduced-motion: see reducedMotion under screen.',
   },
+  cacheRule: 'Before every run the browser\'s HTTP cache is cleared (DevTools protocol Network.clearBrowserCache). '
+    + 'The sign-in (cookies and site storage) and the Firestore offline cache (IndexedDB) are kept. '
+    + 'Each row\'s note says where the isochrone and route API responses came from, "network" or "cache", read from the DevTools protocol network events '
+    + '(a response served from the memory, disk or prefetch cache, by a service worker, or as a 304 revalidation counts as "cache"). '
+    + 'A run whose isochrone or route response did not come from the network is recorded with status "aborted" and stops the session. '
+    + 'Not cleared: Mapbox GL\'s own tile store (Cache Storage "mapbox-tiles") and the app\'s service-worker caches (same-origin scripts and styles, and CARTO tiles used only by the MapLibre fallback), '
+    + 'so map tiles already seen in an earlier run can be served from there.',
   markTimeoutMs: MARK_TIMEOUT_MS,
 };
 
@@ -83,13 +93,13 @@ const firstLine = error => String(error?.message ?? error).split('\n')[0];
 
 function usage(problem) {
   if (problem) console.error(`${problem}\n`);
-  console.error('Usage: node scripts/perf-runs.mjs [--login | --trial] [--url <address>] [--network "<text>"] [--speedtest "<text>"] [--target "<text>"] [--allow-dirty]');
+  console.error('Usage: node scripts/perf-runs.mjs [--login | --trial [--trial-runs <n>]] [--url <address>] [--network "<text>"] [--speedtest "<text>"] [--target "<text>"] [--allow-dirty]');
   process.exit(problem ? 1 : 0);
 }
 
 function parseArgs(argv) {
   const options = {
-    login: false, trial: false, allowDirty: false,
+    login: false, trial: false, allowDirty: false, trialRuns: TRIAL_RUNS_PER_MEASURE,
     url: process.env.APP_URL || 'http://localhost:3000/dashboard',
     network: null, speedtest: null, target: null,
   };
@@ -107,6 +117,10 @@ function parseArgs(argv) {
     else if (arg === '--network') options.network = value();
     else if (arg === '--speedtest') options.speedtest = value();
     else if (arg === '--target') options.target = value();
+    else if (arg === '--trial-runs') {
+      options.trialRuns = Number(value());
+      if (!Number.isInteger(options.trialRuns) || options.trialRuns < 1) usage('--trial-runs needs a whole number of 1 or more.');
+    }
     else if (arg === '--help' || arg === '-h') usage();
     else usage(`Unknown option ${arg}.`);
   }
@@ -245,6 +259,63 @@ function collectMarks(page) {
   return marks;
 }
 
+/** Which timed API request a URL is, or null: the nearest-hydrant isochrone or the route (Mapbox or OSRM). */
+function apiKind(url) {
+  if (url.includes('api.mapbox.com/isochrone/')) return 'isochrone';
+  if (url.includes('api.mapbox.com/directions/') || url.includes('router.project-osrm.org/route/')) return 'route';
+  return null;
+}
+
+/**
+ * Watch the isochrone and route requests through the DevTools protocol, which
+ * says whether each response came from the network or from a cache.
+ */
+async function watchApiRequests(context, page) {
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Network.enable');
+  const requests = new Map();   // requestId -> { kind, source }
+  cdp.on('Network.requestWillBeSent', ({ requestId, request }) => {
+    const kind = apiKind(request.url);
+    if (kind) requests.set(requestId, { kind, source: null });
+  });
+  cdp.on('Network.requestServedFromCache', ({ requestId }) => {
+    const entry = requests.get(requestId);
+    if (entry) entry.source = 'cache';
+  });
+  cdp.on('Network.responseReceived', ({ requestId, response }) => {
+    const entry = requests.get(requestId);
+    if (!entry || entry.source === 'cache') return;
+    const cached = response.fromDiskCache || response.fromPrefetchCache || response.fromServiceWorker || response.status === 304;
+    entry.source = cached ? 'cache' : 'network';
+  });
+  return {
+    /** Clear the browser's HTTP cache (not cookies, site storage or IndexedDB) and forget earlier requests. */
+    async startRun() {
+      await cdp.send('Network.clearBrowserCache');
+      requests.clear();
+    },
+    /** Where each request of this kind was answered from, in request order. */
+    sources(kind) {
+      return [...requests.values()].filter(entry => entry.kind === kind).map(entry => entry.source ?? 'no response');
+    },
+  };
+}
+
+/** "isochrone: network; route: network", for the note column. */
+function describeSources(api) {
+  return ['isochrone', 'route'].map(kind => `${kind}: ${api.sources(kind).join(', ') || 'none'}`).join('; ');
+}
+
+/** Why a completed run's API responses are not all from the network, or ''. */
+function cacheProblem(api) {
+  for (const kind of ['isochrone', 'route']) {
+    const sources = api.sources(kind);
+    if (!sources.length) return `no ${kind} request was seen`;
+    if (sources.some(source => source !== 'network')) return `the ${kind} response did not come from the network`;
+  }
+  return '';
+}
+
 async function waitForMark(marks, measure, fromIndex) {
   const deadline = Date.now() + MARK_TIMEOUT_MS;
   for (;;) {
@@ -319,13 +390,16 @@ async function selectHydrant(page, hydrantId) {
 }
 
 /** One scripted run. Always returns a CSV row, whatever happened. */
-async function runOnce({ page, context, perfUrl, marks, measure, run, startPoint, phase }) {
+async function runOnce({ page, context, perfUrl, marks, api, measure, run, startPoint, phase }) {
   const row = { measure, run, start: startPoint.label, lat: startPoint.lat, lng: startPoint.lng, phase };
-  const failed = (status, note, extra = {}) => ({ ...row, ...extra, status, note, iso_time: new Date().toISOString() });
+  const failed = (status, note, extra = {}) => ({
+    ...row, ...extra, status, note: `${describeSources(api)}; ${note}`, iso_time: new Date().toISOString(),
+  });
   let partial = {};
   try {
     if (page.isClosed()) throw new AbortRun('The browser window was closed.');
     marks.length = 0;
+    await api.startRun();
     await openDashboard(page, context, perfUrl, startPoint);
     await locate(page);
 
@@ -355,6 +429,9 @@ async function runOnce({ page, context, perfUrl, marks, measure, run, startPoint
       return failed('error', `routed to ${route.hydrantId}, not the nearest hydrant ${search.hydrantId}`, partial);
     }
 
+    // Every run must fetch the isochrone and the route from the network; a
+    // cached response stops the session (the row keeps its times).
+    const problem = cacheProblem(api);
     return {
       ...row,
       ...partial,
@@ -362,9 +439,9 @@ async function runOnce({ page, context, perfUrl, marks, measure, run, startPoint
       on_route_hydrants: route.onRouteHydrants,
       ms: measure === 'T1' ? search.ms + route.ms : route.ms,
       ...(measure === 'T1' ? { t1b_ms: route.ms } : {}),
-      status: 'ok',
+      status: problem ? 'aborted' : 'ok',
       iso_time: route.ts,
-      note: notes.join('; '),
+      note: [describeSources(api), ...notes, ...(problem ? [`stopped: ${problem}`] : [])].join('; '),
     };
   } catch (error) {
     return failed(error instanceof AbortRun ? 'aborted' : 'error', firstLine(error), partial);
@@ -412,7 +489,7 @@ async function loginMode(options) {
 
 async function runMode(options) {
   const phase = options.trial ? 'trial' : 'real';
-  const target = options.trial ? TRIAL_RUNS_PER_MEASURE : RUNS_PER_MEASURE;
+  const target = options.trial ? options.trialRuns : RUNS_PER_MEASURE;
 
   const changes = uncommittedChanges();
   if (phase === 'real' && changes?.length && !options.allowDirty) {
@@ -443,6 +520,7 @@ async function runMode(options) {
   });
   const page = context.pages()[0] ?? await context.newPage();
   const marks = collectMarks(page);
+  const api = await watchApiRequests(context, page);
 
   // One untimed load first: checks the sign-in and the build, and reads the machine details.
   let environment;
@@ -515,7 +593,7 @@ async function runMode(options) {
       while (valid < target && !session.stopped) {
         const run = valid + 1;
         const startPoint = START_POINTS[(run - 1) % START_POINTS.length];
-        const row = await runOnce({ page, context, perfUrl: perfUrl.href, marks, measure, run, startPoint, phase });
+        const row = await runOnce({ page, context, perfUrl: perfUrl.href, marks, api, measure, run, startPoint, phase });
         written.push(appendRow(row));
         console.log(describeRow(row));
         if (row.status === 'ok') {
