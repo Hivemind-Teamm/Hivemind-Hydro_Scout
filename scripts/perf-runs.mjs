@@ -200,7 +200,7 @@ function saveMeta(sessions) {
     notes: [
       'Times are measured inside the app with performance.now() and recorded in whole milliseconds. The timing code runs only when the page address has ?perf=1.',
       'With ?perf=1 the app skips its account-presence write (accountPresenceSessions), so the runs write nothing to Firestore. A normal session does write it.',
-      'In this build T1b and T2 cover the same interval (Route click to map idle): the route line and the hydrants along it reach the map in one update.',
+      'In this build T1b and T2 cover the same interval (Route click to the end rule being met): the route line and the hydrants along it reach the map in one update.',
       'The camera move counts in the time: T1a includes the fly-to animation and T1b and T2 include the route-fit animation (see timing.cameraAnimations in each session).',
       'A session without a "timing" field used the earlier end rule: the map\'s next "idle" event. In OTW Mode the route line\'s dash animation repaints the map continuously, so idle never came after the Route click and those runs timed out.',
       'Every run routes to the nearest operational hydrant that the app\'s own search returns from that start point. In T2 runs the search only picks the destination; its time is not part of T2.',

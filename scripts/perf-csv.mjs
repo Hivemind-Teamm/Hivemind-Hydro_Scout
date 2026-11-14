@@ -9,11 +9,11 @@ export const CSV_COLUMNS = [
   'lng',
   'dest',               // id of the hydrant searched and routed to
   'route_m',            // route length the app shows, in metres
-  'ms',                 // T1 = t1a_ms + t1b_ms; T2 = Route click to map idle
+  'ms',                 // T1 = t1a_ms + t1b_ms; T2 = Route click to settled map
   'status',             // ok | error | timeout | aborted
   'iso_time',
-  't1a_ms',             // T1 only: Find Nearest Hydrant click to map idle
-  't1b_ms',             // T1 only: Route click to map idle
+  't1a_ms',             // T1 only: Find Nearest Hydrant click to settled map
+  't1b_ms',             // T1 only: Route click to settled map
   'phase',              // trial | real
   'renderer',           // mapbox | maplibre
   'on_route_hydrants',  // hydrants shown along the route

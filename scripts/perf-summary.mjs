@@ -68,7 +68,7 @@ function main() {
   const shown = path.relative(ROOT, file);
   console.log(`Hydro-Scout timing summary: ${phase} runs from ${shown.startsWith('..') ? file : shown}`);
   console.log('Times in ms. Every valid run is included; no outliers are excluded. SD is the sample SD (n - 1).');
-  console.log('T1 = T1a + T1b (T1a: search click to map idle; T1b: Route click to map idle).');
+  console.log('T1 = T1a + T1b (T1a: search click to settled map; T1b: Route click to settled map; end rule in run_meta.json).');
   console.log('');
   const table = [
     ['measure', 'n', 'failed', 'mean', 'sd', 'median', 'min', 'max'],
