@@ -32,7 +32,6 @@ import {
 import FireTruckBadge from './FireTruckBadge';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
 import { circleRing } from '@/lib/fire-response';
-import { perfAttachMap } from '@/lib/perf';
 import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 if (typeof window !== 'undefined') {
@@ -284,7 +283,6 @@ const HydrantMarkers = memo(function HydrantMarkers({
             onClick={(e) => onHydrantClick(e, h)}
           >
             <div
-              data-hydrant-id={h.id}
               style={{
                 position: 'relative',
                 transform: `translate(${dx}px, ${dy}px)`,
@@ -619,12 +617,6 @@ export default function MapLibreMap({
     if (!mapInstance) return;
     mapInstance.getCanvas().style.cursor = crosshair ? 'crosshair' : '';
   }, [crosshair, mapInstance]);
-
-  // Thesis timing (?perf=1 only): marks end on this map's `idle` event.
-  useEffect(() => {
-    if (!mapInstance) return;
-    return perfAttachMap(mapInstance, 'maplibre');
-  }, [mapInstance]);
 
   const crosshairRef = useRef(crosshair);
   useEffect(() => { crosshairRef.current = crosshair; }, [crosshair]);
