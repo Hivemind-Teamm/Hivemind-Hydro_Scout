@@ -28,6 +28,11 @@ export interface NearestHydrantResult {
   noHydrantsFound: boolean;
 }
 
+export interface HydrantCandidate {
+  hydrant: Hydrant;
+  straightLineMetres: number;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const RADIUS_METRES = 2000;
@@ -116,6 +121,32 @@ async function fetchOperationalHydrants(): Promise<Hydrant[]> {
     .filter((h) => h.status === 'operational');
 }
 
+export function rankOperationalHydrants(
+  hydrants: Hydrant[],
+  userLat: number,
+  userLng: number,
+): HydrantCandidate[] {
+  return hydrants
+    .filter((hydrant) => hydrant.status === 'operational')
+    .map((hydrant) => ({
+      hydrant,
+      straightLineMetres: haversineMetres(
+        userLat,
+        userLng,
+        hydrant.lat,
+        hydrant.lng,
+      ),
+    }))
+    .filter(
+      (candidate) =>
+        candidate.straightLineMetres <= HAVERSINE_PREFILTER_METRES,
+    )
+    .sort(
+      (first, second) =>
+        first.straightLineMetres - second.straightLineMetres,
+    );
+}
+
 // ─── Main exports ─────────────────────────────────────────────────────────────
 
 /**
@@ -134,14 +165,12 @@ export async function findNearestHydrants(
     return { ranked: [], userPosition, withinRadius: [], noHydrantsFound: true };
   }
 
-  // 2. Haversine pre-filter — keep only candidates within 2 km
-  const candidates = operational
-    .map((h) => ({
-      hydrant: h,
-      straightLineMetres: haversineMetres(userLat, userLng, h.lat, h.lng),
-    }))
-    .filter((c) => c.straightLineMetres <= HAVERSINE_PREFILTER_METRES)
-    .sort((a, b) => a.straightLineMetres - b.straightLineMetres);
+  // 2. Haversine pre-filter — keep only candidates within 4 km
+  const candidates = rankOperationalHydrants(
+    operational,
+    userLat,
+    userLng,
+  );
 
   if (candidates.length === 0) {
     return { ranked: [], userPosition, withinRadius: [], noHydrantsFound: true };

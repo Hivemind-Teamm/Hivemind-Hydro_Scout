@@ -21,7 +21,8 @@ import {
   query,
   orderBy,
 } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, firestoreCacheMode } from '@/lib/firebase';
+import { perfEpochNow, perfObserverMeasure, perfRecord, timingPerfEnabled } from '@/lib/perf';
 import {
   hydrantFromDoc,
   toOperationalStatus,
@@ -49,12 +50,56 @@ export function useHydrants(): HydrantsState {
   useEffect(() => {
     const listenerStartedAtMs = Date.now();
     const loggedUpdates = new Map<string, number>();
+    let observerReadyLogged = false;
 
     const unsub = onSnapshot(
       collection(db, 'hydrants'),
       { includeMetadataChanges: true },
       (snap) => {
         const receivedAtMs = Date.now();
+
+        // P1/P5 observer record. This is the dashboard's normal hydrants
+        // listener, so the tests observe the same Firestore path users do.
+        // It deliberately preserves cached and pending callbacks as evidence;
+        // the CSV review selects the server-backed callback where required.
+        if (timingPerfEnabled()) {
+          const callbackEpochMs = perfEpochNow();
+          if (!observerReadyLogged) {
+            observerReadyLogged = true;
+            perfRecord({
+              measure: perfObserverMeasure(),
+              ts: new Date().toISOString(),
+              event: 'listener_ready',
+              callbackEpochMs,
+              fromCache: snap.metadata.fromCache,
+              hasPendingWrites: snap.metadata.hasPendingWrites,
+              cacheMode: firestoreCacheMode,
+            });
+          }
+          for (const change of snap.docChanges({ includeMetadataChanges: true })) {
+            const raw = change.doc.data();
+            const register = Array.isArray(raw.register) ? raw.register : [];
+            const lastRegister = register[register.length - 1] as Record<string, unknown> | undefined;
+            const token = typeof raw.perfToken === 'string' ? raw.perfToken
+              : typeof raw.testToken === 'string' ? raw.testToken
+                : typeof lastRegister?.token === 'string' ? lastRegister.token
+                  : '';
+            perfRecord({
+              measure: perfObserverMeasure(),
+              ts: new Date().toISOString(),
+              event: 'observer_change',
+              callbackEpochMs,
+              hydrantId: change.doc.id,
+              changeType: change.type,
+              operationalStatus: typeof raw.operationalStatus === 'string' ? raw.operationalStatus : '',
+              token,
+              fromCache: snap.metadata.fromCache,
+              hasPendingWrites: snap.metadata.hasPendingWrites,
+              documentHasPendingWrites: change.doc.metadata.hasPendingWrites,
+              cacheMode: firestoreCacheMode,
+            });
+          }
+        }
 
         if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) {
           for (const change of snap.docChanges({ includeMetadataChanges: true })) {
@@ -136,12 +181,50 @@ export async function updateHydrantStatus(hydrantId: string, input: EditHydrantI
     });
   }
 
+  let issueEpochMs = 0;
   try {
     // Hydrant edits belong in the hydrant's register. Station Activity is
     // reserved for operational events, so one edit does not create a second,
     // noisy station notification.
+    issueEpochMs = timingPerfEnabled() ? perfEpochNow() : 0;
+    if (issueEpochMs) {
+      perfRecord({
+        measure: 'P1',
+        ts: new Date().toISOString(),
+        event: 'writer_issue',
+        hydrantId,
+        setStatus: input.status,
+        issueEpochMs,
+        cacheMode: firestoreCacheMode,
+      });
+    }
     await updateDoc(ref, payload);
+    if (issueEpochMs) {
+      perfRecord({
+        measure: 'P1',
+        ts: new Date().toISOString(),
+        event: 'writer_ack',
+        hydrantId,
+        setStatus: input.status,
+        issueEpochMs,
+        ackEpochMs: perfEpochNow(),
+        cacheMode: firestoreCacheMode,
+      });
+    }
   } catch (error) {
+    if (issueEpochMs) {
+      perfRecord({
+        measure: 'P1',
+        ts: new Date().toISOString(),
+        status: 'error',
+        event: 'writer_error',
+        hydrantId,
+        setStatus: input.status,
+        issueEpochMs,
+        message: error instanceof Error ? error.message : 'Hydrant status update failed',
+        cacheMode: firestoreCacheMode,
+      });
+    }
     logFirestoreError('update:hydrant-status', error);
     throw error;
   }

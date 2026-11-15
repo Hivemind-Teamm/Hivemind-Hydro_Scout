@@ -2,7 +2,7 @@
 
 import IncidentTrackingStatus from './IncidentTrackingStatus';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import dynamic from 'next/dynamic';
 import { doc, onSnapshot } from 'firebase/firestore';
 import MapView, { type MapProvider, type MapController, type FireOverlay } from './MapView';
@@ -30,6 +30,8 @@ import HydrantCheckingPanel from './HydrantCheckingPanel';
 const OperationsDashboard = dynamic(() => import('./OperationsDashboard'), { ssr: false });
 const AdminDashboard      = dynamic(() => import('./AdminDashboard'),      { ssr: false });
 const PinHydrantModal     = dynamic(() => import('./PinHydrantModal'),     { ssr: false });
+const P3PerformancePanel  = dynamic(() => import('./P3PerformancePanel'),  { ssr: false });
+const PerfReadout         = dynamic(() => import('./PerfReadout'),          { ssr: false });
 import {
   countByStatus,
   DEFAULT_VISIBLE_STATUSES,
@@ -39,7 +41,7 @@ import {
 } from '../data/hydrants';
 import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
-import { db } from '@/lib/firebase';
+import { db, firestoreCacheMode } from '@/lib/firebase';
 import { useSharedFirePins } from '@/lib/use-shared-fire-pins';
 import { recordHydrantCheck, useHydrantChecking, type HydrantCheckStatus } from '@/lib/hydrant-checking';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -57,7 +59,7 @@ import {
 import { useSupplyLine } from '@/lib/use-supply-line';
 import { placeView } from '@/lib/place-search';
 import { layoutSupplyLine } from '@/lib/supply-layout';
-import { perfEnabled, perfStart, perfEnd, perfFail, type PerfMeasure } from '@/lib/perf';
+import { p3PerfEnabled, timingPerfEnabled, perfEnabled, perfRecord, perfStart, perfEnd, perfFail, type PerfMeasure } from '@/lib/perf';
 
 // Thesis timing (?perf=1 only). One Route click closes both marks: the route
 // line (T1b) and the hydrants along it (T2) reach the map in the same update.
@@ -96,6 +98,27 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 }
 
 export default function HydroScoutDashboard() {
+  // The false server snapshot keeps normal dashboard markup independent of a
+  // browser-only query string. The panel exists only for the explicit P3 URL.
+  const showP3PerfPanel = useSyncExternalStore(
+    () => () => {},
+    p3PerfEnabled,
+    () => false,
+  );
+  const showTimingReadout = useSyncExternalStore(
+    () => () => {},
+    timingPerfEnabled,
+    () => false,
+  );
+  useEffect(() => {
+    if (!timingPerfEnabled()) return;
+    perfRecord({
+      measure: 'P1',
+      ts: new Date().toISOString(),
+      event: 'perf_startup',
+      cacheMode: firestoreCacheMode,
+    });
+  }, []);
   // Start on MapLibre immediately when no Mapbox token is configured, so we
   // never flash a broken Mapbox render before an effect can fall back.
   const [provider, setProvider] = useState<MapProvider>(
@@ -1277,6 +1300,9 @@ export default function HydroScoutDashboard() {
           }}
         />
       </div>
+
+      {showP3PerfPanel && <P3PerformancePanel hydrants={hydrants} loading={loading} />}
+      {showTimingReadout && <PerfReadout />}
 
       {/* Scroll-mode toast */}
       {mapScrollMode && (

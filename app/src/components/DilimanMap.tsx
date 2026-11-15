@@ -21,7 +21,8 @@ import {
 import FireTruckBadge from './FireTruckBadge';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
 import { circleRing } from '@/lib/fire-response';
-import { perfAttachMap } from '@/lib/perf';
+import { perfAttachMap, perfMarkMarkersInteractive } from '@/lib/perf';
+import { firestoreCacheMode } from '@/lib/firebase';
 import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 const clusterLevel = (zoom: number) => Math.round(zoom);
@@ -367,6 +368,7 @@ export default function DilimanMap({
   const [styleEpoch, setStyleEpoch] = useState(0);
   const [mapInstance, setMapInstance] = useState<ReturnType<MapRef['getMap']> | null>(null);
   const [clusterZoom, setClusterZoom] = useState(clusterLevel(DEFAULT_ZOOM));
+  const p2MarkedRef = useRef(false);
 
 
   const fireZoneIds = fire?.zoneIds ?? null;
@@ -404,6 +406,14 @@ export default function DilimanMap({
     if (!mapInstance) return;
     return perfAttachMap(mapInstance, 'mapbox');
   }, [mapInstance]);
+
+  // The effect runs after the DOM marker tree commits. The helper waits for a
+  // settled map frame, which makes this the P2 interactive-marker end mark.
+  useEffect(() => {
+    if (p2MarkedRef.current || !mapInstance || hydrants.length === 0) return;
+    p2MarkedRef.current = true;
+    perfMarkMarkersInteractive(hydrants.length, firestoreCacheMode);
+  }, [hydrants.length, mapInstance]);
 
   useEffect(() => {
     if (!mapInstance) return;

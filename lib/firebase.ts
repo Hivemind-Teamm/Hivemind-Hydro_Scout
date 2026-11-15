@@ -69,26 +69,36 @@ if (isLocalDevelopment) {
  * throws if called twice (e.g. Fast Refresh re-evaluating this module), so we
  * fall back to the already-initialised instance on any failure.
  */
+export let firestoreCacheMode: 'persistent' | 'memory' = 'memory';
+
 function initDb(): Firestore {
   if (isLocalDevelopment) {
     // Never persist emulator data alongside real offline Firestore data.
     try {
+      firestoreCacheMode = 'memory';
       return initializeFirestore(app, {
         localCache: memoryLocalCache(),
       });
     } catch {
+      firestoreCacheMode = 'memory';
       return getFirestore(app);
     }
   }
 
   if (typeof window === "undefined") return getFirestore(app);
   try {
-    return initializeFirestore(app, {
+    const firestore = initializeFirestore(app, {
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager(),
       }),
     });
+    firestoreCacheMode = 'persistent';
+    return firestore;
   } catch {
+    // This is visible in the perf records so P1/P2 rows from a memory-cache
+    // session are never mixed with IndexedDB-backed rows.
+    firestoreCacheMode = 'memory';
+    console.warn('[HS-PERF] Firestore persistent cache was unavailable; using memory cache.');
     return getFirestore(app);
   }
 }

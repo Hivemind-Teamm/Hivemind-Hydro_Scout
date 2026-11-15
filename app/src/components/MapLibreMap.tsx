@@ -32,7 +32,8 @@ import {
 import FireTruckBadge from './FireTruckBadge';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
 import { circleRing } from '@/lib/fire-response';
-import { perfAttachMap } from '@/lib/perf';
+import { perfAttachMap, perfMarkMarkersInteractive } from '@/lib/perf';
+import { firestoreCacheMode } from '@/lib/firebase';
 import type { FireOverlay, MapController, PendingPin } from './MapView';
 
 if (typeof window !== 'undefined') {
@@ -470,6 +471,7 @@ export default function MapLibreMap({
   const [styleEpoch, setStyleEpoch] = useState(0);
   const [mapInstance, setMapInstance] = useState<MLMap | null>(null);
   const [clusterZoom, setClusterZoom] = useState(clusterLevel(DEFAULT_ZOOM));
+  const p2MarkedRef = useRef(false);
 
   const fireZoneIds = fire?.zoneIds ?? null;
   const crosshair = addHydrantMode || firePinMode;
@@ -625,6 +627,14 @@ export default function MapLibreMap({
     if (!mapInstance) return;
     return perfAttachMap(mapInstance, 'maplibre');
   }, [mapInstance]);
+
+  // The effect runs after the DOM marker tree commits. The helper waits for a
+  // settled map frame, which makes this the P2 interactive-marker end mark.
+  useEffect(() => {
+    if (p2MarkedRef.current || !mapInstance || hydrants.length === 0) return;
+    p2MarkedRef.current = true;
+    perfMarkMarkersInteractive(hydrants.length, firestoreCacheMode);
+  }, [hydrants.length, mapInstance]);
 
   const crosshairRef = useRef(crosshair);
   useEffect(() => { crosshairRef.current = crosshair; }, [crosshair]);

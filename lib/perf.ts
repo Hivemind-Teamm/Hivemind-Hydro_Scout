@@ -11,7 +11,7 @@
  * the runner script to collect.
  */
 
-export type PerfMeasure = 'T1a' | 'T1b' | 'T2';
+export type PerfMeasure = 'T1a' | 'T1b' | 'T2' | 'P1' | 'P2' | 'P3' | 'P5';
 export type PerfRenderer = 'mapbox' | 'maplibre';
 type PerfDetail = Record<string, string | number>;
 
@@ -23,7 +23,7 @@ export interface PerfRecord {
   ms?: number;
   status?: 'error';
   message?: string;
-  [detail: string]: string | number | undefined;
+  [detail: string]: string | number | boolean | undefined;
 }
 
 declare global {
@@ -64,13 +64,86 @@ interface PerfMap {
 let attached: { map: PerfMap; renderer: PerfRenderer } | null = null;
 
 export function perfEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  const value = new URLSearchParams(window.location.search).get('perf');
+  return value === '1' || value === 'p3';
+}
+
+/** True for the P1/P2/P5 timing build (`?perf=1`), excluding P3-only runs. */
+export function timingPerfEnabled(): boolean {
   return typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('perf') === '1';
 }
 
+/** P1 is the default; P5 observers opt in with `?perf=1&perfMeasure=p5`. */
+export function perfObserverMeasure(): 'P1' | 'P5' {
+  return typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('perfMeasure') === 'p5'
+    ? 'P5'
+    : 'P1';
+}
+
+/** True only for the standalone P3 nearest-hydrant computation runner. */
+export function p3PerfEnabled(): boolean {
+  return typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('perf') === 'p3';
+}
+
+/** Epoch milliseconds from the same clock used by browser and Node test tools. */
+export function perfEpochNow(): number {
+  return typeof performance === 'undefined'
+    ? Date.now()
+    : performance.timeOrigin + performance.now();
+}
+
 function emit(record: PerfRecord) {
-  (window.__hsPerf ??= []).push(record);
-  console.info('[HS-PERF]', JSON.stringify(record));
+  const enriched = record.epochMs === undefined
+    ? { ...record, epochMs: perfEpochNow() }
+    : record;
+  (window.__hsPerf ??= []).push(enriched);
+  try {
+    const saved = JSON.parse(window.localStorage.getItem('hsPerfLog') ?? '[]');
+    const records = Array.isArray(saved) ? saved : [];
+    records.push(enriched);
+    window.localStorage.setItem('hsPerfLog', JSON.stringify(records));
+  } catch {
+    // Storage can be disabled or full. The in-memory log and console output
+    // still let the runner collect the result.
+  }
+  window.dispatchEvent(new CustomEvent('hs-perf-record', { detail: enriched }));
+  console.info('[HS-PERF]', JSON.stringify(enriched));
+}
+
+/** Persist one non-map performance result for the browser runner and CSV export. */
+export function perfRecord(record: PerfRecord) {
+  if (!perfEnabled()) return;
+  emit(record);
+}
+
+/**
+ * P2 ends on the first settled map frame after the hydrant marker React tree
+ * has committed. `performance.now()` is elapsed time since navigation start.
+ */
+export function perfMarkMarkersInteractive(hydrantsDrawn: number, cacheMode: 'persistent' | 'memory') {
+  if (!timingPerfEnabled()) return;
+  const target = attached;
+  if (!target) return;
+  const { map, renderer } = target;
+  const onRender = () => {
+    if (map.isMoving() || !map.areTilesLoaded()) return;
+    map.off('render', onRender);
+    emit({
+      measure: 'P2',
+      ts: new Date().toISOString(),
+      ms: performance.now(),
+      hydrantsDrawn,
+      cacheMode,
+      renderer,
+      mark: 'hs-markers-interactive',
+    });
+  };
+  map.on('render', onRender);
+  map.triggerRepaint();
 }
 
 /** A loaded map registers itself as the one whose frames end the marks. Returns the cleanup. */
