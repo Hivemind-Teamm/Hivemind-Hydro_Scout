@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Hydrant, HydrantStatus } from '../data/hydrants';
 import { rankOperationalHydrants } from '@/lib/nearest-hydrant';
 import { perfRecord } from '@/lib/perf';
@@ -70,6 +70,8 @@ export default function P3PerformancePanel({ hydrants, loading }: { hydrants: Hy
   const [lastResult, setLastResult] = useState<string>('No P3 run recorded yet.');
   const [lastValidMedian, setLastValidMedian] = useState<number | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [position, setPosition] = useState({ left: 12, top: 80 });
+  const dragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
 
   const datasets = useMemo(() => {
     const entries = new Map<DatasetKey, Hydrant[]>();
@@ -195,12 +197,45 @@ export default function P3PerformancePanel({ hydrants, loading }: { hydrants: Hy
     URL.revokeObjectURL(url);
   }
 
+  function startDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - position.left,
+      offsetY: event.clientY - position.top,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    // Keep the grip visible so a moved panel can always be brought back.
+    setPosition({
+      left: Math.max(8, Math.min(window.innerWidth - 72, event.clientX - drag.offsetX)),
+      top: Math.max(8, Math.min(window.innerHeight - 52, event.clientY - drag.offsetY)),
+    });
+  }
+
+  function endDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
   const canBatch = lastValidMedian !== null && lastValidMedian < 0.2;
   const coolingDown = cooldownUntil > 0;
 
   return (
-    <aside className="absolute left-3 top-20 z-[3500] w-[min(24rem,calc(100vw-1.5rem))] rounded-xl border border-cyan-300/50 bg-slate-950/95 p-4 text-slate-100 shadow-2xl backdrop-blur">
-      <div className="flex items-start justify-between gap-3">
+    <aside style={{ left: position.left, top: position.top }} className="absolute z-[3500] w-[min(24rem,calc(100vw-1.5rem))] rounded-xl border border-cyan-300/50 bg-slate-950/95 p-4 text-slate-100 shadow-2xl backdrop-blur">
+      <div
+        className="flex touch-none cursor-grab items-start justify-between gap-3 active:cursor-grabbing"
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        title="Drag to move the performance panel"
+      >
         <div>
           <p className="text-xs font-black tracking-[0.16em] text-cyan-300 uppercase">Performance test</p>
           <h2 className="mt-1 text-base font-bold">P3: nearest hydrant computation</h2>
