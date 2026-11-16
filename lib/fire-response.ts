@@ -57,7 +57,12 @@ export function rankHydrantsNearFire(
     }
   }
 
-  inRadius.sort((a, b) => a.distanceM - b.distanceM);
+  inRadius.sort((a, b) => {
+    const aOccupied = a.hydrant.occupied === true ? 1 : 0;
+    const bOccupied = b.hydrant.occupied === true ? 1 : 0;
+
+    return aOccupied - bOccupied || a.distanceM - b.distanceM;
+  });
   return { inRadius, nearestOutside };
 }
 
@@ -94,7 +99,15 @@ export function pickSupplyHydrant(
     const preferred = inRadius.find((c) => c.hydrant.id === preferredId);
     if (preferred) return preferred;
   }
-  return inRadius.find((c) => c.hydrant.status === 'operational') ?? inRadius[0] ?? null;
+  return (
+    inRadius.find(
+      (c) => c.hydrant.status === 'operational' && c.hydrant.occupied !== true
+    ) ??
+    inRadius.find((c) => c.hydrant.occupied !== true) ??
+    inRadius.find((c) => c.hydrant.status === 'operational') ??
+    inRadius[0] ??
+    null
+  );
 }
 
 // ─── Geometry ─────────────────────────────────────────────────────────────────

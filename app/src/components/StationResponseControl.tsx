@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   collection,
@@ -35,6 +35,22 @@ type ResponseRecord = {
 
 const ADMIN_RESPONSE_STATION_ID = 'SYSTEM_ADMIN';
 const ADMIN_RESPONSE_STATION_NAME = 'System Administration';
+
+type ResponseEndMode = 'member' | 'station-head';
+
+async function requestEndResponse(responseId: string, mode: ResponseEndMode): Promise<void> {
+  const response = await fetch('/api/station-responses/end', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ responseId, mode }),
+  });
+
+  const result: { error?: string } | null = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(result?.error || 'Could not end the response. Please try again.');
+  }
+}
 
 function currentPosition(): Promise<GeolocationPosition> {
   if (!navigator.geolocation) return Promise.reject(new Error('This device does not support location sharing.'));
@@ -72,6 +88,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   const [openRoster, setOpenRoster] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const staleClosuresInFlight = useRef(new Set<string>());
 
   useEffect(() => {
     if (!user) return;
@@ -186,35 +203,24 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
 
   useEffect(() => {
     if ((role !== 'head' && role !== 'admin') || (!isGlobalAdmin && !stationId) || !user) return;
+
     const stale = responses.filter(response => response.status === 'active'
       && response.lastLocationAt?.toDate
       && Date.now() - response.lastLocationAt.toDate().getTime() > staleAfterMs);
-    if (!stale.length) return;
-    const batch = writeBatch(db);
+
     for (const response of stale) {
-      batch.update(doc(db, 'stationResponses', response.id), {
-        status: 'ended',
-        endedAt: serverTimestamp(),
-        endedByUid: user.uid,
-        endedByName: user.displayName || user.email || 'Station manager',
-        endReason: 'station-head',
-      });
-      batch.update(doc(db, 'users', response.uid), { activeResponseId: null });
-      batch.delete(doc(db, 'stations', response.stationId, 'unitLocations', response.id));
-      batch.delete(doc(db, 'responseLocations', response.id));
-      batch.set(doc(db, 'stations', response.stationId, 'notifications', `${response.id}_closed`), {
-        type: 'station-response-closed',
-        uid: user.uid,
-        displayName: user.displayName || user.email || 'Station manager',
-        responseId: response.id,
-        message: `A stale response from ${response.displayName} was closed by station management.`,
-        createdAt: serverTimestamp(),
-      });
+      if (staleClosuresInFlight.current.has(response.id)) continue;
+      staleClosuresInFlight.current.add(response.id);
+
+      void requestEndResponse(response.id, 'station-head')
+        .catch(err => {
+          console.error('Could not close stale station response:', err);
+          setError(err instanceof Error ? err.message : 'Could not close a stale response.');
+        })
+        .finally(() => {
+          staleClosuresInFlight.current.delete(response.id);
+        });
     }
-    void batch.commit().catch(err => {
-      console.error('Could not close stale station responses:', err);
-      setError('Could not close a stale response. Try again from station activity.');
-    });
   }, [isGlobalAdmin, role, responses, staleAfterMs, stationId, user]);
 
   async function startResponse() {
@@ -280,27 +286,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
     setError(null);
     setBusy(true);
     try {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'stationResponses', response.id), {
-        status: 'ended',
-        endedAt: serverTimestamp(),
-        endedByUid: user.uid,
-        endedByName: user.displayName?.trim() || user.email || 'Responder',
-        endReason: 'member',
-      });
-      batch.update(doc(db, 'users', user.uid), { activeResponseId: null });
-      batch.delete(doc(db, 'stations', response.stationId, 'unitLocations', response.id));
-      batch.delete(doc(db, 'responseLocations', response.id));
-      const notice = doc(db, 'stations', response.stationId, 'notifications', `${response.id}_end`);
-      batch.set(notice, {
-        type: 'response-ended',
-        uid: user.uid,
-        displayName: user.displayName?.trim() || user.email || 'Responder',
-        responseId: response.id,
-        message: `${user.displayName?.trim() || user.email || 'A member'} ended responding.`,
-        createdAt: serverTimestamp(),
-      });
-      await batch.commit();
+      await requestEndResponse(response.id, 'member');
     } catch (err) {
       console.error('Could not end response:', err);
       setError(err instanceof Error ? err.message : 'Could not end the response.');
@@ -314,7 +300,7 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
     setError(null);
     try {
       const batch = writeBatch(db);
-      batch.update(doc(db, 'stationJoinRequests', request.id), { status: approved ? 'approved' : 'rejected', reviewedAt: serverTimestamp(), reviewedBy: user?.uid });
+      batch.update(doc(db, 'stationJoinRequests', request.id), { status: approved ? 'approved' : 'rejected', reviewedAt: serverTimestamp(), reviewedBy:user?.uid });
       batch.update(doc(db, 'users', request.uid), {
         stationMembershipStatus: approved ? 'approved' : 'rejected',
         stationId: approved ? stationId : null,

@@ -38,6 +38,7 @@ import { useHydrants, useReports } from '../data/store';
 import { useAuth } from '@/lib/auth-context';
 import { db } from '@/lib/firebase';
 import { useSharedFirePins } from '@/lib/use-shared-fire-pins';
+import { useHydrantOccupancy } from '@/lib/use-hydrant-occupancy';
 import { recordHydrantCheck, useHydrantChecking, type HydrantCheckStatus } from '@/lib/hydrant-checking';
 import { useIsMobile } from '@/lib/use-media-query';
 import { useOnlineStatus } from '@/lib/use-online-status';
@@ -210,10 +211,21 @@ export default function HydroScoutDashboard() {
   const fire = canPinFire && fireIncident ? { ...fireIncident, address: fireAddress?.key === `${fireIncident.id}:${fireIncident.lat}:${fireIncident.lng}` ? fireAddress.address : null } : null;
   const canEditFire = !!fireIncident && sharedFires.canEdit(fireIncident);
   const { hydrants, loading, error } = useHydrants();
+  const occupancy = useHydrantOccupancy();
+
+  // Apply real-time claims only to fire-response planning.
+  // Keep the original hydrants feed unchanged for other map features.
+  const hydrantsForFire = useMemo(
+    () => hydrants.map(hydrant => ({
+      ...hydrant,
+      occupied: occupancy.claimsByHydrantId.has(hydrant.id),
+    })),
+    [hydrants, occupancy.claimsByHydrantId],
+  );
   const checking = useHydrantChecking(stationId, role === 'admin');
   const { reports, loading: reportsLoading } = useReports();
   const hasPendingReports = reports.some((r) => r.status === 'pending');
-  const [activeResponseIncident, setActiveResponseIncident] = useState<{ responseId: string; lat: number; lng: number } | null>(null);
+  const [activeResponseIncident, setActiveResponseIncident] = useState<{ responseId: string; firePinId: string; lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!activeResponseId) return;
@@ -221,13 +233,30 @@ export default function HydroScoutDashboard() {
       const data = snapshot.data();
       const lat = data?.incidentLat;
       const lng = data?.incidentLng;
-      if (typeof lat === 'number' && Number.isFinite(lat) && typeof lng === 'number' && Number.isFinite(lng)) {
-        setActiveResponseIncident({ responseId: activeResponseId, lat, lng });
+      if (
+        data?.status === 'active' &&
+        typeof data.firePinId === 'string' &&
+        typeof lat === 'number' && Number.isFinite(lat) &&
+        typeof lng === 'number' && Number.isFinite(lng)
+      ) {
+        setActiveResponseIncident({
+          responseId: activeResponseId,
+          firePinId: data.firePinId,
+          lat,
+          lng,
+        });
+      } else {
+        setActiveResponseIncident(null);
       }
     }, error => {
       console.warn('Could not load the active response incident:', error);
     });
   }, [activeResponseId]);
+
+  const responseMatchesSelectedFire =
+    !!activeResponseId &&
+    activeResponseIncident?.responseId === activeResponseId &&
+    activeResponseIncident.firePinId === fire?.id;
 
   useEffect(() => {
     if (!loading && mapReady && !splashStartedRef.current) {
@@ -534,15 +563,15 @@ export default function HydroScoutDashboard() {
   const fireSearch = useMemo(
     () => (fireLat === undefined || fireLng === undefined
       ? null
-      : findHydrantsNearFire(hydrants, { lat: fireLat, lng: fireLng })),
-    [hydrants, fireLat, fireLng],
+      : findHydrantsNearFire(hydrantsForFire, { lat: fireLat, lng: fireLng })),
+    [hydrantsForFire, fireLat, fireLng],
   );
   const fireRanking = fireSearch;
   const fireSearchRadiusM = fireSearch?.radiusM ?? 1000;
   const currentResponseIncident = activeResponseIncident?.responseId === activeResponseId ? activeResponseIncident : null;
   const activeResponseSearchRadiusM = useMemo(() => currentResponseIncident
-    ? findHydrantsNearFire(hydrants, currentResponseIncident).radiusM
-    : null, [currentResponseIncident, hydrants]);
+    ? findHydrantsNearFire(hydrantsForFire, currentResponseIncident).radiusM
+    : null, [currentResponseIncident, hydrantsForFire]);
   const hideUnitLocationsWhileResponding = !!activeResponseId && (!userLocation || !currentResponseIncident
     || haversineM(userLocation.lat, userLocation.lng, currentResponseIncident.lat, currentResponseIncident.lng)
       > (activeResponseSearchRadiusM ?? 1000));
@@ -1077,6 +1106,14 @@ export default function HydroScoutDashboard() {
   if (fire && fireRanking) {
     const panel = (
       <FireResponsePanel
+        incidentId={fire.id}
+        occupancyClaims={occupancy.claimsByHydrantId}
+        occupancyReady={occupancy.ready}
+        occupancyError={occupancy.error}
+        currentUid={user?.uid ?? null}
+        activeResponseId={responseMatchesSelectedFire ? activeResponseId : null}
+        canClaimHydrants={responseMatchesSelectedFire && (role === 'authorized' || role === 'head' || role === 'admin')}
+        canReleaseOthers={role === 'admin'}
         lat={fire.lat}
         lng={fire.lng}
         address={fire.address}

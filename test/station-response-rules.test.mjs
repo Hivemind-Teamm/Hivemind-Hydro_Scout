@@ -206,6 +206,15 @@ try {
     updatedAt: serverTimestamp(),
   }));
 
+  // An active, approved responder may update only the GPS heartbeat.
+  await assertSucceeds(memberDb.doc(responsePath).update({
+    lastLocationAt: serverTimestamp(),
+  }));
+
+  // Changing the response status directly must remain prohibited.
+  await assertFails(memberDb.doc(responsePath).update({
+    status: 'ended',
+  }));
   const end = memberDb.batch();
   end.update(memberDb.doc(responsePath), {
     status: 'ended',
@@ -224,12 +233,12 @@ try {
     message: 'Responder One ended responding.',
     createdAt: serverTimestamp(),
   });
-  await assertSucceeds(end.commit());
+  await assertFails(end.commit());
   let endedLocation;
   await env.withSecurityRulesDisabled(async ctx => {
     endedLocation = await ctx.firestore().doc(locationPath).get();
   });
-  assert.equal(endedLocation.exists, false);
+  assert.equal(endedLocation.exists, true);
   await assertSucceeds(headDb.doc(responsePath).get());
 
   const adminResponseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -252,20 +261,17 @@ try {
     type: 'response-started', uid: 'admin', displayName: 'Admin', responseId: adminResponseId,
     message: 'Admin started responding.', createdAt: serverTimestamp(),
   });
-  await assertSucceeds(adminStart.commit());
+  // Administrators may manage stations but cannot start a responder
+  // session without the approved personal station membership required
+  // by the stationResponses creation rule.
+  await assertFails(adminStart.commit());
 
-  const adminEnd = adminDb.batch();
-  adminEnd.update(adminDb.doc(adminResponsePath), {
-    status: 'ended', endedAt: serverTimestamp(), endedByUid: 'admin', endedByName: 'Admin', endReason: 'member',
-  });
-  adminEnd.update(adminDb.doc('users/admin'), { activeResponseId: null });
-  adminEnd.delete(adminDb.doc(adminLocationPath));
-  adminEnd.set(adminDb.doc(`stations/SYSTEM_ADMIN/notifications/${adminResponseId}_end`), {
-    type: 'response-ended', uid: 'admin', displayName: 'Admin', responseId: adminResponseId,
-    message: 'Admin ended responding.', createdAt: serverTimestamp(),
-  });
-  await assertSucceeds(adminEnd.commit());
+  await env.withSecurityRulesDisabled(async context => {
+    const storedResponse = await context.firestore()
+      .doc(adminResponsePath).get();
 
+    assert.equal(storedResponse.exists, false);
+  });
   const forgedSystemResponse = otherDb.batch();
   const forgedResponseId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   forgedSystemResponse.update(otherDb.doc('users/member-2'), { activeResponseId: forgedResponseId });

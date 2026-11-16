@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, type Ref } from 'react';
+import { Fragment, useState, type Ref } from 'react';
 import { FiAlertTriangle, FiChevronDown, FiChevronRight, FiInfo, FiMove, FiX } from 'react-icons/fi';
 import { MdCenterFocusStrong, MdFireTruck, MdLocalFireDepartment, MdWaterDrop } from 'react-icons/md';
 import { STATUS_META, type Hydrant } from '../data/hydrants';
@@ -9,6 +9,7 @@ import type { FireHydrantCandidate } from '@/lib/fire-response';
 import { supplyStages } from '@/lib/supply-layout';
 import type { SupplyLineEstimate } from '@/lib/supply-line';
 import type { SupplyLine } from '@/lib/use-supply-line';
+import type { HydrantOccupancy } from '@/lib/use-hydrant-occupancy';
 
 type ReadyEstimate = Extract<SupplyLineEstimate, { status: 'ready' }>;
 
@@ -31,6 +32,14 @@ interface FireResponsePanelProps {
   /** Hydrant feed still loading — the list isn't meaningful yet. */
   loading: boolean;
   maxHeight: string;
+  incidentId: string;
+  occupancyClaims: ReadonlyMap<string, HydrantOccupancy>;
+  occupancyReady: boolean;
+  occupancyError: string | null;
+  currentUid: string | null;
+  activeResponseId: string | null;
+  canClaimHydrants: boolean;
+  canReleaseOthers: boolean;
   onSelectSupply: (hydrantId: string) => void;
   onViewHydrant: (hydrant: Hydrant) => void;
   onRecenter: () => void;
@@ -46,9 +55,44 @@ interface FireResponsePanelProps {
 export default function FireResponsePanel({
   lat, lng, address, radiusM, candidates, nearestOutside, supply, estimate, routing, loading, maxHeight,
   onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize, responseActionRef, canEdit = true, onDismiss,
+  incidentId, occupancyClaims, occupancyReady, occupancyError, currentUid, activeResponseId, canClaimHydrants, canReleaseOthers,
 }: FireResponsePanelProps) {
   const operationalCount = candidates.filter((c) => c.hydrant.status === 'operational').length;
   const radiusLabel = formatDistance(radiusM);
+  const [busyHydrantId, setBusyHydrantId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  async function changeClaim(hydrantId: string, action: 'claim' | 'release') {
+    if (!occupancyReady || busyHydrantId || !currentUid) return;
+    const existing = occupancyClaims.get(hydrantId);
+    if (action === 'claim' && (!canClaimHydrants || !activeResponseId || existing)) return;
+    if (action === 'release' && (
+      !existing || existing.firePinId !== incidentId ||
+      (existing.claimedByUid !== currentUid && !canReleaseOthers)
+    )) return;
+
+    setBusyHydrantId(hydrantId);
+    setActionError(null);
+    try {
+      const response = await fetch(`/api/hydrant-occupancy/${action}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hydrantId, firePinId: incidentId }),
+      });
+      const result: { error?: string } = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `Could not ${action} hydrant.`);
+      }
+      // Do not optimistically mark a hydrant as claimed or available.
+      // The server-confirmed Firestore listener supplies the new status.
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : `Could not ${action} hydrant.`);
+    } finally {
+      setBusyHydrantId(null);
+    }
+  }
+
 
   return (
     <div
@@ -86,6 +130,17 @@ export default function FireResponsePanel({
       {/* ── Scrollable body ── */}
       <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {supply && <SupplyEstimate supply={supply} estimate={estimate} routing={routing} onViewHydrant={onViewHydrant} />}
+
+        {!occupancyReady && (
+          <div role="status" className="mx-3.5 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+            {occupancyError ?? 'Checking live occupancy. Claim and release actions are temporarily disabled.'}
+          </div>
+        )}
+        {actionError && (
+          <p role="alert" className="mx-3.5 mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-[11px] text-red-700 dark:bg-red-950/30 dark:text-red-300">
+            {actionError}
+          </p>
+        )}
 
         {/* Hydrant list */}
         <div className="flex items-baseline justify-between gap-2 px-3.5 pb-1 pt-3">
@@ -125,6 +180,12 @@ export default function FireResponsePanel({
             {candidates.map((c, index) => {
               const meta = STATUS_META[c.hydrant.status];
               const selected = supply?.hydrant.id === c.hydrant.id;
+              const claim = occupancyClaims.get(c.hydrant.id);
+              const isMine = !!claim && claim.claimedByUid === currentUid && claim.responseId === activeResponseId;
+              const canRelease = !!claim && claim.firePinId === incidentId &&
+                (claim.claimedByUid === currentUid || canReleaseOthers);
+              const canClaim = !claim && canClaimHydrants && !!activeResponseId;
+              const pending = busyHydrantId === c.hydrant.id;
               return (
                 <li key={c.hydrant.id}>
                   <button
@@ -153,6 +214,33 @@ export default function FireResponsePanel({
                       {formatDistance(c.distanceM)}
                     </span>
                   </button>
+                  <div className="flex items-center justify-between gap-2 px-3.5 pb-2 pl-11">
+                    <span className={`text-[10px] font-semibold ${
+                      !occupancyReady ? 'text-amber-600 dark:text-amber-400'
+                        : claim ? 'text-red-600 dark:text-red-400'
+                          : 'text-emerald-600 dark:text-emerald-400'
+                    }`}>
+                      {!occupancyReady ? 'Occupancy unverified'
+                        : isMine ? 'Occupied · your response'
+                          : claim ? 'Occupied'
+                            : 'Available'}
+                    </span>
+                    {canRelease ? (
+                      <button
+                        type="button"
+                        disabled={!occupancyReady || busyHydrantId !== null}
+                        onClick={() => void changeClaim(c.hydrant.id, 'release')}
+                        className="rounded-md border border-neutral-200 px-2 py-1 text-[10px] font-bold text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                      >{pending ? 'Working…' : 'Release'}</button>
+                    ) : canClaim ? (
+                      <button
+                        type="button"
+                        disabled={!occupancyReady || busyHydrantId !== null}
+                        onClick={() => void changeClaim(c.hydrant.id, 'claim')}
+                        className="rounded-md bg-sky-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >{pending ? 'Working…' : 'Claim'}</button>
+                    ) : null}
+                  </div>
                 </li>
               );
             })}
