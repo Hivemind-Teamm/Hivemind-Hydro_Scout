@@ -62,6 +62,7 @@ test('staging can only select its own Firebase project and credentials', async (
   const admin = await readFile('lib/firebase-admin.ts', 'utf8');
   assert.match(client, /NEXT_PUBLIC_FIREBASE_TARGET/);
   assert.match(client, /hydro-scout-staging/);
+  assert.match(client, /must explicitly select the staging or production Firebase target/);
   assert.match(admin, /expectedFirebaseProject/);
   assert.match(admin, /serviceAccount\.project_id !== expectedProjectId/);
 });

@@ -27,8 +27,8 @@ export function isFirebaseEmulatorMode(): boolean {
 function expectedFirebaseProject(): string {
   const target = process.env.NEXT_PUBLIC_FIREBASE_TARGET as FirebaseTarget | undefined;
   if (target === "staging") return "hydro-scout-staging";
-  if (target === "production" || target === undefined) return "hydro-scout";
-  throw new Error("Invalid Firebase deployment target.");
+  if (target === "production") return "hydro-scout";
+  throw new Error("A deployed build must explicitly select the staging or production Firebase target.");
 }
 
 export function adminApp(): App {

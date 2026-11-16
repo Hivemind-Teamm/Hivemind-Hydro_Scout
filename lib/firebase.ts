@@ -49,11 +49,10 @@ const firebaseTarget = process.env.NEXT_PUBLIC_FIREBASE_TARGET;
 
 if (
   !isLocalEmulatorBuild &&
-  firebaseTarget !== undefined &&
   firebaseTarget !== "staging" &&
   firebaseTarget !== "production"
 ) {
-  throw new Error("Invalid Firebase deployment target.");
+  throw new Error("A deployed build must explicitly select the staging or production Firebase target.");
 }
 
 if (!isLocalEmulatorBuild && firebaseTarget === "staging" && !stagingFirebaseConfig.apiKey) {
