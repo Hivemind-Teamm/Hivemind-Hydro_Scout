@@ -57,6 +57,15 @@ test('local emulator mode is explicit and cannot activate on Vercel', async () =
   assert.match(source, /process\.env\.VERCEL !== "1"/);
 });
 
+test('staging can only select its own Firebase project and credentials', async () => {
+  const client = await readFile('lib/firebase.ts', 'utf8');
+  const admin = await readFile('lib/firebase-admin.ts', 'utf8');
+  assert.match(client, /NEXT_PUBLIC_FIREBASE_TARGET/);
+  assert.match(client, /hydro-scout-staging/);
+  assert.match(admin, /expectedFirebaseProject/);
+  assert.match(admin, /serviceAccount\.project_id !== expectedProjectId/);
+});
+
 test('Firestore rules and indexes deploy with main', async () => {
   const firebase = await readJson('firebase.json');
   assert.equal(firebase.firestore?.rules, 'firestore.rules');

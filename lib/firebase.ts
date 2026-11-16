@@ -23,6 +23,19 @@ const productionFirebaseConfig = {
   measurementId: "G-7JQTPTSKD5",
 };
 
+// The staging API key is intentionally supplied by Vercel at build time.
+// NEXT_PUBLIC values are bundled into the browser, so this must be set on the
+// staging deployment before `next build` runs.
+const stagingFirebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_STAGING_FIREBASE_API_KEY,
+  authDomain: "hydro-scout-staging.firebaseapp.com",
+  projectId: "hydro-scout-staging",
+  storageBucket: "hydro-scout-staging.firebasestorage.app",
+  messagingSenderId: "995672859034",
+  appId: "1:995672859034:web:f420abc3e145fca8085a23",
+  measurementId: "G-6FBSCKYLWS",
+};
+
 /**
  * Development is emulator-only. Never use the production Firebase project
  * while running Next.js in development mode.
@@ -32,6 +45,20 @@ const productionFirebaseConfig = {
 // The server separately requires exact emulator hosts, the demo project ID,
 // and no Vercel runtime before it permits credential-free Admin initialisation.
 const isLocalEmulatorBuild = process.env.NEXT_PUBLIC_LOCAL_FIREBASE_EMULATORS === "1";
+const firebaseTarget = process.env.NEXT_PUBLIC_FIREBASE_TARGET;
+
+if (
+  !isLocalEmulatorBuild &&
+  firebaseTarget !== undefined &&
+  firebaseTarget !== "staging" &&
+  firebaseTarget !== "production"
+) {
+  throw new Error("Invalid Firebase deployment target.");
+}
+
+if (!isLocalEmulatorBuild && firebaseTarget === "staging" && !stagingFirebaseConfig.apiKey) {
+  throw new Error("Missing NEXT_PUBLIC_STAGING_FIREBASE_API_KEY for staging.");
+}
 
 export const firebaseConfig = isLocalEmulatorBuild
   ? {
@@ -42,7 +69,9 @@ export const firebaseConfig = isLocalEmulatorBuild
       messagingSenderId: "000000000000",
       appId: "1:000000000000:web:demo-hydro-scout-api",
     }
-  : productionFirebaseConfig;
+  : firebaseTarget === "staging"
+    ? stagingFirebaseConfig
+    : productionFirebaseConfig;
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
@@ -53,6 +82,10 @@ if (
   throw new Error(
     "Development Firebase isolation failed: unexpected project.",
   );
+}
+
+if (!isLocalEmulatorBuild && firebaseTarget === "staging" && app.options.projectId !== "hydro-scout-staging") {
+  throw new Error("Staging Firebase isolation failed: unexpected project.");
 }
 
 export const auth = getAuth(app);
