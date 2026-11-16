@@ -12,10 +12,13 @@ import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 // bypassing its Firebase Admin service-account credential.
 export function isFirebaseEmulatorMode(): boolean {
   return (
+    process.env.LOCAL_FIREBASE_EMULATORS === "1" &&
     process.env.FIREBASE_AUTH_EMULATOR_HOST === "127.0.0.1:9099" &&
     process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8080" &&
     process.env.GCLOUD_PROJECT === "demo-hydro-scout-api" &&
-    process.env.NODE_ENV !== "production"
+    // Vercel must never be able to enter emulator mode, even if a deployment
+    // environment variable is configured incorrectly.
+    process.env.VERCEL !== "1"
   );
 }
 

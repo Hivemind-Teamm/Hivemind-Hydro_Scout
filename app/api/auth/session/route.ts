@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { isFirebaseEmulatorMode } from "@/lib/firebase-admin";
 
 const SESSION_COOKIE = "session";
 const SESSION_META_COOKIE = "session_meta";
@@ -28,7 +29,9 @@ export async function POST(req: NextRequest) {
 
   const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // A local production build still uses HTTP. This is false only when all
+    // strict local emulator checks pass; deployed sessions always use Secure.
+    secure: !isFirebaseEmulatorMode(),
     sameSite: "lax" as const,
     path: "/",
     maxAge: SESSION_MAX_AGE,

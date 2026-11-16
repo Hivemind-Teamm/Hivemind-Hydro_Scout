@@ -51,6 +51,12 @@ test('server faults are reported as 503, not as a rejected login', async () => {
   assert.match(source, /status: 401/);
 });
 
+test('local emulator mode is explicit and cannot activate on Vercel', async () => {
+  const source = await readFile('lib/firebase-admin.ts', 'utf8');
+  assert.match(source, /LOCAL_FIREBASE_EMULATORS/);
+  assert.match(source, /process\.env\.VERCEL !== "1"/);
+});
+
 test('Firestore rules and indexes deploy with main', async () => {
   const firebase = await readJson('firebase.json');
   assert.equal(firebase.firestore?.rules, 'firestore.rules');

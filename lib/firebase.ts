@@ -27,9 +27,13 @@ const productionFirebaseConfig = {
  * Development is emulator-only. Never use the production Firebase project
  * while running Next.js in development mode.
  */
-const isLocalDevelopment = process.env.NODE_ENV === "development";
+// This is set only in .env.local for performance-test builds. It is public
+// because the browser must select the demo Firebase project at build time.
+// The server separately requires exact emulator hosts, the demo project ID,
+// and no Vercel runtime before it permits credential-free Admin initialisation.
+const isLocalEmulatorBuild = process.env.NEXT_PUBLIC_LOCAL_FIREBASE_EMULATORS === "1";
 
-export const firebaseConfig = isLocalDevelopment
+export const firebaseConfig = isLocalEmulatorBuild
   ? {
       apiKey: "demo-emulator-only-key",
       authDomain: "localhost",
@@ -43,7 +47,7 @@ export const firebaseConfig = isLocalDevelopment
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 if (
-  isLocalDevelopment &&
+  isLocalEmulatorBuild &&
   app.options.projectId !== "demo-hydro-scout-api"
 ) {
   throw new Error(
@@ -53,7 +57,7 @@ if (
 
 export const auth = getAuth(app);
 
-if (isLocalDevelopment) {
+if (isLocalEmulatorBuild) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", {
     disableWarnings: true,
   });
@@ -72,7 +76,7 @@ if (isLocalDevelopment) {
 export let firestoreCacheMode: 'persistent' | 'memory' = 'memory';
 
 function initDb(): Firestore {
-  if (isLocalDevelopment) {
+  if (isLocalEmulatorBuild) {
     // Never persist emulator data alongside real offline Firestore data.
     try {
       firestoreCacheMode = 'memory';
@@ -105,13 +109,13 @@ function initDb(): Firestore {
 
 export const db = initDb();
 
-if (isLocalDevelopment) {
+if (isLocalEmulatorBuild) {
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
 }
 
 export const storage = getStorage(app);
 
-if (isLocalDevelopment) {
+if (isLocalEmulatorBuild) {
   // Storage emulator is intentionally not started. Fail locally,
   // never fall back to production Storage.
   connectStorageEmulator(storage, "127.0.0.1", 9199);
