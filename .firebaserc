@@ -1,6 +1,6 @@
 {
   "projects": {
     "default": "hydro-scout",
-    "staging": "hydro-scout-staging"
+    "staging": "hydro-scout-staging-2026"
   }
 }

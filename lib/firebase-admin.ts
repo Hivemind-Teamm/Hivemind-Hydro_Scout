@@ -25,8 +25,8 @@ export function isFirebaseEmulatorMode(): boolean {
 }
 
 function expectedFirebaseProject(): string {
-  const target = process.env.NEXT_PUBLIC_FIREBASE_TARGET as FirebaseTarget | undefined;
-  if (target === "staging") return "hydro-scout-staging";
+  const target = (process.env.FIREBASE_TARGET ?? process.env.NEXT_PUBLIC_FIREBASE_TARGET) as FirebaseTarget | undefined;
+  if (target === "staging") return "hydro-scout-staging-2026";
   if (target === "production") return "hydro-scout";
   throw new Error("A deployed build must explicitly select the staging or production Firebase target.");
 }
@@ -50,6 +50,11 @@ export function adminApp(): App {
   }
 
   const expectedProjectId = expectedFirebaseProject();
+  // Next loads .env.local for local production builds too. Ensure a leftover
+  // emulator GCLOUD_PROJECT value cannot make Firebase Auth verify tokens for
+  // a different project than the explicitly selected Admin target.
+  process.env.GCLOUD_PROJECT = expectedProjectId;
+  process.env.GOOGLE_CLOUD_PROJECT = expectedProjectId;
   if (existing.length) {
     if (existing[0].options.projectId !== expectedProjectId) {
       throw new Error("Firebase Admin isolation failed: unexpected existing project.");

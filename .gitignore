@@ -48,3 +48,16 @@ scripts/serviceAccountKey.json
 
 # thesis timing runs: signed-in browser profile used by scripts/perf-runs.mjs
 .perf-profile/
+scripts/stagingServiceAccountKey.json
+
+# Local performance-test artifacts
+.p1-*/
+.p2-next.log
+firebase-debug.log
+results/p1_local_two_user.csv
+results/p2_trials.csv
+results/p3_runs.csv
+results/p3_dataset_manifest.json
+results/p3-datasets/
+scripts/.inspect-browser.mjs
+scripts/.inspect-p1.mjs

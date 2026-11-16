@@ -28,12 +28,11 @@ const productionFirebaseConfig = {
 // staging deployment before `next build` runs.
 const stagingFirebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_STAGING_FIREBASE_API_KEY,
-  authDomain: "hydro-scout-staging.firebaseapp.com",
-  projectId: "hydro-scout-staging",
-  storageBucket: "hydro-scout-staging.firebasestorage.app",
-  messagingSenderId: "995672859034",
-  appId: "1:995672859034:web:f420abc3e145fca8085a23",
-  measurementId: "G-6FBSCKYLWS",
+  authDomain: "hydro-scout-staging-2026.firebaseapp.com",
+  projectId: "hydro-scout-staging-2026",
+  storageBucket: "hydro-scout-staging-2026.firebasestorage.app",
+  messagingSenderId: "840981831089",
+  appId: "1:840981831089:web:94518f453eb5e3bbcbb190",
 };
 
 /**
@@ -83,7 +82,7 @@ if (
   );
 }
 
-if (!isLocalEmulatorBuild && firebaseTarget === "staging" && app.options.projectId !== "hydro-scout-staging") {
+if (!isLocalEmulatorBuild && firebaseTarget === "staging" && app.options.projectId !== "hydro-scout-staging-2026") {
   throw new Error("Staging Firebase isolation failed: unexpected project.");
 }
 
