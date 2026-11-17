@@ -85,20 +85,6 @@ service cloud.firestore {
         && currentUserData().stationId == stationId;
     }
 
-    // Global technical administrators are not assigned a station. Their
-    // active responses use this response-only context; it is never stored on
-    // their user profile and cannot be used by station members.
-    function canRespondForStation(stationId) {
-      return (stationId != 'SYSTEM_ADMIN' && isApprovedStationMember(stationId))
-        || (stationId == 'SYSTEM_ADMIN' && isAdmin());
-    }
-
-    function validResponseStationName(stationId, stationName) {
-      return (stationId == 'SYSTEM_ADMIN' && stationName == 'System Administration')
-        || (stationId != 'SYSTEM_ADMIN'
-          && stationName == get(/databases/$(database)/documents/stations/$(stationId)).data.name);
-    }
-
     function validResponsePointerUpdate(uid) {
       let before = resource.data;
       let after = request.resource.data;
@@ -559,8 +545,8 @@ service cloud.firestore {
         && request.resource.data.displayName == currentUserData().displayName
         && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 120
         && request.resource.data.stationId is string
-        && canRespondForStation(request.resource.data.stationId)
-        && validResponseStationName(request.resource.data.stationId, request.resource.data.stationName)
+        && isApprovedStationMember(request.resource.data.stationId)
+        && request.resource.data.stationName == get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.name
         && request.resource.data.status == 'active'
         && request.resource.data.startedAt == request.time
         && request.resource.data.endedAt == null
@@ -570,37 +556,14 @@ service cloud.firestore {
         && (getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/unitLocations/$(responseId)).data.responseId == responseId
           || getAfter(/databases/$(database)/documents/responseLocations/$(responseId)).data.responseId == responseId)
         && getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/notifications/$(responseId + '_start')).data.responseId == responseId;
-      allow update: if (isSignedIn()
+      // GPS heartbeat updates are permitted.
+      // Response termination must use the authenticated server API.
+      allow update: if isSignedIn()
         && resource.data.uid == request.auth.uid
         && resource.data.status == 'active'
-        && canRespondForStation(resource.data.stationId)
+        && isApprovedStationMember(resource.data.stationId)
         && onlyChangedFields(['lastLocationAt'])
-        && request.resource.data.lastLocationAt == request.time)
-        || (isSignedIn()
-        && resource.data.uid == request.auth.uid
-        && resource.data.status == 'active'
-        && request.resource.data.status == 'ended'
-        && onlyChangedFields(['status', 'endedAt', 'endedByUid', 'endedByName', 'endReason'])
-        && request.resource.data.endedAt == request.time
-        && request.resource.data.endedByUid == request.auth.uid
-        && request.resource.data.endedByName == currentUserData().displayName
-        && request.resource.data.endReason == 'member'
-        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.activeResponseId == null
-        && !existsAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/unitLocations/$(responseId))
-        && !existsAfter(/databases/$(database)/documents/responseLocations/$(responseId))
-        && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/notifications/$(responseId + '_end')).data.responseId == responseId)
-        || ((isHeadForStation(resource.data.stationId) || isAdmin())
-          && resource.data.status == 'active'
-          && onlyChangedFields(['status', 'endedAt', 'endedByUid', 'endedByName', 'endReason'])
-          && request.resource.data.status == 'ended'
-          && request.resource.data.endedAt == request.time
-          && request.resource.data.endedByUid == request.auth.uid
-          && request.resource.data.endedByName == currentUserData().displayName
-          && request.resource.data.endReason == 'station-head'
-          && getAfter(/databases/$(database)/documents/users/$(resource.data.uid)).data.activeResponseId == null
-          && !existsAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/unitLocations/$(responseId))
-          && !existsAfter(/databases/$(database)/documents/responseLocations/$(responseId))
-          && getAfter(/databases/$(database)/documents/stations/$(resource.data.stationId)/notifications/$(responseId + '_closed')).data.responseId == responseId);
+        && request.resource.data.lastLocationAt == request.time;
       allow delete: if false;
     }
 
@@ -707,7 +670,7 @@ service cloud.firestore {
 
     match /responseLocations/{responseId} {
       allow read: if isSignedIn();
-      allow create, update: if canRespondForStation(request.resource.data.stationId)
+      allow create, update: if isApprovedStationMember(request.resource.data.stationId)
         && isValidUnitLocation(responseId);
       allow delete: if isSignedIn() && (
         isAdmin()
@@ -735,7 +698,7 @@ service cloud.firestore {
         || canManageStation(stationId)
       );
       allow create, update: if (
-        canRespondForStation(stationId)
+        isApprovedStationMember(stationId)
         && isValidStationUnitLocation(stationId, reportId)
       ) || (
         isLegacyAssignedStation(stationId)
@@ -918,6 +881,14 @@ service cloud.firestore {
       }
     }
 
+    // ---------- hydrant occupancy ----------
+
+    // Signed-in responders can read current hydrant claims.
+    // Claims and releases must use the authenticated server APIs.
+    match /hydrantOccupancy/{hydrantId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
+    }
     // ---------- reports collection group ----------
 
     // The ReportsPanel uses a collectionGroup('reports') query to gather

@@ -92,10 +92,11 @@ export interface HydrantRegisterEntry {
 
 
 export interface Hydrant {
-
   id: string;
-
   name: string;
+
+  /** Temporary occupancy state, separate from operational status. */
+  occupied?: boolean;
 
 
 
