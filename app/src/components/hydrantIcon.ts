@@ -1,26 +1,23 @@
 // Shared display dimensions for the hydrant pin images, used by both the
 // Mapbox and MapLibre markers so the two providers match.
 
+import { filterCss, glowStep, pinShadowSteps } from '@/lib/pin-filter';
+
 export const HYDRANT_ICON_WIDTH = 34;
 export const HYDRANT_ICON_HEIGHT = 44;
 
-// Black outline + drop shadow so pins stand out against any map background.
-const BLACK_OUTLINE =
-  'drop-shadow(1px 0 0 black) drop-shadow(-1px 0 0 black) ' +
-  'drop-shadow(0 1px 0 black) drop-shadow(0 -1px 0 black) ';
-const PIN_SHADOW = 'drop-shadow(0 3px 4px rgba(0,0,0,0.5))';
+// The filter chains live in lib/pin-filter.ts. Map pins bake them into a
+// bitmap once (HydrantPinImage.tsx); these CSS strings are the fallback until
+// that finishes, and are still used by the Leaflet map and small UI icons.
 
-export const HYDRANT_PIN_FILTER = BLACK_OUTLINE + PIN_SHADOW;
+/** Black outline + drop shadow so pins stand out against any map background. */
+export const HYDRANT_PIN_FILTER = filterCss(pinShadowSteps('plain'));
 
-// A soft colored outline outside the black one: preserves status colors while
-// marking the AOR for station users. It goes before the shadow so the shadow
-// itself is not outlined.
-const aorOutline = (color: string) =>
-  `drop-shadow(1.2px 0 0.4px ${color}) drop-shadow(-1.2px 0 0.4px ${color}) ` +
-  `drop-shadow(0 1.2px 0.4px ${color}) drop-shadow(0 -1.2px 0.4px ${color}) `;
+/** Plus a blue outline: hydrant inside the station's own AOR. */
+export const OWN_AOR_PIN_FILTER = filterCss(pinShadowSteps('own'));
 
-export const OWN_AOR_PIN_FILTER =
-  BLACK_OUTLINE + aorOutline('rgba(59,130,246,0.75)') + PIN_SHADOW;   // blue
+/** Plus a violet outline: hydrant in another station's AOR. */
+export const OTHER_AOR_PIN_FILTER = filterCss(pinShadowSteps('other'));
 
-export const OTHER_AOR_PIN_FILTER =
-  BLACK_OUTLINE + aorOutline('rgba(139,92,246,0.75)') + PIN_SHADOW;  // violet
+/** Halo around pins near the OTW route or inside a pinned fire's radius. */
+export const pinGlowFilter = (color: string) => filterCss([glowStep(color)]);

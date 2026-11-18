@@ -73,6 +73,10 @@ const ROUTE_CORRIDOR_M = 300;
 // than an ordinary car obeying normal flow. 0.75 ≈ 25% faster than free-flow.
 // Tune to match observed local response times.
 const EMERGENCY_ETA_FACTOR = 0.75;
+// Admins see every pin without AOR coloring. A shared constant (not a fresh
+// `[]` per render) keeps the memoized map marker set from re-rendering on
+// every dashboard update.
+const NO_AOR_BARANGAYS: string[] = [];
 
 // Nominatim reverse geocode; falls back to the coordinates on any failure.
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
@@ -1251,7 +1255,7 @@ export default function HydroScoutDashboard() {
         <MapView
           provider={provider}
           hydrants={visibleHydrants}
-          aorBarangays={role === 'admin' ? [] : aorBarangays}
+          aorBarangays={role === 'admin' ? NO_AOR_BARANGAYS : aorBarangays}
           selectedHydrantId={selectedHydrant?.id ?? null}
           onMapboxError={handleMapboxError}
           onMapReady={handleMapReady}

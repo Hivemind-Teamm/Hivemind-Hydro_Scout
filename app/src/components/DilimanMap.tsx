@@ -13,7 +13,9 @@ import {
   DILIMAN_CENTER, DEFAULT_ZOOM, DILIMAN_AOR_OUTLINE, AOR_OUTLINE_SOURCE, AOR_OUTLINE_LINE_LAYER,
   AOR_OUTLINE_DASH, aorOutlineStyle,
 } from './mapConfig';
-import { HYDRANT_ICON_WIDTH, HYDRANT_ICON_HEIGHT, HYDRANT_PIN_FILTER, OWN_AOR_PIN_FILTER, OTHER_AOR_PIN_FILTER } from './hydrantIcon';
+import { pinGlowFilter } from './hydrantIcon';
+import HydrantPinImage from './HydrantPinImage';
+import type { PinTone } from '@/lib/pin-filter';
 import {
   FLAME_PATH, FIRE_COLOR, SUPPLY_LINE_COLOR,
   FIRE_RADIUS_FILL_OPACITY, FIRE_RADIUS_LINE_DASH, SUPPLY_LINE_DASH, TRUCK_ANCHOR,
@@ -170,15 +172,10 @@ const HydrantMarkers = memo(function HydrantMarkers({
 
         const selected = selectedHydrantId === h.id;
         const meta = STATUS_META[h.status];
-        const hasAorContext = aorBarangays.length > 0;
-        const hasBarangay = h.barangay.length > 0;
-        const isOwnAor = hasAorContext && hasBarangay && aorBarangays.includes(h.barangay);
-        const pinFilter = !hasAorContext || !hasBarangay
-          ? HYDRANT_PIN_FILTER
-          : isOwnAor
-            ? OWN_AOR_PIN_FILTER
-            : OTHER_AOR_PIN_FILTER;
-        const markerFilter = `${pinFilter} ${meta.iconFilter ?? ''}`;
+        const tone: PinTone = aorBarangays.length === 0 || h.barangay.length === 0
+          ? 'plain'
+          : aorBarangays.includes(h.barangay) ? 'own' : 'other';
+        const label = `${h.name} — ${meta.legendLabel}`;
 
         // OTW mode visual states
         const nearRoute = nearRouteIds?.has(h.id) ?? false;
@@ -188,6 +185,15 @@ const HydrantMarkers = memo(function HydrantMarkers({
         const inFireZone = fireZoneIds?.has(h.id) ?? false;
         const offFire = !!fireZoneIds && !inFireZone && !isOtwTarget;
         const isSupply = fireSupplyId === h.id;
+
+        // The status-colored halo is baked into the pin bitmap. It stays a
+        // live wrapper filter only when the wrapper holds more than the pin
+        // (pulse rings, spout, hazard badge, sliced pin) so those glow too —
+        // at most a couple of pins at a time.
+        const glow = nearRoute || inFireZone;
+        const hazard = inOtwMode && !clustered && h.status !== 'operational';
+        const wrapperGlow = glow && (h.status === 'out' || selected || isSupply || hazard);
+        const pinGlow = glow && !wrapperGlow && !isOtwTarget;
 
         return (
           <Marker
@@ -206,7 +212,7 @@ const HydrantMarkers = memo(function HydrantMarkers({
                 pointerEvents: clustered ? 'none' : 'auto',
                 cursor: crosshair ? 'crosshair' : 'pointer',
                 willChange: 'transform, opacity',
-                filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : nearRoute || inFireZone ? `drop-shadow(0 0 5px ${meta.color})` : undefined,
+                filter: isOtwTarget ? 'drop-shadow(0 0 6px #ef4444)' : wrapperGlow ? pinGlowFilter(meta.color) : undefined,
               }}
             >
               {/* Fire supply hydrant: water-blue pulse ring */}
@@ -233,63 +239,20 @@ const HydrantMarkers = memo(function HydrantMarkers({
                   ))}
                 </>
               )}
-              {h.status === 'out' ? (
-                /* Out of service → sliced hydrant (two clipped halves + glint). */
-                <div className="hydrant-slice" style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    className="half top"
-                    src={meta.iconUrl}
-                    alt={`${h.name} — ${meta.legendLabel}`}
-                    title={`${h.name} — ${meta.legendLabel}`}
-                    width={HYDRANT_ICON_WIDTH}
-                    height={HYDRANT_ICON_HEIGHT}
-                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: markerFilter }}
-                  />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    className="half bot"
-                    src={meta.iconUrl}
-                    alt=""
-                    aria-hidden
-                    width={HYDRANT_ICON_WIDTH}
-                    height={HYDRANT_ICON_HEIGHT}
-                    style={{ width: HYDRANT_ICON_WIDTH, height: HYDRANT_ICON_HEIGHT, filter: markerFilter }}
-                  />
-                  <span className="cut" />
+              <HydrantPinImage status={h.status} tone={tone} glow={pinGlow} label={label} />
+              {/* Water only spouts from the focused pin — the selected
+                  hydrant or the OTW routing target — so the map isn't a
+                  field of spraying water at rest. Operational → strong
+                  jet · reduced pressure → weak dribble. */}
+              {h.status !== 'out' && h.status !== 'reference' && (selected || isOtwTarget || isSupply) && !clustered && (
+                <div className="hydrant-fx">
+                  <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
+                    <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
+                  </div>
                 </div>
-              ) : (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={meta.iconUrl}
-                    alt={`${h.name} — ${meta.legendLabel}`}
-                    title={`${h.name} — ${meta.legendLabel}`}
-                    width={HYDRANT_ICON_WIDTH}
-                    height={HYDRANT_ICON_HEIGHT}
-                    style={{
-                      display: 'block',
-                      width: HYDRANT_ICON_WIDTH,
-                      height: HYDRANT_ICON_HEIGHT,
-                      objectFit: 'contain',
-                      filter: markerFilter,
-                    }}
-                  />
-                  {/* Water only spouts from the focused pin — the selected
-                      hydrant or the OTW routing target — so the map isn't a
-                      field of spraying water at rest. Operational → strong
-                      jet · reduced pressure → weak dribble. */}
-                  {h.status !== 'reference' && (selected || isOtwTarget || isSupply) && !clustered && (
-                    <div className="hydrant-fx">
-                      <div className={`hydrant-spout ${h.status === 'operational' ? 'strong' : 'weak'}`}>
-                        <span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" /><span className="drop" />
-                      </div>
-                    </div>
-                  )}
-                </>
               )}
               {/* While routing, flag nearby non-operational hydrants as hazards. */}
-              {inOtwMode && !clustered && h.status !== 'operational' && (
+              {hazard && (
                 <div className="hydrant-hazard-badge">!</div>
               )}
             </div>
