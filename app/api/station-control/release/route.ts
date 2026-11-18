@@ -8,13 +8,46 @@ export async function POST(request: NextRequest) {
   try {
     const { adminApp } = await import("@/lib/firebase-admin");
     const { getAuth } = await import("firebase-admin/auth");
-    const { getFirestore } = await import("firebase-admin/firestore");
+    const { FieldValue, getFirestore } = await import("firebase-admin/firestore");
     const app = adminApp();
     const decoded = await getAuth(app).verifyIdToken(body.idToken);
     const control = getFirestore(app).doc(`stationControlSessions/${decoded.uid}`);
-    await getFirestore(app).runTransaction(async transaction => {
+    const firestore = getFirestore(app);
+    await firestore.runTransaction(async transaction => {
       const current = await transaction.get(control);
-      if (current.data()?.activeSessionId === body.sessionId) transaction.delete(control);
+      if (current.data()?.activeSessionId !== body.sessionId) return;
+      const pending = await transaction.get(control.collection("requests").where("status", "==", "pending"));
+      const next = pending.docs
+        .filter(record => record.data().requestedForSessionId === body.sessionId)
+        .sort((left, right) => Number(right.data().requestedAtMs ?? 0) - Number(left.data().requestedAtMs ?? 0))[0];
+      if (!next) {
+        transaction.delete(control);
+        return;
+      }
+      const data = next.data();
+      const stationId = data.stationId;
+      const requesterSessionId = data.requesterSessionId;
+      if (typeof stationId !== "string" || typeof requesterSessionId !== "string") {
+        transaction.delete(control);
+        return;
+      }
+      transaction.set(control, {
+        uid: decoded.uid,
+        stationId,
+        activeSessionId: requesterSessionId,
+        claimedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.update(next.ref, { status: "approved", resolvedAt: FieldValue.serverTimestamp() });
+      transaction.set(
+        firestore.doc(`stations/${stationId}/notifications/station-session-request-${next.id}`),
+        { sessionRequestStatus: "approved", resolvedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      );
+      transaction.set(control.collection("events").doc(), {
+        type: "logout-handoff", uid: decoded.uid, stationId,
+        previousSessionId: body.sessionId, newSessionId: requesterSessionId,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
