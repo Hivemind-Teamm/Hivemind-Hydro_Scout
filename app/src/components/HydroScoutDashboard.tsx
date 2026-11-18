@@ -43,6 +43,9 @@ import { db } from '@/lib/firebase';
 import { useSharedFirePins } from '@/lib/use-shared-fire-pins';
 import { useHydrantOccupancy } from '@/lib/use-hydrant-occupancy';
 import { useResponseVisibility } from '@/lib/use-response-location-sharing';
+import { selectAutoClaimTargets } from '@/lib/hydrant-auto-claim';
+import { useHydrantAutoClaim } from '@/lib/use-hydrant-auto-claim';
+import { requestHydrantOccupancy } from '@/lib/hydrant-occupancy-client';
 import { recordHydrantCheck, useHydrantChecking, type HydrantCheckStatus } from '@/lib/hydrant-checking';
 import { useIsMobile } from '@/lib/use-media-query';
 import { MOBILE_TOP_CONTROLS_BOTTOM } from './mapConfig';
@@ -61,6 +64,7 @@ import { placeView } from '@/lib/place-search';
 import { layoutSupplyLine } from '@/lib/supply-layout';
 
 const OTW_HYDRANT_KEY  = 'hydroscout_otw_hydrant_id';
+const NO_AUTO_CLAIM_TARGETS: Hydrant[] = [];
 const OTW_ROUTE_KEY    = 'hydroscout_otw_route';
 const OTW_MIN_ZOOM     = 13;
 const OTW_MAX_ZOOM     = 19;
@@ -596,10 +600,56 @@ export default function HydroScoutDashboard() {
     : undefined;
   const responseFireLat = liveResponsePin?.lat ?? currentResponseIncident?.lat;
   const responseFireLng = liveResponsePin?.lng ?? currentResponseIncident?.lng;
-  const activeResponseSearchRadiusM = useMemo(() => responseFireLat !== undefined && responseFireLng !== undefined
-    ? findHydrantsNearFire(hydrantsForFire, { lat: responseFireLat, lng: responseFireLng }).radiusM
+  const activeResponseSearch = useMemo(() => responseFireLat !== undefined && responseFireLng !== undefined
+    ? findHydrantsNearFire(hydrantsForFire, { lat: responseFireLat, lng: responseFireLng })
     : null, [responseFireLat, responseFireLng, hydrantsForFire]);
+  const activeResponseSearchRadiusM = activeResponseSearch?.radiusM ?? null;
   const responderHideRadiusM = activeResponseSearchRadiusM ?? 1000;
+
+  // Auto-claim: a responder who reaches an operational or reduced-pressure
+  // hydrant (the fire's list or the route target) claims it for the response.
+  const responseFirePinId = currentResponseIncident?.firePinId ?? null;
+  const canClaimHydrantRole = role === 'authorized' || role === 'head' || role === 'admin';
+  const autoClaimTargets = useMemo(() => (
+    user && activeResponseId && responseFirePinId && activeResponseSearch
+      ? selectAutoClaimTargets({
+        candidates: activeResponseSearch.inRadius.map(candidate => candidate.hydrant),
+        routeTarget: otwHydrant,
+        claims: occupancy.claims,
+        uid: user.uid,
+        responseId: activeResponseId,
+      })
+      : NO_AUTO_CLAIM_TARGETS
+  ), [user, activeResponseId, responseFirePinId, activeResponseSearch, otwHydrant, occupancy.claims]);
+  const [autoClaimNotice, setAutoClaimNotice] = useState<{
+    hydrantId: string; name: string; firePinId: string; undoing: boolean; error: string | null;
+  } | null>(null);
+  const autoClaimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (autoClaimTimerRef.current) clearTimeout(autoClaimTimerRef.current); }, []);
+  const handleAutoClaimed = useCallback((hydrant: Hydrant, firePinId: string) => {
+    setAutoClaimNotice({ hydrantId: hydrant.id, name: hydrant.name, firePinId, undoing: false, error: null });
+    if (autoClaimTimerRef.current) clearTimeout(autoClaimTimerRef.current);
+    autoClaimTimerRef.current = setTimeout(() => setAutoClaimNotice(null), 10_000);
+  }, []);
+  const handleUndoAutoClaim = useCallback(async () => {
+    if (!autoClaimNotice || autoClaimNotice.undoing) return;
+    if (autoClaimTimerRef.current) clearTimeout(autoClaimTimerRef.current);
+    const notice = autoClaimNotice;
+    setAutoClaimNotice({ ...notice, undoing: true, error: null });
+    try {
+      await requestHydrantOccupancy('release', notice.hydrantId, notice.firePinId);
+      setAutoClaimNotice(null);
+    } catch (err) {
+      setAutoClaimNotice({ ...notice, undoing: false, error: err instanceof Error ? err.message : 'Could not release the hydrant.' });
+    }
+  }, [autoClaimNotice]);
+  useHydrantAutoClaim({
+    enabled: canUseDeviceLocation && canClaimHydrantRole && occupancy.ready,
+    responseId: activeResponseId ?? null,
+    firePinId: responseFirePinId,
+    targets: autoClaimTargets,
+    onClaimed: handleAutoClaimed,
+  });
   // Distance from the response's own GPS loop; selecting a boolean re-renders
   // the dashboard only when the responder crosses the radius.
   const responderOutsideRange = useResponseVisibility(visibility => (
@@ -1584,6 +1634,41 @@ export default function HydroScoutDashboard() {
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Automatic hydrant claim notice, with Undo (release). */}
+      {autoClaimNotice && (
+        <div
+          role="status"
+          className="pointer-events-auto absolute left-1/2 z-[2100] flex -translate-x-1/2 flex-col gap-2 rounded-2xl bg-white/95 px-4 py-3 shadow-xl ring-1 ring-black/5 backdrop-blur-sm anim-fade-scale max-w-[min(420px,92vw)] dark:bg-neutral-900/90 dark:ring-white/10"
+          style={{ top: isMobile ? `calc(${MOBILE_TOP_CONTROLS_BOTTOM} + 1rem + env(safe-area-inset-top, 0px))` : '5.25rem' }}
+        >
+          <div className="flex items-start gap-2.5">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
+              <path d="M20 6 9 17l-5-5"/>
+            </svg>
+            <span className="text-xs leading-snug text-neutral-700 dark:text-neutral-200">
+              <span className="font-bold text-sky-700 dark:text-sky-400">{autoClaimNotice.name}</span>{' '}
+              <span className="text-neutral-400">({autoClaimNotice.hydrantId})</span> was claimed for your response because you reached it.
+            </span>
+          </div>
+          {autoClaimNotice.error && <p role="alert" className="text-xs text-red-600">{autoClaimNotice.error}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { if (autoClaimTimerRef.current) clearTimeout(autoClaimTimerRef.current); setAutoClaimNotice(null); }}
+              className="rounded-full px-3 py-1.5 text-xs font-semibold text-neutral-500 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/10"
+            >
+              OK
+            </button>
+            <button
+              onClick={() => void handleUndoAutoClaim()}
+              disabled={autoClaimNotice.undoing}
+              className="rounded-full bg-neutral-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-neutral-700 disabled:opacity-60 dark:bg-neutral-700 dark:hover:bg-neutral-600"
+            >
+              {autoClaimNotice.undoing ? 'Releasing…' : 'Undo'}
+            </button>
+          </div>
         </div>
       )}
 

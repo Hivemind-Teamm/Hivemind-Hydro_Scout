@@ -70,6 +70,11 @@ when observed by the station manager's response listener. Map/routing features
 may also send coordinates to Mapbox or the routing provider configured by the
 app.
 
+During an active response the device position is also used, on the device
+only, to [claim a hydrant automatically](hydrant-auto-claim.md) when the
+responder reaches it; that request carries the hydrant and fire IDs, not
+coordinates.
+
 The consent notice version is maintained in `lib/location-consent.ts`. Each
 browser/device must make its own choice. Use the persistent **Location privacy**
 control to review or withdraw consent.

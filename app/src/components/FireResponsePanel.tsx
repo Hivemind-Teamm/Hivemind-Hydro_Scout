@@ -10,6 +10,7 @@ import { supplyStages, TRUCK_ROLE_LABELS } from '@/lib/supply-layout';
 import type { SupplyLineEstimate } from '@/lib/supply-line';
 import type { SupplyLine } from '@/lib/use-supply-line';
 import type { HydrantOccupancy } from '@/lib/use-hydrant-occupancy';
+import { requestHydrantOccupancy } from '@/lib/hydrant-occupancy-client';
 
 type ReadyEstimate = Extract<SupplyLineEstimate, { status: 'ready' }>;
 
@@ -79,16 +80,7 @@ export default function FireResponsePanel({
     setBusyHydrantId(hydrantId);
     setActionError(null);
     try {
-      const response = await fetch(`/api/hydrant-occupancy/${action}`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hydrantId, firePinId: incidentId }),
-      });
-      const result: { error?: string } = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result.error || `Could not ${action} hydrant.`);
-      }
+      await requestHydrantOccupancy(action, hydrantId, incidentId);
       // Do not optimistically mark a hydrant as claimed or available.
       // The server-confirmed Firestore listener supplies the new status.
     } catch (error) {
