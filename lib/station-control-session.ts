@@ -1,4 +1,5 @@
 const SESSION_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+const inMemorySessionIds = new Map<string, string>();
 
 function storageKey(uid: string) {
   return `hydroscout:station-control-session:${uid}`;
@@ -10,21 +11,29 @@ function storageKey(uid: string) {
  */
 export function stationControlSessionId(uid: string): string {
   const key = storageKey(uid);
+  const inMemory = inMemorySessionIds.get(key);
+  if (inMemory && SESSION_ID.test(inMemory)) return inMemory;
   try {
     const saved = sessionStorage.getItem(key);
-    if (saved && SESSION_ID.test(saved)) return saved;
+    if (saved && SESSION_ID.test(saved)) {
+      inMemorySessionIds.set(key, saved);
+      return saved;
+    }
   } catch {
-    // Session storage is unavailable in some privacy modes. The in-memory ID
-    // below still lets the current page participate in the control check.
+    // Session storage is unavailable in some privacy modes. Keep one ID in
+    // memory for this page so every API call still represents this session.
   }
 
   const id = crypto.randomUUID();
+  inMemorySessionIds.set(key, id);
   try { sessionStorage.setItem(key, id); } catch { /* See above. */ }
   return id;
 }
 
 export function clearStationControlSessionId(uid: string) {
-  try { sessionStorage.removeItem(storageKey(uid)); } catch { /* Best effort. */ }
+  const key = storageKey(uid);
+  inMemorySessionIds.delete(key);
+  try { sessionStorage.removeItem(key); } catch { /* Best effort. */ }
 }
 
 export class StationSessionActiveError extends Error {
