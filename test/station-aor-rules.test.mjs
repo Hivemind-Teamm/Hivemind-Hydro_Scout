@@ -5,7 +5,7 @@
 import test, { after, before } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { arrayUnion, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, GeoPoint } from 'firebase/firestore';
+import { arrayUnion, doc, setDoc, updateDoc, deleteDoc, runTransaction, serverTimestamp, writeBatch, GeoPoint, collection } from 'firebase/firestore';
 
 let env;
 const KNL = ['Krus na Ligas', 'U.P. Campus', 'U.P. Village', 'Botocan', 'San Vicente', "Teachers' Village East"];
@@ -119,16 +119,23 @@ test('only admins change a station AOR', async () => {
   await assertSucceeds(updateDoc(doc(as('admin'), 'stations', 'LEGACY'), { aorBarangays: ['Central'] }));
 });
 
-// Status edits update the hydrant itself. They intentionally do not create a
-// Station Activity item, because every routine edit would otherwise add a
-// second, noisy notification.
+// The app's real multi-document writes share one rules expression budget, and
+// station accounts have the most expensive profile lookup.
 const statusEdit = (uid, hydrantId, lat, lng) => {
   const db = as(uid);
-  return updateDoc(doc(db, 'hydrants', hydrantId), {
-    operationalStatus: 'Reduced Pressure', pressureStatus: 'Weak', updatedBy: uid, updatedAt: serverTimestamp(),
-    register: arrayUnion({ statusColor: '#f5a623', action: 'Status set to Reduced Pressure', by: uid, role: 'Head', date: '2026-10-28' }),
-    waterCleanliness: 'Clear', hazards: ['Blocked'], photos: arrayUnion('https://res.cloudinary.com/x.jpg'),
-    fieldNotes: arrayUnion({ user: uid, initials: 'KS', text: 'Checked', date: '2026-10-28' }),
+  return runTransaction(db, async tx => {
+    const ref = doc(db, 'hydrants', hydrantId);
+    await tx.get(ref);
+    tx.update(ref, {
+      operationalStatus: 'Reduced Pressure', pressureStatus: 'Weak', updatedBy: uid, updatedAt: serverTimestamp(),
+      register: arrayUnion({ statusColor: '#f5a623', action: 'Status set to Reduced Pressure', by: uid, role: 'Head', date: '2026-10-28' }),
+      waterCleanliness: 'Clear', hazards: ['Blocked'], photos: arrayUnion('https://res.cloudinary.com/x.jpg'),
+      fieldNotes: arrayUnion({ user: uid, initials: 'KS', text: 'Checked', date: '2026-10-28' }),
+    });
+    tx.set(doc(collection(db, 'stations', uid === 'knl-station' ? 'KNL' : 'LH', 'notifications')), {
+      type: 'hydrant-updated', uid, displayName: uid, hydrantId, lat, lng,
+      message: `${uid} updated hydrant ${hydrantId}.`, createdAt: serverTimestamp(),
+    });
   });
 };
 const resolveReport = (uid, hydrantId, reportId) => {
@@ -139,7 +146,7 @@ const resolveReport = (uid, hydrantId, reportId) => {
   return batch.commit();
 };
 
-test('a station account can save a status edit in its AOR only', async () => {
+test('a station account can run the app status-edit transaction (hydrant + activity notice) in its AOR only', async () => {
   await assertSucceeds(statusEdit('knl-station', 'HYD-101', 14.65595, 121.06322));
   await assertFails(statusEdit('knl-station', 'HYD-102', 14.63371, 121.03454));
   await assertSucceeds(statusEdit('lh-station', 'HYD-102', 14.63371, 121.03454));
@@ -154,10 +161,18 @@ test('a station account can run the app report-resolution batch in its AOR only'
 const authorizedStatusEdit = (hydrantId, lat, lng, extra = {}) => {
   const uid = 'knl-authorized';
   const db = as(uid);
-  return updateDoc(doc(db, 'hydrants', hydrantId), {
-    operationalStatus: 'Out of Service', pressureStatus: 'None', updatedBy: uid, updatedAt: serverTimestamp(),
-    register: arrayUnion({ statusColor: '#9aa0a6', action: 'Status set to Out of Service', by: uid, role: 'Authorized', date: '2026-10-30' }),
-    ...extra,
+  return runTransaction(db, async tx => {
+    const ref = doc(db, 'hydrants', hydrantId);
+    await tx.get(ref);
+    tx.update(ref, {
+      operationalStatus: 'Out of Service', pressureStatus: 'None', updatedBy: uid, updatedAt: serverTimestamp(),
+      register: arrayUnion({ statusColor: '#9aa0a6', action: 'Status set to Out of Service', by: uid, role: 'Authorized', date: '2026-10-30' }),
+      ...extra,
+    });
+    tx.set(doc(collection(db, 'stations', 'KNL', 'notifications')), {
+      type: 'hydrant-updated', uid, displayName: uid, hydrantId, lat, lng,
+      message: `${uid} updated hydrant ${hydrantId}.`, createdAt: serverTimestamp(),
+    });
   });
 };
 
