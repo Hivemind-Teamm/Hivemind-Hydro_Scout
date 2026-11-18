@@ -34,7 +34,7 @@ function StationLabel({ name, id }: { name: string; id?: string | null }) {
   return <p className="text-[11px] font-extrabold text-[#0b5ea8] dark:text-[#60a5fa]">{name || id || 'N/A'}</p>;
 }
 
-function NotificationDialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+function NotificationDialog({ title, category, categoryColor, children, onClose }: { title: string; category: string; categoryColor: string; children: ReactNode; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;
@@ -46,7 +46,7 @@ function NotificationDialog({ title, children, onClose }: { title: string; child
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}
     className="notification-details-dialog m-auto max-h-[85dvh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-2xl font-sans shadow-2xl backdrop:bg-black/70">
     <header className="notification-details-header flex items-start justify-between gap-4 px-5 py-4">
-      <div className="min-w-0"><span className="mb-2 block h-1 w-8 rounded-full bg-[#fed42e]" /><p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#fed42e]">Hydro-Scout notification</p><h2 id="notification-detail-title" className="mt-1 text-sm font-extrabold leading-relaxed text-white">{title}</h2></div>
+      <div className="min-w-0"><p style={{ color: categoryColor }} className="text-[10px] font-extrabold uppercase tracking-[0.16em] [text-shadow:0_1px_8px_rgba(0,0,0,0.5)]">{category}</p><h2 id="notification-detail-title" className="mt-1 text-sm font-extrabold leading-relaxed text-white">{title}</h2></div>
       <button type="button" onClick={onClose} aria-label="Close notification details" className="rounded-full border border-white/30 p-1.5 text-white transition hover:bg-white/15"><FiX /></button>
     </header>
     <div className="notification-details-content px-5 py-5">{children}</div>
@@ -270,7 +270,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
         {(activityOpen ? !visibleNotifications.length : !requests.length) && <p className="px-4 py-8 text-center text-xs text-neutral-400">{activityOpen ? (isGlobalAdmin && stationSearch ? 'No activity matches that station.' : notificationsCleared ? 'All caught up. New activity will appear here.' : 'No station activity yet.') : 'No pending member requests.'}</p>}
       </div>
     </section>}
-    {selected && <NotificationDialog title={selected.type === 'personal-station-assigned' && selected.uid && selected.targetUid
+    {selected && <NotificationDialog category={notificationStyle(selected.response || selected.responseGroup ? (selected.response?.status === 'active' || (selected.responseGroup?.activeCount ?? 0) > 0 ? 'response-started' : 'response-ended') : selected.type).label} categoryColor={notificationStyle(selected.response || selected.responseGroup ? (selected.response?.status === 'active' || (selected.responseGroup?.activeCount ?? 0) > 0 ? 'response-started' : 'response-ended') : selected.type).color} title={selected.type === 'personal-station-assigned' && selected.uid && selected.targetUid
       ? `${selected.displayName || selected.adminEmail || 'Admin'} assigned ${selected.targetName || 'Member'} to ${stationName}.`
       : selected.message} onClose={() => setSelectedKey(null)}>
       {selected.responseGroup && <div className="space-y-3">
