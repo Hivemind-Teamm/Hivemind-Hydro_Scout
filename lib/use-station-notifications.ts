@@ -148,8 +148,13 @@ export function useStationNotifications() {
   const fullDetails = role === 'head' || role === 'admin';
   const canApproveMembers = !!user && !!stationId && role === 'head' && accountType !== 'station';
   const management = useManagementNotifications();
-  const limited = useLimitedNotifications(user && (role === 'admin' || !fullDetails) ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
-  const feed = role === 'head' ? management : limited;
+  // Heads and station accounts normally receive their richer live feed
+  // directly from Firestore. When that connection is unavailable (for
+  // example, an extension blocks Firestore), fall back to the server-verified
+  // operational feed used by every other signed-in role.
+  const limited = useLimitedNotifications(user ? `${encodeURIComponent(user.uid)}:${role}:${stationId}:${stationMembershipStatus}` : null);
+  const managementFeedUnavailable = role === 'head' && management.error !== null;
+  const feed = role === 'head' && !managementFeedUnavailable ? management : limited;
   // Cleared before grouping so cleared events also drop out of unread counts.
   const clearKey = user ? notificationClearKey(`${user.uid}:${stationId ?? 'all'}`) : null;
   const clearedBefore = parseClearedBefore(useSyncExternalStore(subscribe, () => clearKey ? readStorage(clearKey) : '', () => ''));
@@ -160,7 +165,7 @@ export function useStationNotifications() {
   const activityUnreadCount = (item: StationNotification) => unreadActivityCount(item, feed.isActivityUnread);
   const unreadActivities = notifications.reduce((sum, item) => sum + activityUnreadCount(item), 0);
   const unreadMembers = management.requests.filter(item => management.isMemberUnread(item)).length;
-  return { ...feed, notifications, fullDetails, activityUnreadCount,
+  return { ...feed, notifications, fullDetails: fullDetails && !managementFeedUnavailable, activityUnreadCount,
     unreadActivityCount: unreadActivities, unreadMemberCount: canApproveMembers ? unreadMembers : 0,
     hasUnreadMembers: canApproveMembers && unreadMembers > 0,
     hasUnreadActivity: unreadActivities > 0,
