@@ -16,7 +16,7 @@ function isTokenRejection(error: unknown): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { idToken?: unknown; sessionId?: unknown; takeOver?: unknown };
+  let body: { idToken?: unknown; sessionId?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -27,7 +27,6 @@ export async function POST(request: NextRequest) {
     typeof body.idToken !== "string"
     || typeof body.sessionId !== "string"
     || !SESSION_ID.test(body.sessionId)
-    || typeof body.takeOver !== "undefined" && typeof body.takeOver !== "boolean"
   ) {
     return NextResponse.json({ ok: false, error: "invalid request" }, { status: 400 });
   }
@@ -58,20 +57,17 @@ export async function POST(request: NextRequest) {
     }
 
     const control = firestore.collection("stationControlSessions").doc(decoded.uid);
-    const audit = control.collection("events").doc();
     let conflict = false;
-    let tookOver = false;
 
     await firestore.runTransaction(async transaction => {
       const current = await transaction.get(control);
       const activeSessionId = current.exists ? current.data()?.activeSessionId : null;
 
-      if (typeof activeSessionId === "string" && activeSessionId !== body.sessionId && !body.takeOver) {
+      if (typeof activeSessionId === "string" && activeSessionId !== body.sessionId) {
         conflict = true;
         return;
       }
 
-      tookOver = typeof activeSessionId === "string" && activeSessionId !== body.sessionId;
       transaction.set(control, {
         uid: decoded.uid,
         stationId,
@@ -79,23 +75,13 @@ export async function POST(request: NextRequest) {
         claimedAt: FieldValue.serverTimestamp(),
       });
 
-      if (tookOver) {
-        transaction.set(audit, {
-          type: "takeover",
-          uid: decoded.uid,
-          stationId,
-          previousSessionId: activeSessionId,
-          newSessionId: body.sessionId,
-          createdAt: FieldValue.serverTimestamp(),
-        });
-      }
     });
 
     if (conflict) {
       return NextResponse.json({ ok: false, error: "station session active" }, { status: 409 });
     }
 
-    return NextResponse.json({ ok: true, stationAccount: true, tookOver });
+    return NextResponse.json({ ok: true, stationAccount: true });
   } catch (error) {
     if (isTokenRejection(error)) {
       return NextResponse.json({ ok: false, error: "Session verification failed." }, { status: 401 });

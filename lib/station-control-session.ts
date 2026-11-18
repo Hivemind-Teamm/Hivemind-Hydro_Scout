@@ -34,18 +34,56 @@ export class StationSessionActiveError extends Error {
   }
 }
 
+export type StationSessionRequestAction = "approve" | "reject";
+
 export async function claimStationControl(
   idToken: string,
   uid: string,
-  takeOver = false,
 ): Promise<void> {
   const response = await fetch("/api/station-control/claim", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ idToken, sessionId: stationControlSessionId(uid), takeOver }),
+    body: JSON.stringify({ idToken, sessionId: stationControlSessionId(uid) }),
   });
 
   if (response.status === 409) throw new StationSessionActiveError();
   if (!response.ok) throw new Error("station-control-unavailable");
+}
+
+/** Requests access from the current shared-station controller. */
+export async function requestStationControl(idToken: string, uid: string): Promise<void> {
+  const response = await fetch("/api/station-control/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ idToken, sessionId: stationControlSessionId(uid) }),
+  });
+  if (!response.ok) throw new Error("station-control-request-unavailable");
+}
+
+/** Resolves a request only when this browser still holds the active station session. */
+export async function resolveStationControlRequest(
+  idToken: string,
+  uid: string,
+  requestId: string,
+  action: StationSessionRequestAction,
+): Promise<void> {
+  const response = await fetch("/api/station-control/resolve-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ idToken, sessionId: stationControlSessionId(uid), requestId, action }),
+  });
+  if (!response.ok) throw new Error("station-control-request-unavailable");
+}
+
+/** Releases a voluntarily signed-out station browser without affecting a newer session. */
+export async function releaseStationControl(idToken: string, uid: string): Promise<void> {
+  await fetch("/api/station-control/release", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ idToken, sessionId: stationControlSessionId(uid) }),
+  });
 }

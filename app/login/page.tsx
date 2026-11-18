@@ -137,25 +137,12 @@ function LoginContent() {
     }
   }
 
-  async function handleTakeover() {
-    setError(null);
-    setSubmitting(true);
-    try {
-      await login(email, password, true);
-    } catch (err) {
-      setError(signInErrorMessage(err));
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   // Show the form and error when Firebase login succeeded
   // but server session verification did not.
   if (loading || (user && !error)) return null;
 
   const displayedError = stationTakeoverRequired
-    ? "This station account is active on another device. Confirm takeover to sign that device out."
+    ? "This station account is active on another device. An approval request was sent to that active session."
     : error;
 
   const eyeOpen = (
@@ -303,28 +290,6 @@ function LoginContent() {
           >
             {displayedError}
           </p>
-        )}
-
-        {stationTakeoverRequired && (
-          <button
-            type="button"
-            onClick={handleTakeover}
-            disabled={submitting || !email || !password}
-            style={{
-              border: `1.5px solid ${BRAND.red}`,
-              borderRadius: 24,
-              background: "transparent",
-              color: BRAND.red,
-              cursor: submitting ? "default" : "pointer",
-              fontFamily: "inherit",
-              fontSize: btnFont - 1,
-              fontWeight: 700,
-              padding: isMobile ? "11px 20px" : "13px 20px",
-              width: "100%",
-            }}
-          >
-            Take over this station session
-          </button>
         )}
 
         {/* Login button */}

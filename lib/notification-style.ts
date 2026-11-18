@@ -15,6 +15,7 @@ export function notificationStyle(type: string) {
     case 'report-resolved': return { color: '#16a34a', label: 'Resolved' };
     case 'report-pending': return { color: '#d97706', label: 'Pending' };
     case 'report-denied': return { color: '#dc2626', label: 'Denied' };
+    case 'station-session-request': return { color: '#d97706', label: 'Station login request' };
     default: return { color: '#64748b', label: 'Station activity' };
   }
 }

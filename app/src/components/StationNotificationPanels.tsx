@@ -11,6 +11,7 @@ import { notificationStyle } from '@/lib/notification-style';
 import NotificationCountBadge from './NotificationCountBadge';
 import { accountLoginStatus } from '@/lib/account-login-status';
 import { useAuth } from '@/lib/auth-context';
+import { resolveStationControlRequest } from '@/lib/station-control-session';
 
 function time(value?: { toDate?: () => Date } | null) {
   const date = value?.toDate?.();
@@ -59,7 +60,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   onViewFireLocation: (lat: number, lng: number) => void;
 }) {
   const { notifications, requests, error: notificationError, activityUnreadCount, isMemberUnread, readActivity, readMember, fullDetails, clearNotifications, notificationsCleared } = useStationNotifications();
-  const { role, stationId } = useAuth();
+  const { role, stationId, user, accountType } = useAuth();
   const isGlobalAdmin = role === 'admin';
   const [profile, setProfile] = useState<ViewingUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +117,18 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     } finally { opening.current = false; setLoading(false); }
   }
 
+  async function resolveStationRequest(item: StationNotification, action: 'approve' | 'reject') {
+    if (!user || !item.sessionRequestId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await resolveStationControlRequest(await user.getIdToken(), user.uid, item.sessionRequestId, action);
+      readActivity(item);
+    } catch {
+      setError('This station login request is no longer available.');
+    } finally { setLoading(false); }
+  }
+
   const accountLink = (uid: string, name: string, role: string, markRead: () => void) => (
     <button disabled={loading} onClick={() => void openProfile(uid, { name, role }, markRead)}
       className="pointer-events-auto relative font-semibold text-[#e0353b] hover:underline focus-visible:outline-2 focus-visible:outline-red-500 disabled:opacity-50">{name}</button>
@@ -149,6 +162,22 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}
       <div className="scroll-fade min-h-0 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
         {activityOpen ? visibleNotifications.map(item => {
+          const stationSessionRequest = item.type === 'station-session-request';
+          if (stationSessionRequest) {
+            const pending = item.sessionRequestStatus === 'pending';
+            const canResolve = pending && accountType === 'station' && !!user;
+            return <article key={stationNotificationCardKey(item)} style={{ borderLeftColor: notificationStyle(item.type).color }} className="border-l-[3px] px-4 py-3">
+              <div className="mb-1 flex items-center justify-between gap-3"><PillBadge dot={notificationStyle(item.type).color} color={notificationStyle(item.type).color} label="Station login request" /><NotificationCountBadge count={activityUnreadCount(item)} label="unread station login requests" /></div>
+              <div className="mb-2"><StationLabel name={item.stationName || stationName} id={item.stationId || stationId} /></div>
+              <p className="text-xs font-semibold leading-relaxed text-neutral-800 dark:text-neutral-100">{item.message}</p>
+              <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">{time(item.createdAt)}</p>
+              {canResolve && <div className="mt-3 flex gap-2">
+                <button type="button" disabled={loading} onClick={() => void resolveStationRequest(item, 'reject')} className="rounded-full border border-neutral-300 px-3 py-1.5 text-[11px] font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800">Cancel</button>
+                <button type="button" disabled={loading} onClick={() => void resolveStationRequest(item, 'approve')} className="rounded-full bg-neutral-900 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-neutral-700 disabled:opacity-50 dark:bg-white dark:text-neutral-900">Allow Takeover</button>
+              </div>}
+              {!pending && <p className="mt-2 text-[11px] font-semibold text-neutral-500">{item.sessionRequestStatus === 'approved' ? 'Takeover approved' : 'Request cancelled'}</p>}
+            </article>;
+          }
           const assignment = item.type === 'personal-station-assigned';
           const response = item.response;
           const group = item.responseGroup;

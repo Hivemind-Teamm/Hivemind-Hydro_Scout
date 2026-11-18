@@ -27,7 +27,7 @@ import { getExistingIncidentDeviceId } from "./incident-device-id";
 import { deleteIncidentDeviceLocation } from "./incident-device-location-cleanup";
 import { incidentLocationCleanupRegistry } from "./incident-location-cleanup-registry.mjs";
 import { cleanupIncidentLocationBeforeLogout } from "./incident-logout-cleanup.mjs";
-import { claimStationControl, StationSessionActiveError } from "./station-control-session";
+import { claimStationControl, releaseStationControl, requestStationControl, stationControlSessionId, StationSessionActiveError } from "./station-control-session";
 
 function friendlyAuthError(err: unknown): never {
   if (err instanceof FirebaseError) {
@@ -72,10 +72,10 @@ interface AuthContextValue {
   stationAccessIds: string[];
   /** Current active response, used to adjust the responder's map display. */
   activeResponseId: string | null;
-  /** True when a shared station account is active on another device. */
+  /** True while another device is waiting for the active station controller's decision. */
   stationTakeoverRequired: boolean;
   loading: boolean;
-  login: (email: string, password: string, takeOverStationSession?: boolean) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Used after a confirmed shared-station takeover; it must not be blocked by local cleanup. */
   forceStationSessionLogout: () => Promise<void>;
@@ -134,10 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [stationAccessIds, setStationAccessIds] = useState<string[]>([]);
   const [activeResponseId, setActiveResponseId] = useState<string | null>(null);
   const [stationTakeoverRequired, setStationTakeoverRequired] = useState(false);
+  const [pendingStationRequest, setPendingStationRequest] = useState<{ uid: string; requestId: string } | null>(null);
   const [stationAor, setStationAor] = useState<{ stationId: string | null; barangays: string[] }>({ stationId: null, barangays: NO_BARANGAYS });
   const [loading, setLoading] = useState(true);
   const sessionGeneration = useRef(0);
-  const stationTakeoverRequested = useRef(false);
+  const pendingRequestProcessing = useRef(false);
   const locationConsent = useLocationConsent(user?.uid);
   const { stationId: consentStationId, granted: locationGranted } = locationConsent;
 
@@ -190,11 +191,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      let idToken = "";
       try {
-        const [profile, idToken] = await Promise.all([
+        const [profile, verifiedIdToken] = await Promise.all([
           getUserProfile(firebaseUser.uid),
           firebaseUser.getIdToken(),
         ]);
+        idToken = verifiedIdToken;
         if (!isCurrent()) return;
 
         const data = profile.data ?? null;
@@ -209,10 +212,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // A shared station account has one active control session. Personal
         // station-linked accounts deliberately skip this check.
         if (data?.accountType === "station") {
-          await claimStationControl(idToken, firebaseUser.uid, stationTakeoverRequested.current);
+          await claimStationControl(idToken, firebaseUser.uid);
         }
-        stationTakeoverRequested.current = false;
         setStationTakeoverRequired(false);
+        setPendingStationRequest(null);
 
         // Do not expose station privileges before the server accepts the session.
         await syncSessionCookie(idToken);
@@ -223,13 +226,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (!isCurrent()) return;
         if (error instanceof StationSessionActiveError) {
-          stationTakeoverRequested.current = false;
+          try {
+            await requestStationControl(idToken, firebaseUser.uid);
+            setPendingStationRequest({ uid: firebaseUser.uid, requestId: stationControlSessionId(firebaseUser.uid) });
+          } catch (requestError) {
+            console.error("Failed to request station-session approval:", requestError);
+          }
           setStationTakeoverRequired(true);
           clearProfile();
           setUser(null);
-          try { await firebaseSignOut(auth); } catch (signOutError) {
-            console.error("Failed to clear a blocked station login:", signOutError);
-          }
           try { await syncSessionCookie(null); } catch { /* Best effort. */ }
           return;
         }
@@ -247,6 +252,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribe();
     };
   }, []);
+
+  // A blocked browser remains Firebase-authenticated only long enough to hear
+  // the server-authored decision. It never receives a server session cookie or
+  // dashboard privileges until the active station browser approves it.
+  useEffect(() => {
+    if (!pendingStationRequest) return;
+    const { uid, requestId } = pendingStationRequest;
+    return onSnapshot(doc(db, "stationControlSessions", uid, "requests", requestId), async snapshot => {
+      const status = snapshot.data()?.status;
+      if ((status !== "approved" && status !== "rejected") || pendingRequestProcessing.current) return;
+      pendingRequestProcessing.current = true;
+      try {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser || firebaseUser.uid !== uid) return;
+        if (status === "rejected") {
+          setStationTakeoverRequired(false);
+          setPendingStationRequest(null);
+          await firebaseSignOut(auth);
+          return;
+        }
+        const [profile, idToken] = await Promise.all([getUserProfile(uid), firebaseUser.getIdToken(true)]);
+        await syncSessionCookie(idToken);
+        setUser(firebaseUser);
+        applyProfile(profile.data ?? null);
+        setStationTakeoverRequired(false);
+        setPendingStationRequest(null);
+      } catch (error) {
+        console.error("Failed to complete approved station login:", error);
+      } finally {
+        pendingRequestProcessing.current = false;
+      }
+    }, error => console.error("Failed to watch station-session request:", error));
+  }, [pendingStationRequest]);
 
   useEffect(() => {
     if (!user) return;
@@ -277,13 +315,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [aorStationId]);
   const aorBarangays = aorStationId && stationAor.stationId === aorStationId ? stationAor.barangays : NO_BARANGAYS;
 
-  async function login(email: string, password: string, takeOverStationSession = false) {
+  async function login(email: string, password: string) {
     setStationTakeoverRequired(false);
-    stationTakeoverRequested.current = takeOverStationSession;
+    setPendingStationRequest(null);
     let credential;
     try { credential = await signInWithEmailAndPassword(auth, email, password); }
     catch (error) {
-      stationTakeoverRequested.current = false;
       friendlyAuthError(error);
     }
 
@@ -337,6 +374,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     const currentUser = auth.currentUser;
+    if (currentUser && accountType === "station") {
+      try { await releaseStationControl(await currentUser.getIdToken(), currentUser.uid); }
+      catch (error) { console.warn("Could not release the station control session:", error); }
+    }
     if (currentUser) {
       // Stop GPS and delete this device's incident position before sign-out.
       // A failed deletion must block sign-out rather than leave an orphaned position.

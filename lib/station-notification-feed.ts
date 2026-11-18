@@ -10,6 +10,8 @@ export type StationNotification = {
   lat?: number;
   lng?: number;
   sessionId?: string;
+  sessionRequestId?: string;
+  sessionRequestStatus?: 'pending' | 'approved' | 'rejected';
   checkingName?: string;
   checkingStatus?: 'active' | 'completed';
   targetHydrantCount?: number;

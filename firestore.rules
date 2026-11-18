@@ -797,6 +797,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Session-transfer requests are server-authored. Both station browsers use
+    // the same Firebase UID, so each may read its own request state; neither
+    // may forge an approval, cancellation, or control-session change.
+    match /stationControlSessions/{uid}/requests/{requestId} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     // Private account presence. Separate sessions preserve multi-tab/device
     // status; presence is a UI signal, never an authorization grant.
     match /accountPresenceSessions/{sessionId} {
