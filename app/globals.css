@@ -89,6 +89,24 @@ body {
   to   { background-position: 28px 28px; }
 }
 
+@keyframes station-takeover-gradient {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
+.station-takeover-button {
+  background: linear-gradient(100deg, #15803d, #22c55e, #bbf7d0, #22c55e, #15803d);
+  background-size: 200% 100%;
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.42);
+  animation: station-takeover-gradient 2.4s linear infinite;
+}
+
+.station-takeover-button:hover { filter: brightness(1.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  .station-takeover-button { animation: none; }
+}
+
 .add-hydrant-active {
   background-image: repeating-linear-gradient(
     -45deg,
