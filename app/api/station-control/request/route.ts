@@ -41,14 +41,26 @@ export async function POST(request: NextRequest) {
       const current = await transaction.get(control);
       const activeSessionId = current.data()?.activeSessionId;
       if (typeof activeSessionId !== "string" || activeSessionId === body.sessionId) throw new Error("no-active-session");
+      const pendingRequests = await transaction.get(control.collection("requests").where("status", "==", "pending"));
       const existing = await transaction.get(sessionRequest);
       if (existing.exists && existing.data()?.status === "pending") return;
+      for (const previous of pendingRequests.docs) {
+        const previousData = previous.data();
+        if (previous.id === body.sessionId || previousData.requestedForSessionId !== activeSessionId) continue;
+        transaction.update(previous.ref, { status: "superseded", supersededAt: FieldValue.serverTimestamp() });
+        transaction.set(
+          firestore.doc(`stations/${stationId}/notifications/station-session-request-${previous.id}`),
+          { sessionRequestStatus: "superseded", supersededAt: FieldValue.serverTimestamp() },
+          { merge: true },
+        );
+      }
       transaction.set(sessionRequest, {
         uid: decoded.uid,
         stationId,
         requestedForSessionId: activeSessionId,
         requesterSessionId: body.sessionId,
         status: "pending",
+        requestedAtMs: Date.now(),
         createdAt: FieldValue.serverTimestamp(),
       });
       transaction.set(notification, {

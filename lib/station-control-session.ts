@@ -75,7 +75,10 @@ export async function resolveStationControlRequest(
     credentials: "same-origin",
     body: JSON.stringify({ idToken, sessionId: stationControlSessionId(uid), requestId, action }),
   });
-  if (!response.ok) throw new Error("station-control-request-unavailable");
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    throw new Error(typeof body?.error === "string" ? body.error : "station-control-request-unavailable");
+  }
 }
 
 /** Releases a voluntarily signed-out station browser without affecting a newer session. */

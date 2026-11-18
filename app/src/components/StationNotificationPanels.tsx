@@ -124,8 +124,8 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     try {
       await resolveStationControlRequest(await user.getIdToken(), user.uid, item.sessionRequestId, action);
       readActivity(item);
-    } catch {
-      setError('This station login request is no longer available.');
+    } catch (error) {
+      setError(error instanceof Error && error.message === 'Request expired.' ? 'Request expired.' : 'This station login request is no longer available.');
     } finally { setLoading(false); }
   }
 
@@ -165,7 +165,8 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           const stationSessionRequest = item.type === 'station-session-request';
           if (stationSessionRequest) {
             const pending = item.sessionRequestStatus === 'pending';
-            const canResolve = pending && accountType === 'station' && !!user;
+            const superseded = item.sessionRequestStatus === 'superseded';
+            const canResolve = (pending || superseded) && accountType === 'station' && !!user;
             return <article key={stationNotificationCardKey(item)} style={{ borderLeftColor: notificationStyle(item.type).color }} className="border-l-[3px] px-4 py-3">
               <div className="mb-1 flex items-center justify-between gap-3"><PillBadge dot={notificationStyle(item.type).color} color={notificationStyle(item.type).color} label="Station login request" /><NotificationCountBadge count={activityUnreadCount(item)} label="unread station login requests" /></div>
               <div className="mb-2"><StationLabel name={item.stationName || stationName} id={item.stationId || stationId} /></div>
@@ -175,7 +176,8 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
                 <button type="button" disabled={loading} onClick={() => void resolveStationRequest(item, 'reject')} className="rounded-full border border-neutral-300 px-3 py-1.5 text-[11px] font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800">Cancel</button>
                 <button type="button" disabled={loading} onClick={() => void resolveStationRequest(item, 'approve')} className="rounded-full bg-neutral-900 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-neutral-700 disabled:opacity-50 dark:bg-white dark:text-neutral-900">Allow Takeover</button>
               </div>}
-              {!pending && <p className="mt-2 text-[11px] font-semibold text-neutral-500">{item.sessionRequestStatus === 'approved' ? 'Takeover approved' : 'Request cancelled'}</p>}
+              {superseded && <p className="mt-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400">A newer login request replaced this one.</p>}
+              {!pending && !superseded && <p className="mt-2 text-[11px] font-semibold text-neutral-500">{item.sessionRequestStatus === 'approved' ? 'Takeover approved' : item.sessionRequestStatus === 'expired' ? 'Request expired' : 'Request cancelled'}</p>}
             </article>;
           }
           const assignment = item.type === 'personal-station-assigned';

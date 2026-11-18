@@ -11,7 +11,7 @@ export type StationNotification = {
   lng?: number;
   sessionId?: string;
   sessionRequestId?: string;
-  sessionRequestStatus?: 'pending' | 'approved' | 'rejected';
+  sessionRequestStatus?: 'pending' | 'superseded' | 'expired' | 'approved' | 'rejected';
   checkingName?: string;
   checkingStatus?: 'active' | 'completed';
   targetHydrantCount?: number;

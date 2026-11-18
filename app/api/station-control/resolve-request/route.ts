@@ -29,13 +29,20 @@ export async function POST(request: NextRequest) {
       const [current, requested] = await Promise.all([transaction.get(control), transaction.get(sessionRequest)]);
       const data = requested.data();
       if (!current.exists || current.data()?.activeSessionId !== body.sessionId || !requested.exists
-        || data?.status !== "pending" || data?.requestedForSessionId !== body.sessionId || data?.uid !== decoded.uid) {
+        || data?.requestedForSessionId !== body.sessionId || data?.uid !== decoded.uid) {
         outcome = "unavailable";
         return;
       }
       const stationId = data.stationId;
       if (typeof stationId !== "string" || data.requesterSessionId !== body.requestId) { outcome = "unavailable"; return; }
       const notification = firestore.doc(`stations/${stationId}/notifications/station-session-request-${body.requestId}`);
+      if (data.status === "superseded") {
+        transaction.update(sessionRequest, { status: "expired", expiredAt: FieldValue.serverTimestamp() });
+        transaction.set(notification, { sessionRequestStatus: "expired", expiredAt: FieldValue.serverTimestamp() }, { merge: true });
+        outcome = "expired";
+        return;
+      }
+      if (data.status !== "pending") { outcome = "unavailable"; return; }
       transaction.update(sessionRequest, { status: body.action === "approve" ? "approved" : "rejected", resolvedAt: FieldValue.serverTimestamp() });
       transaction.update(notification, { sessionRequestStatus: body.action === "approve" ? "approved" : "rejected", resolvedAt: FieldValue.serverTimestamp() });
       if (body.action === "approve") {
@@ -46,7 +53,7 @@ export async function POST(request: NextRequest) {
         });
       }
     });
-    if (outcome) return NextResponse.json({ ok: false, error: "Request is no longer available." }, { status: 409 });
+    if (outcome) return NextResponse.json({ ok: false, error: outcome === "expired" ? "Request expired." : "Request is no longer available." }, { status: 409 });
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (isTokenRejection(error)) return NextResponse.json({ ok: false, error: "Session verification failed." }, { status: 401 });

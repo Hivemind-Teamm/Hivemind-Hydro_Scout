@@ -37,10 +37,10 @@ export default function StationControlSessionGuard() {
     const uid = user.uid;
     const ownSessionId = stationControlSessionId(uid);
     return onSnapshot(collection(db, "stationControlSessions", uid, "requests"), snapshot => {
-      const pending = snapshot.docs.find(record => {
+      const pending = snapshot.docs.filter(record => {
         const data = record.data();
         return data.status === "pending" && data.requestedForSessionId === ownSessionId;
-      });
+      }).sort((left, right) => Number(right.data().requestedAtMs ?? 0) - Number(left.data().requestedAtMs ?? 0))[0];
       if (!pending) { setRequestId(null); setDismissed(false); return; }
       let wasDismissed = false;
       try { wasDismissed = sessionStorage.getItem(`hydroscout:station-session-request-dismissed:${uid}:${pending.id}`) === "1"; } catch { /* Best effort. */ }
