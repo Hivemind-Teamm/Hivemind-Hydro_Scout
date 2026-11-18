@@ -77,6 +77,12 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     if (!isGlobalAdmin || !term) return notifications;
     return notifications.filter(item => `${item.stationName ?? ''} ${item.stationId ?? ''}`.toLowerCase().includes(term));
   }, [isGlobalAdmin, notifications, stationSearch]);
+  // The server closes older requests when a new device asks to take over.
+  // This client-side guard also prevents cached/late feed entries from ever
+  // showing a second actionable takeover button.
+  const latestPendingSessionRequestId = useMemo(() => notifications
+    .filter(item => item.type === 'station-session-request' && item.sessionRequestStatus === 'pending' && typeof item.sessionRequestId === 'string')
+    .sort((left, right) => (right.createdAt?.toDate?.().getTime() ?? 0) - (left.createdAt?.toDate?.().getTime() ?? 0))[0]?.sessionRequestId ?? null, [notifications]);
   const hasActiveResponse = notifications.some(item => item.response?.status === 'active' || (item.responseGroup?.activeCount ?? 0) > 0);
   const hasActiveFire = notifications.some(item => item.type === 'fire-pinned');
   const opening = useRef(false);
@@ -168,8 +174,9 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           const stationSessionRequest = item.type === 'station-session-request';
           if (stationSessionRequest) {
             const pending = item.sessionRequestStatus === 'pending';
-            const unavailable = item.sessionRequestStatus === 'superseded' || item.sessionRequestStatus === 'expired';
-            const canResolve = pending && accountType === 'station' && !!user;
+            const activeRequest = pending && item.sessionRequestId === latestPendingSessionRequestId;
+            const unavailable = !activeRequest;
+            const canResolve = activeRequest && accountType === 'station' && !!user;
             return <article key={stationNotificationCardKey(item)} style={{ borderLeftColor: notificationStyle(item.type).color }} className="border-l-[3px] px-4 py-3">
               <div className="mb-1 flex items-center justify-between gap-3"><PillBadge dot={notificationStyle(item.type).color} color={notificationStyle(item.type).color} label="Station login request" /><NotificationCountBadge count={activityUnreadCount(item)} label="unread station login requests" /></div>
               <div className="mb-2"><StationLabel name={item.stationName || stationName} id={item.stationId || stationId} /></div>
@@ -179,8 +186,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
                 <button type="button" disabled={loading} onClick={() => void resolveStationRequest(item, 'reject')} className="rounded-full border border-neutral-300 px-3 py-1.5 text-[11px] font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800">Cancel</button>
                 <button type="button" disabled={loading} onClick={() => void resolveStationRequest(item, 'approve')} className="station-takeover-button rounded-full px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-50">Allow Takeover</button>
               </div>}
-              {unavailable && <p className="mt-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400">This station login request is no longer available.</p>}
-              {!pending && !unavailable && <p className="mt-2 text-[11px] font-semibold text-neutral-500">{item.sessionRequestStatus === 'approved' ? 'Takeover approved' : 'Request cancelled'}</p>}
+              {unavailable && <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-600 dark:bg-red-950/35 dark:text-red-300">This station login request is no longer available.</p>}
             </article>;
           }
           const assignment = item.type === 'personal-station-assigned';

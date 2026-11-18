@@ -47,10 +47,12 @@ export async function POST(request: NextRequest) {
       for (const previous of pendingRequests.docs) {
         const previousData = previous.data();
         if (previous.id === body.sessionId || previousData.requestedForSessionId !== activeSessionId) continue;
-        transaction.update(previous.ref, { status: "superseded", supersededAt: FieldValue.serverTimestamp() });
+        // Only the newest request may be acted on. Older requests are closed
+        // as soon as a newer device asks for access.
+        transaction.update(previous.ref, { status: "expired", expiredAt: FieldValue.serverTimestamp() });
         transaction.set(
           firestore.doc(`stations/${stationId}/notifications/station-session-request-${previous.id}`),
-          { sessionRequestStatus: "superseded", supersededAt: FieldValue.serverTimestamp() },
+          { sessionRequestStatus: "expired", expiredAt: FieldValue.serverTimestamp() },
           { merge: true },
         );
       }
