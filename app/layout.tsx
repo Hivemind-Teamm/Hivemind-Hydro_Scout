@@ -11,6 +11,7 @@ import { ThemeProvider } from "@/lib/theme-context";
 import ScrollBehavior from "./src/components/ScrollBehavior";
 import ServiceWorkerRegister from "./src/components/ServiceWorkerRegister";
 import AccountPresenceReporter from './src/components/AccountPresenceReporter';
+import StationControlSessionGuard from './src/components/StationControlSessionGuard';
 
 // Runs before first paint to set the `.dark` class from the stored choice
 // or the OS/default preference, preventing a flash of the wrong theme.
@@ -94,6 +95,7 @@ export default function RootLayout({
 
           <AuthProvider>
             <AccountPresenceReporter />
+            <StationControlSessionGuard />
             {children}
           </AuthProvider>
         </ThemeProvider>

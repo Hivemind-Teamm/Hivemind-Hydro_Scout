@@ -27,6 +27,7 @@ import { getExistingIncidentDeviceId } from "./incident-device-id";
 import { deleteIncidentDeviceLocation } from "./incident-device-location-cleanup";
 import { incidentLocationCleanupRegistry } from "./incident-location-cleanup-registry.mjs";
 import { cleanupIncidentLocationBeforeLogout } from "./incident-logout-cleanup.mjs";
+import { claimStationControl, StationSessionActiveError } from "./station-control-session";
 
 function friendlyAuthError(err: unknown): never {
   if (err instanceof FirebaseError) {
@@ -71,9 +72,13 @@ interface AuthContextValue {
   stationAccessIds: string[];
   /** Current active response, used to adjust the responder's map display. */
   activeResponseId: string | null;
+  /** True when a shared station account is active on another device. */
+  stationTakeoverRequired: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, takeOverStationSession?: boolean) => Promise<void>;
   logout: () => Promise<void>;
+  /** Used after a confirmed shared-station takeover; it must not be blocked by local cleanup. */
+  forceStationSessionLogout: () => Promise<void>;
   signup: (email: string, password: string, displayName: string, requestedStationId?: string | null) => Promise<void>;
   openLocationConsent: () => void;
   refreshSession: () => Promise<void>;
@@ -128,9 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [stationMembershipStatus, setStationMembershipStatus] = useState<MembershipStatus>("none");
   const [stationAccessIds, setStationAccessIds] = useState<string[]>([]);
   const [activeResponseId, setActiveResponseId] = useState<string | null>(null);
+  const [stationTakeoverRequired, setStationTakeoverRequired] = useState(false);
   const [stationAor, setStationAor] = useState<{ stationId: string | null; barangays: string[] }>({ stationId: null, barangays: NO_BARANGAYS });
   const [loading, setLoading] = useState(true);
   const sessionGeneration = useRef(0);
+  const stationTakeoverRequested = useRef(false);
   const locationConsent = useLocationConsent(user?.uid);
   const { stationId: consentStationId, granted: locationGranted } = locationConsent;
 
@@ -199,6 +206,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if (!isCurrent()) return;
 
+        // A shared station account has one active control session. Personal
+        // station-linked accounts deliberately skip this check.
+        if (data?.accountType === "station") {
+          await claimStationControl(idToken, firebaseUser.uid, stationTakeoverRequested.current);
+        }
+        stationTakeoverRequested.current = false;
+        setStationTakeoverRequired(false);
+
         // Do not expose station privileges before the server accepts the session.
         await syncSessionCookie(idToken);
         if (!isCurrent()) return;
@@ -207,6 +222,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         applyProfile(data);
       } catch (error) {
         if (!isCurrent()) return;
+        if (error instanceof StationSessionActiveError) {
+          stationTakeoverRequested.current = false;
+          setStationTakeoverRequired(true);
+          clearProfile();
+          setUser(null);
+          try { await firebaseSignOut(auth); } catch (signOutError) {
+            console.error("Failed to clear a blocked station login:", signOutError);
+          }
+          try { await syncSessionCookie(null); } catch { /* Best effort. */ }
+          return;
+        }
         console.error("Failed to initialize authenticated profile:", error);
         setUser(firebaseUser);
         clearProfile(); // Fail closed: no station or administrative access.
@@ -251,10 +277,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [aorStationId]);
   const aorBarangays = aorStationId && stationAor.stationId === aorStationId ? stationAor.barangays : NO_BARANGAYS;
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string, takeOverStationSession = false) {
+    setStationTakeoverRequired(false);
+    stationTakeoverRequested.current = takeOverStationSession;
     let credential;
     try { credential = await signInWithEmailAndPassword(auth, email, password); }
-    catch (error) { friendlyAuthError(error); }
+    catch (error) {
+      stationTakeoverRequested.current = false;
+      friendlyAuthError(error);
+    }
 
     try {
       const profile = await getUserProfile(credential.user.uid);
@@ -330,6 +361,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await syncSessionCookie(null);
   }
 
+  async function forceStationSessionLogout() {
+    // A takeover has already been explicitly confirmed by a new device. Do
+    // not leave this browser operational if its optional GPS cleanup fails.
+    ++sessionGeneration.current;
+    clearProfile();
+    setUser(null);
+    try {
+      await firebaseSignOut(auth);
+    } finally {
+      try { await syncSessionCookie(null); } catch (error) {
+        console.error("Failed to clear a taken-over server session:", error);
+      }
+    }
+  }
+
   async function refreshSession() {
     const currentUser = auth.currentUser;
     if (!currentUser) return;
@@ -338,10 +384,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, role, accountType, stationId: assignedStationId, stationName,
+      user, role, accountType, stationId: assignedStationId, stationName, stationTakeoverRequired,
       aorBarangays, stationMembershipStatus, stationAccessIds, activeResponseId, loading,
       canWriteInAor: barangay => canWriteInAor(role, aorBarangays, barangay),
-      login, logout, signup, refreshSession,
+      login, logout, forceStationSessionLogout, signup, refreshSession,
       openLocationConsent: locationConsent.openNotice,
       canUseDeviceLocation: locationConsent.canUseDeviceLocation,
       locationPrivacyAvailable: !!consentStationId,

@@ -28,7 +28,7 @@ export default function LoginPage() {
 }
 
 function LoginContent() {
-  const { login, user, loading, refreshSession } = useAuth();
+  const { login, user, loading, refreshSession, stationTakeoverRequired } = useAuth();
   const { isDark } = useTheme();
   const isMobile = useIsMobile();
   const isShort = useIsShort();
@@ -129,14 +129,19 @@ function LoginContent() {
 
     try {
       await login(email, password);
+    } catch (err) {
+      setError(signInErrorMessage(err));
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
-      // Firebase sign-in is not the same as server session verification.
-      // Do not navigate until the session cookie is confirmed.
-      await refreshSession();
-
-      const next = searchParams.get("next") || "/dashboard";
-
-      router.push(next);
+  async function handleTakeover() {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await login(email, password, true);
     } catch (err) {
       setError(signInErrorMessage(err));
       console.error(err);
@@ -148,6 +153,10 @@ function LoginContent() {
   // Show the form and error when Firebase login succeeded
   // but server session verification did not.
   if (loading || (user && !error)) return null;
+
+  const displayedError = stationTakeoverRequired
+    ? "This station account is active on another device. Confirm takeover to sign that device out."
+    : error;
 
   const eyeOpen = (
     <svg
@@ -282,7 +291,7 @@ function LoginContent() {
           </div>
         </div>
 
-        {error && (
+        {displayedError && (
           <p
             className="anim-shake"
             style={{
@@ -292,8 +301,30 @@ function LoginContent() {
               margin: 0,
             }}
           >
-            {error}
+            {displayedError}
           </p>
+        )}
+
+        {stationTakeoverRequired && (
+          <button
+            type="button"
+            onClick={handleTakeover}
+            disabled={submitting || !email || !password}
+            style={{
+              border: `1.5px solid ${BRAND.red}`,
+              borderRadius: 24,
+              background: "transparent",
+              color: BRAND.red,
+              cursor: submitting ? "default" : "pointer",
+              fontFamily: "inherit",
+              fontSize: btnFont - 1,
+              fontWeight: 700,
+              padding: isMobile ? "11px 20px" : "13px 20px",
+              width: "100%",
+            }}
+          >
+            Take over this station session
+          </button>
         )}
 
         {/* Login button */}

@@ -788,6 +788,15 @@ service cloud.firestore {
           && resource.data.get('updatedBy', null) == request.auth.uid);
     }
 
+    // Shared station-account control is issued only by the verified server
+    // route. The holder may read its current control session so a previous
+    // device can sign itself out after an explicit takeover. Personal accounts
+    // do not create these documents and retain multi-device access.
+    match /stationControlSessions/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     // Private account presence. Separate sessions preserve multi-tab/device
     // status; presence is a UI signal, never an authorization grant.
     match /accountPresenceSessions/{sessionId} {
