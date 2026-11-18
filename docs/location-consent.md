@@ -44,8 +44,13 @@ privacy-request procedures before operational deployment.
 ## Collected data and recipients
 
 During an active response, the app sends this device's latitude, longitude,
-accuracy, update time, station ID, and station name to Firestore. Signed-in users
-can read the active station-labeled map location for cross-station coordination.
+accuracy, update time, station ID, and station name to Firestore **only while the
+responder is within 1 km of the fire** they respond to. Outside that radius no
+position is sent; only the private response record's `lastLocationAt` time is
+refreshed so the response is not closed as stale. Signed-in users can read the
+active station-labeled map location for cross-station coordination. Firestore
+rules refuse a map location more than 1 km (plus a 10 m allowance) from the
+response's active fire pin.
 The map location does not include the responder's UID or name. The responder,
 station head, administrators, and delegated station managers can read the private
 response history, including responder identity and start/end times. Station heads
@@ -71,9 +76,13 @@ control to review or withdraw consent.
 
 ## Browser reporting limits
 
-The app captures a fresh location when a response starts and attempts updates
-approximately every three minutes while the page is active or resumed. Focus,
-visibility restoration, and reconnection can trigger another attempt. Browser
+The app captures a fresh location when a response starts. While the page is
+active or resumed it checks the device position again on a schedule set by the
+distance to the 1 km edge (every 10 s close to it, up to every three minutes far
+away; every minute inside). Firestore is written only when the map location must
+appear, move by 100 m (at most once a minute), refresh (every three minutes) or
+disappear, plus the three-minute response heartbeat. Focus, visibility
+restoration, reconnection and a moved fire pin trigger another check. Browser
 timers may be throttled, and geolocation may require a visible page. There is no
 guarantee of acquisition when the browser is closed, the device is asleep, the
 page is suspended, or connectivity is unavailable. This is not guaranteed
@@ -90,7 +99,10 @@ needed for that behavior.
    **Start responding** does not publish a location.
 4. Open **Location privacy**, consent, and allow browser location permission.
    Pin a fire in the map to expose **Start responding**, start a response and
-   verify that the map displays a station-labeled pin.
+   verify that the map displays a station-labeled pin when you are within 1 km
+   of the fire. Pin the fire more than 1 km away instead and verify the fire
+   panel says you are hidden, no pin appears, and it appears once you move
+   (or the pin is moved) within 1 km.
 5. Observe from another signed-in account. Verify the pin is visible without the
    responder's name; verify the station head can see the private response history.
 6. Withdraw consent. Verify updates stop and the pin disappears. Consent again

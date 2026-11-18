@@ -51,13 +51,15 @@ interface FireResponsePanelProps {
   canEdit?: boolean;
   onDismiss?: () => void;
   responseActionRef?: Ref<HTMLDivElement>;
+  /** Slot for the responder's "visible / hidden to others" status line. */
+  responseStatusRef?: Ref<HTMLDivElement>;
   /** Mobile only — collapses the panel to an edge tab. */
   onMinimize?: () => void;
 }
 
 export default function FireResponsePanel({
   lat, lng, address, radiusM, candidates, nearestOutside, supply, estimate, routing, loading, maxHeight,
-  onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize, responseActionRef, canEdit = true, onDismiss,
+  onSelectSupply, onViewHydrant, onRecenter, onMovePin, onClear, onMinimize, responseActionRef, responseStatusRef, canEdit = true, onDismiss,
   incidentId, occupancyClaims, occupancyReady, occupancyError, currentUid, activeResponseId, canClaimHydrants, canReleaseOthers,
 }: FireResponsePanelProps) {
   const operationalCount = candidates.filter((c) => c.hydrant.status === 'operational').length;
@@ -250,6 +252,9 @@ export default function FireResponsePanel({
           </ul>
         )}
       </div>
+
+      {/* Responder's own visibility status (filled by StationResponseControl). */}
+      <div ref={responseStatusRef} className="shrink-0 empty:hidden" />
 
       {/* ── Footer ── */}
       <div className="flex shrink-0 gap-2 border-t border-neutral-100 px-3.5 py-2.5 dark:border-neutral-800">

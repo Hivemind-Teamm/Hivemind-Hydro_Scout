@@ -52,9 +52,18 @@ a station account does not start location sharing.
    request. A head for that station reviews and approves or rejects it in
    **Member approvals**. Approval assigns the person's station ID; it does not start tracking.
 3. With a fire pinned in the current map UI, an approved responder accepts the location notice and presses **Start
-   responding**. The app captures an initial location and publishes it with the
-   station's label. Updates are attempted every three minutes while the app is
-   active/resumed and location access is available.
+   responding**. The responder's station-labeled location is published to other
+   users **only while they are within 1 km of that fire** (`RESPONSE_VISIBILITY_RADIUS_M`
+   in `lib/response-visibility.ts`, enforced by `firestore.rules`). This radius
+   is fixed; it is not the hydrant search radius, which still expands in 500 m
+   bands when no hydrant is found within 1 km. Outside the radius nothing is
+   published and the fire panel tells the responder they are hidden and how far
+   away they are; the private response record still receives a three-minute
+   `lastLocationAt` heartbeat. GPS checks are spaced by the distance to the
+   edge (10 s near it, up to three minutes far away, one minute inside), and the
+   marker is written on entry, after 100 m of movement (at most once a minute),
+   every three minutes, and deleted on leaving (with a 50 m exit margin so GPS
+   jitter at the edge does not flicker it). A moved fire pin is followed.
 4. The responder presses **End response** to stop sharing. The live location is
    removed, while the station's private response history is retained.
 
@@ -80,7 +89,8 @@ necessary before considering this an operational incident workflow.
 ## Privacy and audiences
 
 - Signed-in Hydro-Scout users can read active public response reports for
-  cross-station coordination. These map documents contain a random response ID,
+  cross-station coordination. A report exists only while its responder is within
+  1 km of the response's active fire pin. These map documents contain a random response ID,
   station ID/name, coordinates, accuracy, update time, and `public: true`; they
   do not contain a responder UID or display name. Anonymous visitors cannot read
   these locations.
@@ -188,7 +198,7 @@ entries before they appear in the sign-up selector. Current station IDs accept
 Run client-side and rules tests with Node 24 and Java 21:
 
 ```powershell
-node --test test/location-consent.test.mjs test/unit-location.test.mjs test/unit-location-reporting.test.mjs test/unit-location-expiry.test.mjs test/map-unit-location.test.mjs
+node --test test/response-visibility.test.mjs test/location-consent.test.mjs test/unit-location.test.mjs test/unit-location-reporting.test.mjs test/unit-location-expiry.test.mjs test/map-unit-location.test.mjs
 npx.cmd -y firebase-tools@latest emulators:exec --only firestore --project demo-station-responses "node test/station-response-rules.test.mjs"
 npx.cmd tsc --noEmit --incremental false
 npx.cmd eslint app/src/components/StationResponseControl.tsx lib/auth-context.tsx lib/unit-location.ts test/station-response-rules.test.mjs

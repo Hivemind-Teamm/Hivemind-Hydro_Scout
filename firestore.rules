@@ -553,8 +553,8 @@ service cloud.firestore {
         && request.resource.data.lastLocationAt == request.time
         && currentUserData().get('activeResponseId', null) == null
         && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.activeResponseId == responseId
-        && (getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/unitLocations/$(responseId)).data.responseId == responseId
-          || getAfter(/databases/$(database)/documents/responseLocations/$(responseId)).data.responseId == responseId)
+        // No location document is required at start: the responder's marker is
+        // published only once they are within the fire's visibility radius.
         && getAfter(/databases/$(database)/documents/stations/$(request.resource.data.stationId)/notifications/$(responseId + '_start')).data.responseId == responseId;
       // GPS heartbeat updates are permitted.
       // Response termination must use the authenticated server API.
@@ -627,7 +627,28 @@ service cloud.firestore {
         && data.lat is number && data.lat >= -90 && data.lat <= 90
         && data.lng is number && data.lng >= -180 && data.lng <= 180
         && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
-        && data.updatedAt is timestamp && data.updatedAt == request.time;
+        && data.updatedAt is timestamp && data.updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.firePinId is string
+        && isWithinResponseVisibility(data.lat, data.lng,
+          getAfter(/databases/$(database)/documents/stationResponses/$(responseId)).data.firePinId);
+    }
+
+    // Responders are shown to other users only within this distance (metres)
+    // of their fire. Keep equal to RESPONSE_VISIBILITY_RADIUS_M in
+    // lib/response-visibility.ts (test/response-visibility.test.mjs checks).
+    // This is not the hydrant search radius, which expands in 500 m bands.
+    function responseVisibilityRadiusM() {
+      return 1000;
+    }
+
+    // The 10 m allowance absorbs Earth-model differences between the app's
+    // haversine and distance(); the app itself publishes only at <= the radius.
+    function isWithinResponseVisibility(lat, lng, firePinId) {
+      let fire = get(/databases/$(database)/documents/firePins/$(firePinId)).data;
+      return fire.status == 'active'
+        && fire.lat is number && fire.lng is number
+        && latlng.value(float(lat), float(lng)).distance(latlng.value(float(fire.lat), float(fire.lng)))
+          <= responseVisibilityRadiusM() + 10;
     }
 
     function isValidStationUnitLocation(stationId, responseId) {
@@ -665,7 +686,9 @@ service cloud.firestore {
         && data.lat is number && data.lat >= -90 && data.lat <= 90
         && data.lng is number && data.lng >= -180 && data.lng <= 180
         && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 40075000
-        && data.updatedAt is timestamp && data.updatedAt == request.time;
+        && data.updatedAt is timestamp && data.updatedAt == request.time
+        && response.firePinId is string
+        && isWithinResponseVisibility(data.lat, data.lng, response.firePinId);
     }
 
     match /responseLocations/{responseId} {
