@@ -44,6 +44,9 @@ export class StationSessionActiveError extends Error {
 }
 
 export type StationSessionRequestAction = "approve" | "reject";
+export type StationControlStatus =
+  | { state: "active"; requestId: string | null }
+  | { state: "approved" | "rejected" | "pending" | "superseded" | "expired" | "inactive"; requestId?: never };
 
 export async function claimStationControl(
   idToken: string,
@@ -88,6 +91,23 @@ export async function resolveStationControlRequest(
     const body = await response.json().catch(() => null) as { error?: unknown } | null;
     throw new Error(typeof body?.error === "string" ? body.error : "station-control-request-unavailable");
   }
+}
+
+/** Reads the server-authoritative state so control remains usable when a browser blocks Firestore listeners. */
+export async function getStationControlStatus(idToken: string, uid: string): Promise<StationControlStatus> {
+  const response = await fetch("/api/station-control/status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ idToken, sessionId: stationControlSessionId(uid) }),
+  });
+  if (!response.ok) throw new Error("station-control-status-unavailable");
+  const body = await response.json() as { state?: unknown; requestId?: unknown };
+  if (body.state === "active") return { state: "active", requestId: typeof body.requestId === "string" ? body.requestId : null };
+  if (["approved", "rejected", "pending", "superseded", "expired", "inactive"].includes(String(body.state))) {
+    return { state: body.state as StationControlStatus["state"] & "approved" };
+  }
+  throw new Error("station-control-status-unavailable");
 }
 
 /** Releases a voluntarily signed-out station browser without affecting a newer session. */

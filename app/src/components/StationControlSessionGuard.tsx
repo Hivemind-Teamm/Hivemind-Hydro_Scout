@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { collection, doc, onSnapshot } from "firebase/firestore";
 import { FiShield, FiX } from "react-icons/fi";
-import { db } from "@/lib/firebase";
-import { clearStationControlSessionId, resolveStationControlRequest, stationControlSessionId } from "@/lib/station-control-session";
+import { clearStationControlSessionId, getStationControlStatus, resolveStationControlRequest } from "@/lib/station-control-session";
 import { useAuth } from "@/lib/auth-context";
 
 /** Keeps shared station control single-session and surfaces transfer requests without blocking work. */
@@ -17,36 +15,42 @@ export default function StationControlSessionGuard() {
 
   useEffect(() => {
     if (loading || accountType !== "station" || !user) return;
-    const uid = user.uid;
-    const ownSessionId = stationControlSessionId(uid);
-    return onSnapshot(doc(db, "stationControlSessions", uid), snapshot => {
-      const activeSessionId = snapshot.data()?.activeSessionId;
-      if (typeof activeSessionId === "string" && activeSessionId !== ownSessionId && !loggingOut.current) {
-        loggingOut.current = true;
-        clearStationControlSessionId(uid);
-        void forceStationSessionLogout().catch(error => {
-          loggingOut.current = false;
-          console.error("Failed to complete station-session takeover logout:", error);
-        });
-      }
-    });
+    let disposed = false;
+    const check = async () => {
+      try {
+        const status = await getStationControlStatus(await user.getIdToken(), user.uid);
+        if (disposed || status.state === "active" || loggingOut.current) return;
+        if (status.state === "approved" || status.state === "inactive") {
+          loggingOut.current = true;
+          clearStationControlSessionId(user.uid);
+          await forceStationSessionLogout();
+        }
+      } catch (error) { console.error("Failed to check station-session status:", error); }
+    };
+    void check();
+    const timer = window.setInterval(() => { void check(); }, 2000);
+    return () => { disposed = true; window.clearInterval(timer); };
   }, [accountType, forceStationSessionLogout, loading, user]);
 
   useEffect(() => {
     if (loading || accountType !== "station" || !user) return;
-    const uid = user.uid;
-    const ownSessionId = stationControlSessionId(uid);
-    return onSnapshot(collection(db, "stationControlSessions", uid, "requests"), snapshot => {
-      const pending = snapshot.docs.filter(record => {
-        const data = record.data();
-        return data.status === "pending" && data.requestedForSessionId === ownSessionId;
-      }).sort((left, right) => Number(right.data().requestedAtMs ?? 0) - Number(left.data().requestedAtMs ?? 0))[0];
-      if (!pending) { setRequestId(null); setDismissed(false); return; }
-      let wasDismissed = false;
-      try { wasDismissed = sessionStorage.getItem(`hydroscout:station-session-request-dismissed:${uid}:${pending.id}`) === "1"; } catch { /* Best effort. */ }
-      setRequestId(pending.id);
-      setDismissed(wasDismissed);
-    }, error => console.error("Failed to watch station-session requests:", error));
+    let disposed = false;
+    const check = async () => {
+      try {
+        const status = await getStationControlStatus(await user.getIdToken(), user.uid);
+        if (disposed || status.state !== "active" || !status.requestId) {
+          if (!disposed) { setRequestId(null); setDismissed(false); }
+          return;
+        }
+        let wasDismissed = false;
+        try { wasDismissed = sessionStorage.getItem(`hydroscout:station-session-request-dismissed:${user.uid}:${status.requestId}`) === "1"; } catch { /* Best effort. */ }
+        setRequestId(status.requestId);
+        setDismissed(wasDismissed);
+      } catch (error) { console.error("Failed to check station-session requests:", error); }
+    };
+    void check();
+    const timer = window.setInterval(() => { void check(); }, 2000);
+    return () => { disposed = true; window.clearInterval(timer); };
   }, [accountType, loading, user]);
 
   async function resolve(action: "approve" | "reject") {

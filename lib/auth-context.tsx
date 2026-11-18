@@ -27,7 +27,7 @@ import { getExistingIncidentDeviceId } from "./incident-device-id";
 import { deleteIncidentDeviceLocation } from "./incident-device-location-cleanup";
 import { incidentLocationCleanupRegistry } from "./incident-location-cleanup-registry.mjs";
 import { cleanupIncidentLocationBeforeLogout } from "./incident-logout-cleanup.mjs";
-import { claimStationControl, releaseStationControl, requestStationControl, stationControlSessionId, StationSessionActiveError } from "./station-control-session";
+import { claimStationControl, getStationControlStatus, releaseStationControl, requestStationControl, stationControlSessionId, StationSessionActiveError } from "./station-control-session";
 
 function friendlyAuthError(err: unknown): never {
   if (err instanceof FirebaseError) {
@@ -287,9 +287,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // The listener gives immediate feedback when Firestore is reachable. A
-    // server-verified retry below is the fallback for browsers or extensions
-    // that delay/block Firestore's live connection.
+    // The listener gives immediate feedback when Firestore is reachable. The
+    // server status check below remains authoritative when an extension or
+    // restrictive network blocks Firestore's live connection.
     const unsubscribe = onSnapshot(doc(db, "stationControlSessions", uid, "requests", requestId), async snapshot => {
       const status = snapshot.data()?.status;
       if ((status !== "approved" && status !== "rejected") || pendingRequestProcessing.current) return;
@@ -308,24 +308,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }, error => console.error("Failed to watch station-session request:", error));
 
-    async function retryClaimAfterApproval() {
+    async function checkStationRequestStatus() {
       if (disposed || pendingRequestProcessing.current) return;
       const firebaseUser = auth.currentUser;
       if (!firebaseUser || firebaseUser.uid !== uid) return;
       try {
-        await claimStationControl(await firebaseUser.getIdToken(), uid);
-      } catch (error) {
-        // A conflict is expected until the active browser approves or exits.
-        if (!(error instanceof StationSessionActiveError)) {
-          console.error("Failed to check approved station session:", error);
+        const status = await getStationControlStatus(await firebaseUser.getIdToken(), uid);
+        if (status.state === "active" || status.state === "approved") {
+          await completeApprovedStationLogin();
+          return;
         }
-        return;
+        if (status.state === "rejected" || status.state === "superseded" || status.state === "expired" || status.state === "inactive") {
+          setStationTakeoverRequired(false);
+          setPendingStationRequest(null);
+          await firebaseSignOut(auth);
+        }
+      } catch (error) {
+        console.error("Failed to check station-session request status:", error);
       }
-      await completeApprovedStationLogin();
     }
 
-    const retryTimer = window.setInterval(() => { void retryClaimAfterApproval(); }, 2000);
-    void retryClaimAfterApproval();
+    const retryTimer = window.setInterval(() => { void checkStationRequestStatus(); }, 2000);
+    void checkStationRequestStatus();
     return () => {
       disposed = true;
       window.clearInterval(retryTimer);
