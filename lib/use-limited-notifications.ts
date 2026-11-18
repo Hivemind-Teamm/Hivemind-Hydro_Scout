@@ -21,6 +21,7 @@ const REFRESH_INTERVAL_MS = 5 * 60_000;
 const FOCUS_MAX_AGE_MS = 60_000;
 const PANEL_OPEN_MAX_AGE_MS = 15_000;
 const panelToggleEvent = 'hydroscout:toggle-station-activity';
+const stationSessionRequestEvent = 'hydroscout:station-session-request';
 // The header and panel share each poll instead of duplicating server/database reads.
 const polls = new Map<string, { startedAt: number; result: Promise<WireFeed> }>();
 function fetchFeed(scope: string, maxAgeMs: number) {
@@ -72,7 +73,11 @@ export function useLimitedNotifications(scope: string | null) {
     const timer = setInterval(() => void refresh(), REFRESH_INTERVAL_MS);
     const visible = () => { if (!document.hidden) void refresh(); };
     const panelToggled = () => void refresh(PANEL_OPEN_MAX_AGE_MS);
+    // A station-session request should become visible in activity immediately
+    // after the active controller dismisses its toast.
+    const stationSessionRequested = () => void refresh(0);
     window.addEventListener(panelToggleEvent, panelToggled);
+    window.addEventListener(stationSessionRequestEvent, stationSessionRequested);
     window.addEventListener('focus', visible);
     document.addEventListener('visibilitychange', visible);
     window.addEventListener(readEvent, syncRead);
@@ -80,6 +85,7 @@ export function useLimitedNotifications(scope: string | null) {
     return () => {
       active = false; controller.abort(); clearInterval(timer);
       window.removeEventListener(panelToggleEvent, panelToggled);
+      window.removeEventListener(stationSessionRequestEvent, stationSessionRequested);
       window.removeEventListener('focus', visible); document.removeEventListener('visibilitychange', visible);
       window.removeEventListener(readEvent, syncRead); window.removeEventListener('storage', syncRead);
     };

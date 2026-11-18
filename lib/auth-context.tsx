@@ -328,7 +328,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const retryTimer = window.setInterval(() => { void checkStationRequestStatus(); }, 2000);
+    const retryTimer = window.setInterval(() => { void checkStationRequestStatus(); }, 1000);
     void checkStationRequestStatus();
     return () => {
       disposed = true;

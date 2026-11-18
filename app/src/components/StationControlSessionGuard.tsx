@@ -68,6 +68,7 @@ export default function StationControlSessionGuard() {
     if (!user || !requestId) return;
     try { sessionStorage.setItem(`hydroscout:station-session-request-dismissed:${user.uid}:${requestId}`, "1"); } catch { /* Best effort. */ }
     setDismissed(true);
+    window.dispatchEvent(new Event("hydroscout:station-session-request"));
   }
 
   if (!requestId || dismissed) return null;
