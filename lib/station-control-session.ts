@@ -83,10 +83,11 @@ export async function resolveStationControlRequest(
 
 /** Releases a voluntarily signed-out station browser without affecting a newer session. */
 export async function releaseStationControl(idToken: string, uid: string): Promise<void> {
-  await fetch("/api/station-control/release", {
+  const response = await fetch("/api/station-control/release", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify({ idToken, sessionId: stationControlSessionId(uid) }),
   });
+  if (!response.ok) throw new Error("station-control-release-unavailable");
 }

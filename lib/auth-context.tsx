@@ -231,6 +231,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setPendingStationRequest({ uid: firebaseUser.uid, requestId: stationControlSessionId(firebaseUser.uid) });
           } catch (requestError) {
             console.error("Failed to request station-session approval:", requestError);
+            setStationTakeoverRequired(false);
+            clearProfile();
+            setUser(null);
+            try { await firebaseSignOut(auth); } catch { /* Best effort after a failed request. */ }
+            try { await syncSessionCookie(null); } catch { /* Best effort. */ }
+            return;
           }
           setStationTakeoverRequired(true);
           clearProfile();
@@ -374,10 +380,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     const currentUser = auth.currentUser;
-    if (currentUser && accountType === "station") {
-      try { await releaseStationControl(await currentUser.getIdToken(), currentUser.uid); }
-      catch (error) { console.warn("Could not release the station control session:", error); }
-    }
     if (currentUser) {
       // Stop GPS and delete this device's incident position before sign-out.
       // A failed deletion must block sign-out rather than leave an orphaned position.
@@ -393,6 +395,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         },
       });
+    }
+
+    // Shared station control must be released before Firebase signs this
+    // browser out. If the server cannot confirm the release, LogoutButton
+    // keeps the user here and shows its existing safe-sign-out error.
+    if (currentUser && accountType === "station") {
+      await releaseStationControl(await currentUser.getIdToken(), currentUser.uid);
     }
 
     ++sessionGeneration.current;
