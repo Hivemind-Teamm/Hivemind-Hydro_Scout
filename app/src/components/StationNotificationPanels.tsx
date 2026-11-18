@@ -44,12 +44,12 @@ function NotificationDialog({ title, children, onClose }: { title: string; child
   return <dialog ref={dialog} aria-labelledby="notification-detail-title"
     onCancel={event => { event.preventDefault(); onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}
-    className="m-auto max-h-[85dvh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-2xl bg-white p-5 font-sans text-neutral-800 shadow-2xl backdrop:bg-black/50 dark:bg-neutral-900 dark:text-neutral-100">
-    <header className="mb-4 flex items-start justify-between gap-4">
-      <h2 id="notification-detail-title" className="text-sm font-bold leading-relaxed">{title}</h2>
-      <button type="button" onClick={onClose} aria-label="Close notification details" className="rounded-lg p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800"><FiX /></button>
+    className="notification-details-dialog m-auto max-h-[85dvh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-2xl font-sans shadow-2xl backdrop:bg-black/70">
+    <header className="notification-details-header flex items-start justify-between gap-4 px-5 py-4">
+      <div className="min-w-0"><span className="mb-2 block h-1 w-8 rounded-full bg-[#fed42e]" /><p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#fed42e]">Hydro-Scout notification</p><h2 id="notification-detail-title" className="mt-1 text-sm font-extrabold leading-relaxed text-white">{title}</h2></div>
+      <button type="button" onClick={onClose} aria-label="Close notification details" className="rounded-full border border-white/30 p-1.5 text-white transition hover:bg-white/15"><FiX /></button>
     </header>
-    {children}
+    <div className="notification-details-content px-5 py-5">{children}</div>
   </dialog>;
 }
 

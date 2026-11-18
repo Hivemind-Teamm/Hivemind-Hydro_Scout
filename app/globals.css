@@ -107,6 +107,38 @@ body {
   .station-takeover-button { animation: none; }
 }
 
+/* Shared detail treatment for station activity: the same charcoal, red, and
+   yellow visual language as the dashboard rather than a plain system dialog. */
+.notification-details-dialog {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #121212;
+  color: #f5f5f5;
+}
+
+.notification-details-header {
+  background: linear-gradient(120deg, #e0353b 0%, #bd2028 58%, #8d1820 100%);
+  border-bottom: 3px solid #fed42e;
+}
+
+.notification-details-content > .mb-3.text-\[10px\] {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.75rem;
+  color: #a3a3a3;
+}
+
+.notification-details-content dl > div {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 3px solid #e0353b;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.7rem 0.8rem;
+}
+
+.notification-details-content dl > div + div { margin-top: 0.55rem; }
+.notification-details-content dl dt { color: #a3a3a3; font-weight: 700; }
+.notification-details-content dl dd { color: #f5f5f5; }
+.notification-details-content details { background: rgba(255, 255, 255, 0.045); }
+
 .add-hydrant-active {
   background-image: repeating-linear-gradient(
     -45deg,
