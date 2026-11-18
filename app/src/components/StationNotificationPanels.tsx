@@ -180,16 +180,19 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
             const expired = item.sessionRequestStatus === 'expired' || item.sessionRequestStatus === 'superseded' || (pending && !activeRequest);
             const canResolve = activeRequest && accountType === 'station' && !!user;
             return <article key={stationNotificationCardKey(item)} style={{ borderLeftColor: notificationStyle(item.type).color }} className="border-l-[3px] px-4 py-3">
-              <div className="mb-1 flex items-center justify-between gap-3"><PillBadge dot={notificationStyle(item.type).color} color={notificationStyle(item.type).color} label="Station login request" /><NotificationCountBadge count={activityUnreadCount(item)} label="unread station login requests" /></div>
-              <div className="mb-2"><StationLabel name={item.stationName || stationName} id={item.stationId || stationId} /></div>
-              <p className="text-xs font-semibold leading-relaxed text-neutral-800 dark:text-neutral-100">{item.message}</p>
-              <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">{time(item.createdAt)}</p>
+              <button type="button" onClick={() => openNotification(item)} aria-label="Open station login request details" className="block w-full text-left">
+                <div className="mb-1 flex items-center justify-between gap-3"><PillBadge dot={notificationStyle(item.type).color} color={notificationStyle(item.type).color} label="Station login request" /><NotificationCountBadge count={activityUnreadCount(item)} label="unread station login requests" /></div>
+                <div className="mb-2"><StationLabel name={item.stationName || stationName} id={item.stationId || stationId} /></div>
+                <p className="text-xs font-semibold leading-relaxed text-neutral-800 dark:text-neutral-100">{item.message}</p>
+                <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">{time(item.createdAt)}</p>
+              </button>
               {canResolve && <div className="mt-3 flex gap-2">
                 <button type="button" disabled={loading} onClick={() => void resolveStationRequest(item, 'reject')} className="rounded-full border border-neutral-300 px-3 py-1.5 text-[11px] font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800">Cancel</button>
                 <button type="button" disabled={loading} onClick={() => void resolveStationRequest(item, 'approve')} className="station-takeover-button rounded-full px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-50">Allow Takeover</button>
               </div>}
               {expired && <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-600 dark:bg-red-950/35 dark:text-red-300">This station login request is no longer available.</p>}
               {item.sessionRequestStatus === 'rejected' && <p className="mt-3 text-[11px] font-semibold text-neutral-500">Canceled</p>}
+              {item.sessionRequestStatus === 'approved' && <p className="mt-3 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Takeover approved</p>}
             </article>;
           }
           const assignment = item.type === 'personal-station-assigned';
@@ -332,7 +335,13 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
         </>}
         {!selected.limited && selected.uid && <div><dt className="text-neutral-400">Updated by</dt><dd className="mt-1">{accountLink(selected.uid, selected.displayName || 'View account', 'Member', () => readActivity(selected))}</dd></div>}
       </dl>}
-      {!selected.responseGroup && selected.type !== 'fire-pinned' && selected.type !== 'fire-cleared' && <dl className="space-y-3 text-xs">
+      {selected.type === 'station-session-request' && <dl className="space-y-3 text-xs">
+        <div><dt className="text-neutral-400">Station</dt><dd className="mt-1"><StationLabel name={selected.stationName || selected.stationId || stationName} id={selected.stationId || stationId} /></dd></div>
+        <div><dt className="text-neutral-400">Request status</dt><dd className="mt-1 font-semibold">{selected.sessionRequestStatus === 'approved' ? 'Takeover approved' : selected.sessionRequestStatus === 'rejected' ? 'Canceled' : selected.sessionRequestStatus === 'pending' ? 'Awaiting a decision from the active station session' : 'No longer available'}</dd></div>
+        <div><dt className="text-neutral-400">What this does</dt><dd className="mt-1">Approving signs out the current station session and lets the requesting device continue.</dd></div>
+        <div><dt className="text-neutral-400">Request date and time</dt><dd className="mt-1">{time(selected.createdAt)}</dd></div>
+      </dl>}
+      {!selected.responseGroup && selected.type !== 'fire-pinned' && selected.type !== 'fire-cleared' && selected.type !== 'station-session-request' && <dl className="space-y-3 text-xs">
         <div><dd><StationLabel name={selected.stationName || selected.response?.stationName || selected.stationId || selected.response?.stationId || (isGlobalAdmin ? 'N/A' : stationName)} id={selected.stationId || selected.response?.stationId || stationId} /></dd></div>
         {selected.response ? <>
           {!selected.limited && <div><dt className="text-neutral-400">Responder</dt><dd className="mt-1">{selected.uid ? accountLink(selected.uid, selected.displayName || 'Responder', 'Member', () => readActivity(selected)) : selected.displayName}</dd></div>}
