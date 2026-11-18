@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   collection,
-  deleteDoc,
   doc,
   onSnapshot,
   query,
@@ -12,7 +11,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { FiActivity, FiLogOut } from 'react-icons/fi';
+import { FiActivity, FiEye, FiEyeOff, FiLogOut } from 'react-icons/fi';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { useStations } from '../data/stations';
@@ -20,9 +19,22 @@ import StationNotificationPanels from './StationNotificationPanels';
 import StationMembersPanel from './StationMembersPanel';
 import type { JoinRequest } from '@/lib/use-station-notifications';
 import { locationTimeoutMs } from '@/lib/unit-location-expiry';
+import { formatDistance, haversineM } from '@/lib/haversine';
+import { INITIAL_SHARING_STATE, planResponseSharing, RESPONSE_VISIBILITY_RADIUS_M } from '@/lib/response-visibility';
+import {
+  forgetResponseSharing,
+  primeResponseSharing,
+  readResponsePosition,
+  responseMarker,
+  useResponseLocationSharing,
+  useResponseVisibility,
+  type ResponseVisibility,
+} from '@/lib/use-response-location-sharing';
 
 type ResponseRecord = {
   firePinId?: string;
+  incidentLat?: number;
+  incidentLng?: number;
   id: string;
   uid: string;
   displayName: string;
@@ -52,18 +64,25 @@ async function requestEndResponse(responseId: string, mode: ResponseEndMode): Pr
   }
 }
 
-function currentPosition(): Promise<GeolocationPosition> {
-  if (!navigator.geolocation) return Promise.reject(new Error('This device does not support location sharing.'));
-  return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, error => {
-    reject(new Error(error.code === error.PERMISSION_DENIED
-      ? 'Allow location access in your browser before starting a response.'
-      : 'Could not get your current location. Check your GPS and try again.'));
-  }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 }));
+const VISIBILITY_RADIUS_LABEL = `${RESPONSE_VISIBILITY_RADIUS_M / 1000} km`;
+
+function visibilityText(visibility: ResponseVisibility): string {
+  const away = visibility.distanceM === null ? '' : ` · ${formatDistance(visibility.distanceM)} from fire`;
+  switch (visibility.phase) {
+    case 'visible': return `Others can see you${away}`;
+    case 'hidden': return `Hidden until within ${VISIBILITY_RADIUS_LABEL}${away}`;
+    case 'paused': return 'Location sharing is off · others can’t see you';
+    case 'unavailable': return 'Can’t get your location right now';
+    default: return 'Finding your location…';
+  }
 }
 
-export default function StationResponseControl({ fireIncident, actionContainer, onViewFireLocation }: {
+export default function StationResponseControl({ fireIncident, firePins, actionContainer, statusContainer, onViewFireLocation }: {
   fireIncident: { id: string; lat: number; lng: number; stationId: string | null } | null;
+  /** Active shared fires, so the location check follows a moved pin. */
+  firePins: readonly { id: string; lat: number; lng: number }[];
   actionContainer: HTMLDivElement | null;
+  statusContainer: HTMLDivElement | null;
   onViewFireLocation: (lat: number, lng: number) => void;
 }) {
   const {
@@ -78,7 +97,6 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
   const canViewRoster = isGlobalAdmin || (role === 'head' && !!stationId);
   const canApprove = role === 'head' && !!stationId && accountType !== 'station';
   const [activeResponses, setActiveResponses] = useState<ResponseRecord[]>([]);
-  const activeResponseId = activeResponses[0]?.id;
   const activeResponseStationId = activeResponses[0]?.stationId ?? null;
   const activeResponseStation = stations.find(item => item.id === activeResponseStationId);
   const [responses, setResponses] = useState<ResponseRecord[]>([]);
@@ -142,62 +160,27 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
     return () => window.removeEventListener('hydroscout:toggle-station-roster', toggle);
   }, [canViewRoster, isGlobalAdmin, stationId]);
 
-  useEffect(() => {
-    if (!activeResponseId || !activeResponseStationId) return;
-    const response = { id: activeResponseId };
-    if (!canUseDeviceLocation) {
-      void deleteDoc(doc(db, 'stations', activeResponseStationId, 'unitLocations', response.id)).catch(err => {
-        console.error('Could not remove the location after consent withdrawal:', err);
-      });
-      void deleteDoc(doc(db, 'responseLocations', response.id)).catch(err => {
-        console.error('Could not remove the legacy location after consent withdrawal:', err);
-      });
-      return;
-    }
-    const activeStationName = activeResponseStation?.name
-      ?? (activeResponseStationId === ADMIN_RESPONSE_STATION_ID ? ADMIN_RESPONSE_STATION_NAME : null);
-    if (!activeStationName) return;
-    let stopped = false;
-    let inFlight = false;
-    const refresh = async () => {
-      if (stopped || inFlight || !navigator.onLine) return;
-      inFlight = true;
-      try {
-        const position = await currentPosition();
-        if (stopped) return;
-        const batch = writeBatch(db);
-        batch.set(doc(db, 'stations', activeResponseStationId, 'unitLocations', response.id), {
-          responseId: response.id,
-          stationId: activeResponseStationId,
-          stationName: activeStationName,
-          public: true,
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          updatedAt: serverTimestamp(),
-        });
-        batch.update(doc(db, 'stationResponses', response.id), { lastLocationAt: serverTimestamp() });
-        await batch.commit();
-      } catch (err) {
-        console.warn('Active response location was not updated:', err);
-      } finally {
-        inFlight = false;
+  // Live location: published to other users only within 1 km of the fire.
+  const activeResponse = activeResponses[0];
+  const activeStationName = activeResponseStation?.name
+    ?? (activeResponseStationId === ADMIN_RESPONSE_STATION_ID ? ADMIN_RESPONSE_STATION_NAME : null);
+  const responseFire = activeResponse?.firePinId ? firePins.find(pin => pin.id === activeResponse.firePinId) : undefined;
+  const responseFireLat = responseFire?.lat ?? activeResponse?.incidentLat;
+  const responseFireLng = responseFire?.lng ?? activeResponse?.incidentLng;
+  useResponseLocationSharing(
+    user && activeResponse && activeResponseStationId && activeStationName
+      && typeof responseFireLat === 'number' && typeof responseFireLng === 'number'
+      ? {
+        responseId: activeResponse.id,
+        stationId: activeResponseStationId,
+        stationName: activeStationName,
+        fireLat: responseFireLat,
+        fireLng: responseFireLng,
       }
-    };
-    void refresh();
-    const timer = setInterval(() => { void refresh(); }, 3 * 60_000);
-    const resume = () => { if (document.visibilityState === 'visible') void refresh(); };
-    document.addEventListener('visibilitychange', resume);
-    window.addEventListener('focus', resume);
-    window.addEventListener('online', resume);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', resume);
-      window.removeEventListener('focus', resume);
-      window.removeEventListener('online', resume);
-    };
-  }, [activeResponseId, activeResponseStation, activeResponseStationId, canUseDeviceLocation]);
+      : null,
+    canUseDeviceLocation,
+  );
+  const visibility = useResponseVisibility(value => value);
 
   const staleAfterMs = locationTimeoutMs(process.env.NEXT_PUBLIC_UNIT_LOCATION_TIMEOUT_MINUTES);
 
@@ -234,9 +217,15 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
       return;
     }
     setBusy(true);
+    let id: string | null = null;
     try {
-      const position = await currentPosition();
-      const id = crypto.randomUUID();
+      const position = await readResponsePosition();
+      id = crypto.randomUUID();
+      // Shown to others right away only when already within 1 km of the fire;
+      // otherwise the location loop publishes on entering the radius.
+      const distanceM = haversineM(position.coords.latitude, position.coords.longitude, fireIncident.lat, fireIncident.lng);
+      const plan = planResponseSharing({ ...INITIAL_SHARING_STATE, published: false },
+        { lat: position.coords.latitude, lng: position.coords.longitude }, distanceM, Infinity, Date.now());
       const batch = writeBatch(db);
       batch.set(doc(db, 'stationResponses', id), {
         firePinId: fireIncident.id,
@@ -253,16 +242,10 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         lastLocationAt: serverTimestamp(),
       });
       batch.update(doc(db, 'users', user.uid), { activeResponseId: id });
-      batch.set(doc(db, 'stations', responseStationId, 'unitLocations', id), {
-        responseId: id,
-        stationId: responseStationId,
-        stationName: responseStationName,
-        public: true,
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        updatedAt: serverTimestamp(),
-      });
+      if (plan.publish) {
+        batch.set(doc(db, 'stations', responseStationId, 'unitLocations', id),
+          responseMarker({ responseId: id, stationId: responseStationId, stationName: responseStationName }, position.coords));
+      }
       const notice = doc(db, 'stations', responseStationId, 'notifications', `${id}_start`);
       batch.set(notice, {
         type: 'response-started',
@@ -272,8 +255,12 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
         message: `${user.displayName?.trim() || user.email || 'A member'} started responding.`,
         createdAt: serverTimestamp(),
       });
+      // Prime before committing: the response listener fires on the local write.
+      // The create itself sets lastLocationAt, so it counts as the heartbeat.
+      primeResponseSharing(id, { ...plan.next, lastHeartbeatAt: Date.now() }, distanceM, plan.nextCheckMs);
       await batch.commit();
     } catch (err) {
+      if (id) forgetResponseSharing(id);
       console.error('Could not start response:', err);
       setError(err instanceof Error ? err.message : 'Could not start the response.');
     } finally {
@@ -324,7 +311,6 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
 
   if (!user) return null;
   const hasPendingStationRequest = stationMembershipStatus === 'pending';
-  const activeResponse = activeResponses[0];
   const canShowResponseAction = canRespond && (!!fireIncident || !!activeResponse) && (!activeResponse
     || !activeResponse.firePinId || activeResponse.firePinId === fireIncident?.id);
 
@@ -339,11 +325,21 @@ export default function StationResponseControl({ fireIncident, actionContainer, 
     </button>
   ) : null;
 
+  const shownVisibility = canShowResponseAction && activeResponse && visibility?.responseId === activeResponse.id ? visibility : null;
+  const responseStatus = shownVisibility ? (
+    <p role="status" className={`flex items-center gap-1.5 text-[11px] font-semibold ${shownVisibility.phase === 'visible' ? 'text-emerald-600 dark:text-emerald-400' : 'text-neutral-500 dark:text-neutral-400'}`}>
+      {shownVisibility.phase === 'visible' ? <FiEye className="h-3 w-3 shrink-0" /> : <FiEyeOff className="h-3 w-3 shrink-0" />}
+      <span>{visibilityText(shownVisibility)}</span>
+    </p>
+  ) : null;
+
   return (
     <>
       {actionContainer && responseAction && createPortal(responseAction, actionContainer)}
+      {statusContainer && actionContainer && responseStatus && createPortal(<div className="px-3.5 pt-2">{responseStatus}</div>, statusContainer)}
       {((canShowResponseAction && !actionContainer) || hasPendingStationRequest || error) && <div className="pointer-events-auto absolute bottom-[calc(6.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[2500] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-xl bg-white/95 p-2 shadow-xl backdrop-blur dark:bg-neutral-900/95">
         {!actionContainer && responseAction}
+        {!actionContainer && responseStatus && <div className="px-1">{responseStatus}</div>}
         {hasPendingStationRequest && <span className="px-2 text-xs font-semibold text-amber-700">Station request pending approval</span>}
         {error && <span role="alert" className="max-w-56 text-xs text-red-600">{error}</span>}
       </div>}

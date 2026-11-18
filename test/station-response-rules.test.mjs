@@ -134,7 +134,20 @@ try {
   const noticePath = `stations/DILIMAN-01/notifications/${responseId}_start`;
 
   const memberDb = dbFor('member-1');
-  const buildStart = (incident = {}) => {
+  // The fire pin is at 14.65, 121.06. Offsets due north, in metres.
+  const METRES_PER_DEGREE_LAT = 111_194.9;
+  const northOfFire = metres => ({ lat: 14.65 + metres / METRES_PER_DEGREE_LAT, lng: 121.06 });
+  const marker = (position, overrides = {}) => ({
+    responseId,
+    stationId: 'DILIMAN-01',
+    stationName: 'Diliman Fire Station',
+    public: true,
+    ...position,
+    accuracy: 8,
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  });
+  const buildStart = (incident = {}, location = { lat: 14.65, lng: 121.06 }) => {
   const start = memberDb.batch();
   start.update(memberDb.doc('users/member-1'), { activeResponseId: responseId });
   start.set(memberDb.doc(responsePath), {
@@ -149,16 +162,7 @@ try {
     endedAt: null,
     lastLocationAt: serverTimestamp(),
   });
-  start.set(memberDb.doc(locationPath), {
-    responseId,
-    stationId: 'DILIMAN-01',
-    stationName: 'Diliman Fire Station',
-    public: true,
-    lat: 14.65,
-    lng: 121.06,
-    accuracy: 8,
-    updatedAt: serverTimestamp(),
-  });
+  if (location) start.set(memberDb.doc(locationPath), marker(location));
   start.set(memberDb.doc(noticePath), {
     type: 'response-started',
     uid: 'member-1',
@@ -174,7 +178,41 @@ try {
   await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst').update({ status: 'cleared' }));
   await assertFails(buildStart().commit());
   await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst').update({ status: 'active' }));
-  await assertSucceeds(buildStart().commit());
+
+  // Responders are shown to others only within 1 km of their fire.
+  // A start from outside 1 km may not publish a marker...
+  await assertFails(buildStart({}, northOfFire(1_500)).commit());
+  // ...but the response itself starts without one.
+  await assertSucceeds(buildStart({}, null).commit());
+  let startedWithoutMarker;
+  await env.withSecurityRulesDisabled(async ctx => {
+    startedWithoutMarker = await ctx.firestore().doc(locationPath).get();
+  });
+  assert.equal(startedWithoutMarker.exists, false);
+  const noMarkers = await assertSucceeds(dbFor('member-2').collectionGroup('unitLocations').where('public', '==', true).get());
+  assert.equal(noMarkers.size, 0);
+  // Publishing is refused outside the radius (10 m model allowance) and
+  // accepted on entering it.
+  await assertFails(memberDb.doc(locationPath).set(marker(northOfFire(1_500))));
+  await assertFails(memberDb.doc(locationPath).set(marker(northOfFire(1_020))));
+  await assertSucceeds(memberDb.doc(locationPath).set(marker(northOfFire(990))));
+  // The check follows the live pin: after the fire is moved 2 km away, the
+  // same spot is outside the radius.
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst')
+    .update({ lat: 14.65 + 2_000 / METRES_PER_DEGREE_LAT }));
+  await assertFails(memberDb.doc(locationPath).set(marker(northOfFire(990))));
+  await assertSucceeds(memberDb.doc(locationPath).set(marker(northOfFire(1_990))));
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst')
+    .update({ lat: 14.65 }));
+  await assertSucceeds(memberDb.doc(locationPath).set(marker({ lat: 14.65, lng: 121.06 })));
+  // A responder whose fire was cleared cannot publish.
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst').update({ status: 'cleared' }));
+  await assertFails(memberDb.doc(locationPath).set(marker(northOfFire(100))));
+  await env.withSecurityRulesDisabled(context => context.firestore().doc('firePins/abcdefghijklmnopqrst').update({ status: 'active' }));
+  // Leaving the radius removes the marker; outside it only the heartbeat is written.
+  await assertSucceeds(memberDb.doc(locationPath).delete());
+  await assertSucceeds(memberDb.doc(responsePath).update({ lastLocationAt: serverTimestamp() }));
+  await assertSucceeds(memberDb.doc(locationPath).set(marker({ lat: 14.65, lng: 121.06 })));
 
   const otherDb = dbFor('member-2');
   await assertSucceeds(headDb.doc(responsePath).get());
@@ -195,16 +233,7 @@ try {
   await assertFails(memberDb.doc(locationPath).update({ public: false }));
 
   await assertSucceeds(memberDb.doc(locationPath).delete());
-  await assertSucceeds(memberDb.doc(locationPath).set({
-    responseId,
-    stationId: 'DILIMAN-01',
-    stationName: 'Diliman Fire Station',
-    public: true,
-    lat: 14.66,
-    lng: 121.07,
-    accuracy: 7,
-    updatedAt: serverTimestamp(),
-  }));
+  await assertSucceeds(memberDb.doc(locationPath).set(marker({ lat: 14.655, lng: 121.063 }, { accuracy: 7 })));
 
   // An active, approved responder may update only the GPS heartbeat.
   await assertSucceeds(memberDb.doc(responsePath).update({

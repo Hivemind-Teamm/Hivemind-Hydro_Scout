@@ -42,6 +42,7 @@ import { useAuth } from '@/lib/auth-context';
 import { db } from '@/lib/firebase';
 import { useSharedFirePins } from '@/lib/use-shared-fire-pins';
 import { useHydrantOccupancy } from '@/lib/use-hydrant-occupancy';
+import { useResponseVisibility } from '@/lib/use-response-location-sharing';
 import { recordHydrantCheck, useHydrantChecking, type HydrantCheckStatus } from '@/lib/hydrant-checking';
 import { useIsMobile } from '@/lib/use-media-query';
 import { MOBILE_TOP_CONTROLS_BOTTOM } from './mapConfig';
@@ -101,6 +102,7 @@ export default function HydroScoutDashboard() {
   const [mapViewport, setMapViewport] = useState<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const [is3D, setIs3D] = useState(false);
   const [responseActionContainer, setResponseActionContainer] = useState<HTMLDivElement | null>(null);
+  const [responseStatusContainer, setResponseStatusContainer] = useState<HTMLDivElement | null>(null);
   const [activeStatuses, setActiveStatuses] = useState<ReadonlySet<HydrantStatus>>(() => new Set(DEFAULT_VISIBLE_STATUSES));
   const [selectedHydrant, setSelectedHydrant] = useState<Hydrant | null>(null);
   // Place chosen in the search bar; shown until the search is cleared. Never
@@ -584,12 +586,26 @@ export default function HydroScoutDashboard() {
   const fireRanking = fireSearch;
   const fireSearchRadiusM = fireSearch?.radiusM ?? 1000;
   const currentResponseIncident = activeResponseIncident?.responseId === activeResponseId ? activeResponseIncident : null;
-  const activeResponseSearchRadiusM = useMemo(() => currentResponseIncident
-    ? findHydrantsNearFire(hydrantsForFire, currentResponseIncident).radiusM
-    : null, [currentResponseIncident, hydrantsForFire]);
-  const hideUnitLocationsWhileResponding = !!activeResponseId && (!userLocation || !currentResponseIncident
-    || haversineM(userLocation.lat, userLocation.lng, currentResponseIncident.lat, currentResponseIncident.lng)
-      > (activeResponseSearchRadiusM ?? 1000));
+  // Follow the live pin if the fire was moved after the response started.
+  const liveResponsePin = currentResponseIncident
+    ? sharedFires.pins.find(pin => pin.id === currentResponseIncident.firePinId)
+    : undefined;
+  const responseFireLat = liveResponsePin?.lat ?? currentResponseIncident?.lat;
+  const responseFireLng = liveResponsePin?.lng ?? currentResponseIncident?.lng;
+  const activeResponseSearchRadiusM = useMemo(() => responseFireLat !== undefined && responseFireLng !== undefined
+    ? findHydrantsNearFire(hydrantsForFire, { lat: responseFireLat, lng: responseFireLng }).radiusM
+    : null, [responseFireLat, responseFireLng, hydrantsForFire]);
+  const responderHideRadiusM = activeResponseSearchRadiusM ?? 1000;
+  // Distance from the response's own GPS loop; selecting a boolean re-renders
+  // the dashboard only when the responder crosses the radius.
+  const responderOutsideRange = useResponseVisibility(visibility => (
+    activeResponseId && visibility?.responseId === activeResponseId && visibility.distanceM !== null
+      ? visibility.distanceM > responderHideRadiusM
+      : null
+  ));
+  const hideUnitLocationsWhileResponding = !!activeResponseId && (responderOutsideRange
+    ?? (!userLocation || responseFireLat === undefined || responseFireLng === undefined
+      || haversineM(userLocation.lat, userLocation.lng, responseFireLat, responseFireLng) > responderHideRadiusM));
   const fireSupply = useMemo(
     () => (fireRanking ? pickSupplyHydrant(fireRanking.inRadius, fireSupplyChoice) : null),
     [fireRanking, fireSupplyChoice],
@@ -1175,6 +1191,7 @@ export default function HydroScoutDashboard() {
         canEdit={canEditFire}
         onDismiss={() => setSelectedFireId(null)}
         responseActionRef={setResponseActionContainer}
+        responseStatusRef={setResponseStatusContainer}
         onMinimize={isMobile ? () => setFirePanelMinimized(true) : undefined}
       />
     );
@@ -1350,7 +1367,8 @@ export default function HydroScoutDashboard() {
         onToggleFirePin={handleToggleFirePinMode}
         onToggleChecking={() => setShowHydrantChecking(true)}
       />
-      <StationResponseControl fireIncident={fireIncident} actionContainer={responseActionContainer} onViewFireLocation={handleViewFireNotification} />
+      <StationResponseControl fireIncident={fireIncident} firePins={sharedFires.pins} actionContainer={responseActionContainer}
+        statusContainer={responseStatusContainer} onViewFireLocation={handleViewFireNotification} />
       {sharedFires.error && <p role="alert" className="pointer-events-auto absolute bottom-24 left-4 right-20 z-[2400] max-w-sm rounded-lg bg-white/95 p-3 text-xs text-red-600 shadow dark:bg-neutral-900">{sharedFires.error}</p>}
 
       {/* Fire-pin mode hint. Bottom-center on desktop (clear of the search bar
