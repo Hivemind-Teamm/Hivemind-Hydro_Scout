@@ -46,7 +46,7 @@ function NotificationDialog({ title, category, categoryColor, children, onClose 
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}
     className="notification-details-dialog m-auto max-h-[85dvh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-2xl font-sans shadow-2xl backdrop:bg-black/70">
     <header className="notification-details-header flex items-start justify-between gap-4 px-5 py-4">
-      <div className="min-w-0"><p style={{ color: categoryColor }} className="text-[10px] font-extrabold uppercase tracking-[0.16em] [text-shadow:0_1px_8px_rgba(0,0,0,0.5)]">{category}</p><h2 id="notification-detail-title" className="mt-1 text-sm font-extrabold leading-relaxed text-white">{title}</h2></div>
+      <div className="min-w-0"><p className="inline-flex rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] shadow-[0_2px_8px_rgba(0,0,0,0.25)]" style={{ color: categoryColor }}>{category}</p><h2 id="notification-detail-title" className="mt-1 text-sm font-extrabold leading-relaxed text-white">{title}</h2></div>
       <button type="button" onClick={onClose} aria-label="Close notification details" className="rounded-full border border-white/30 p-1.5 text-white transition hover:bg-white/15"><FiX /></button>
     </header>
     <div className="notification-details-content px-5 py-5">{children}</div>
