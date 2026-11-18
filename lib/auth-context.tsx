@@ -265,21 +265,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!pendingStationRequest) return;
     const { uid, requestId } = pendingStationRequest;
-    return onSnapshot(doc(db, "stationControlSessions", uid, "requests", requestId), async snapshot => {
-      const status = snapshot.data()?.status;
-      if ((status !== "approved" && status !== "rejected") || pendingRequestProcessing.current) return;
+    let disposed = false;
+
+    async function completeApprovedStationLogin() {
+      if (pendingRequestProcessing.current || disposed) return;
       pendingRequestProcessing.current = true;
       try {
         const firebaseUser = auth.currentUser;
         if (!firebaseUser || firebaseUser.uid !== uid) return;
-        if (status === "rejected") {
-          setStationTakeoverRequired(false);
-          setPendingStationRequest(null);
-          await firebaseSignOut(auth);
-          return;
-        }
         const [profile, idToken] = await Promise.all([getUserProfile(uid), firebaseUser.getIdToken(true)]);
         await syncSessionCookie(idToken);
+        if (disposed) return;
         setUser(firebaseUser);
         applyProfile(profile.data ?? null);
         setStationTakeoverRequired(false);
@@ -289,7 +285,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } finally {
         pendingRequestProcessing.current = false;
       }
+    }
+
+    // The listener gives immediate feedback when Firestore is reachable. A
+    // server-verified retry below is the fallback for browsers or extensions
+    // that delay/block Firestore's live connection.
+    const unsubscribe = onSnapshot(doc(db, "stationControlSessions", uid, "requests", requestId), async snapshot => {
+      const status = snapshot.data()?.status;
+      if ((status !== "approved" && status !== "rejected") || pendingRequestProcessing.current) return;
+      try {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser || firebaseUser.uid !== uid) return;
+        if (status === "rejected") {
+          setStationTakeoverRequired(false);
+          setPendingStationRequest(null);
+          await firebaseSignOut(auth);
+          return;
+        }
+        await completeApprovedStationLogin();
+      } catch (error) {
+        console.error("Failed to process station-session request:", error);
+      }
     }, error => console.error("Failed to watch station-session request:", error));
+
+    async function retryClaimAfterApproval() {
+      if (disposed || pendingRequestProcessing.current) return;
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser || firebaseUser.uid !== uid) return;
+      try {
+        await claimStationControl(await firebaseUser.getIdToken(), uid);
+      } catch (error) {
+        // A conflict is expected until the active browser approves or exits.
+        if (!(error instanceof StationSessionActiveError)) {
+          console.error("Failed to check approved station session:", error);
+        }
+        return;
+      }
+      await completeApprovedStationLogin();
+    }
+
+    const retryTimer = window.setInterval(() => { void retryClaimAfterApproval(); }, 2000);
+    void retryClaimAfterApproval();
+    return () => {
+      disposed = true;
+      window.clearInterval(retryTimer);
+      unsubscribe();
+    };
   }, [pendingStationRequest]);
 
   useEffect(() => {
