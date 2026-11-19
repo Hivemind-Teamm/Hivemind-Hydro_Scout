@@ -158,8 +158,13 @@ test('server-backed location consent enforces the full lifecycle', async () => {
       ),
     );
 
-    // A forged revision must not authorize consent.
-    await assertFails(
+    // Governance publication is temporarily optional. A personal responder
+    // can record consent even after the governance document is unavailable.
+    await env.withSecurityRulesDisabled(async context => {
+      await deleteDoc(doc(context.firestore(), governancePath));
+    });
+
+    await assertSucceeds(
       setDoc(
         doc(memberDb, consentPath),
         consentData(
@@ -202,7 +207,8 @@ test('server-backed location consent enforces the full lifecycle', async () => {
 
     console.log('DECLINED CONSENT: publication denied, deletion permitted');
 
-    // Old consent must not authorize a newer published notice.
+    // A changed governance document does not invalidate consent while the
+    // temporary governance prerequisite is disabled.
     await assertSucceeds(
       setDoc(
         doc(memberDb, consentPath),
@@ -221,11 +227,11 @@ test('server-backed location consent enforces the full lifecycle', async () => {
       });
     });
 
-    await assertFails(
+    await assertSucceeds(
       setDoc(doc(memberDb, markerPath), markerData()),
     );
 
-    console.log('OUTDATED CONSENT: publication denied');
+    console.log('GOVERNANCE OPTIONAL: publication remains permitted');
 
     const storedConsent = await assertSucceeds(
       getDoc(doc(memberDb, consentPath)),

@@ -323,19 +323,17 @@ test('switching station invalidates the previous station consent', t => {
   assert.equal(h.state.canUseDeviceLocation, true);
 });
 
-test('older governance timestamp does not authorize station GPS', t => {
+test('governance timestamp does not block station GPS while the prerequisite is disabled', t => {
   const h = harness();
   t.after(h.dispose);
   h.profile('station-1');
   h.consent('granted', { updatedAt: new MockTimestamp(99, 5) });
-  assert.equal(h.state.canUseDeviceLocation, false);
-  h.consent('granted');
   assert.equal(h.state.canUseDeviceLocation, true);
   h.setGovernance({
     revision: 'published:101:0',
     publishedAt: new MockTimestamp(101, 0),
   });
-  assert.equal(h.state.canUseDeviceLocation, false);
+  assert.equal(h.state.canUseDeviceLocation, true);
 });
 
 test('a local refusal stays effective across storage synchronization', t => {

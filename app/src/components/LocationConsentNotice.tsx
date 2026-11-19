@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePrivacyGovernance } from '@/lib/privacy-governance';
+import { LOCATION_GOVERNANCE_REQUIRED } from '@/lib/use-location-consent';
 
 export default function LocationConsentNotice({ granted, storageError, savingConsent, onAllow, onDecline, onClose }: {
   granted: boolean; storageError: boolean; savingConsent: boolean; onAllow: () => void; onDecline: () => void; onClose: () => void;
@@ -31,18 +32,18 @@ export default function LocationConsentNotice({ granted, storageError, savingCon
         <p><strong>Your choice and rights.</strong> Use “Location privacy” to withdraw consent. Withdrawal immediately stops location sharing by this browser. Removal of an already-published live location requires server connectivity and may be delayed while offline; end your response separately to update its status. Contact the controller to request access, correction or deletion, object to processing, or exercise other rights under RA 10173. You may also raise a complaint with the National Privacy Commission.</p>
         <p><strong>Map services.</strong> If you use routing or nearby-hydrant searches, your coordinates may also be sent to Mapbox or the routing provider configured by the app. Browser location estimates can be inaccurate.</p>
         <p><strong>Consent record.</strong> Your account, station, decision, notice version and decision time are recorded in Cloud Firestore when successfully saved. This browser also remembers your choice. A new grant requires server verification before location sharing is enabled. Clearing browser data does not delete a server consent record. You must start a response separately before sharing location.</p>
-        <p><strong>Controller:</strong> {controller || 'Not yet configured by the project administrator.'}<br /><strong>Privacy contact:</strong> {contact || 'Not yet configured by the project administrator.'}</p>
-        {governanceLoading && <p role="status" className="rounded-lg bg-neutral-100 p-3 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">Checking published privacy contact details...</p>}
-        {governanceError && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-amber-900">Published privacy details could not be verified. Displayed values may be deployment defaults.</p>}
-        {!governanceLoading && (!controller || !contact) && <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Controller and privacy contact details are pending configuration.</p>}
-        {!governanceLoading && !governanceRevision && <p role="status" className="rounded-lg bg-amber-50 p-3 text-amber-900">Location sharing consent is unavailable until published privacy governance details can be verified. You can continue without sharing.</p>}
+        {LOCATION_GOVERNANCE_REQUIRED && <p><strong>Controller:</strong> {controller || 'Not yet configured by the project administrator.'}<br /><strong>Privacy contact:</strong> {contact || 'Not yet configured by the project administrator.'}</p>}
+        {LOCATION_GOVERNANCE_REQUIRED && governanceLoading && <p role="status" className="rounded-lg bg-neutral-100 p-3 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">Checking published privacy contact details...</p>}
+        {LOCATION_GOVERNANCE_REQUIRED && governanceError && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-amber-900">Published privacy details could not be verified. Displayed values may be deployment defaults.</p>}
+        {LOCATION_GOVERNANCE_REQUIRED && !governanceLoading && (!controller || !contact) && <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Controller and privacy contact details are pending configuration.</p>}
+        {LOCATION_GOVERNANCE_REQUIRED && !governanceLoading && !governanceRevision && <p role="status" className="rounded-lg bg-amber-50 p-3 text-amber-900">Location sharing consent is unavailable until published privacy governance details can be verified. You can continue without sharing.</p>}
         <a href="https://privacy.gov.ph/data-privacy-act-/" target="_blank" rel="noreferrer" className="text-red-600 underline">Read the Data Privacy Act of 2012</a>
       </div>
       {storageError && <p role="alert" className="mt-3 text-sm text-red-600">Your choice could not be fully saved or verified. Check your connection and try again. A new grant will not enable location sharing until confirmed by the server.</p>}
       {savingConsent && <p role="status" className="mt-3 text-sm text-neutral-600 dark:text-neutral-300">Saving your consent to the server. Location sharing stays disabled until the server confirms it.</p>}
       <div className="mt-5 flex flex-wrap gap-3">
         <button type="button" onClick={onDecline} className="flex-1 rounded-lg border border-neutral-300 px-4 py-3 text-sm font-semibold">{granted ? 'Withdraw consent' : 'Continue without sharing'}</button>
-        <button type="button" onClick={onAllow} disabled={governanceLoading || !!governanceError || !governanceRevision || savingConsent} className="flex-1 rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{savingConsent ? 'Saving consent...' : 'I consent to location sharing'}</button>
+        <button type="button" onClick={onAllow} disabled={savingConsent || (LOCATION_GOVERNANCE_REQUIRED && (governanceLoading || !!governanceError || !governanceRevision))} className="flex-1 rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{savingConsent ? 'Saving consent...' : 'I consent to location sharing'}</button>
         {granted && <button type="button" onClick={onClose} className="w-full text-sm underline">Close notice</button>}
       </div>
     </dialog>

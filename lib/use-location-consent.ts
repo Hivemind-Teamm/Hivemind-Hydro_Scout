@@ -46,6 +46,11 @@ interface WriteState {
 // Only a verified Firestore consent record can authorize GPS sharing.
 let nextWriteId = 0;
 
+// Temporary operational setting: retain explicit, server-recorded consent but
+// do not require an administrator-published controller/contact document before
+// a responder can enable location sharing.
+export const LOCATION_GOVERNANCE_REQUIRED = false;
+
 export function useLocationConsent(uid: string | undefined) {
   const governance = usePrivacyGovernance();
 
@@ -184,9 +189,14 @@ export function useLocationConsent(uid: string | undefined) {
     serverConsent.stationId === stationId &&
     serverConsent.verified &&
     serverConsent.noticeVersion === LOCATION_NOTICE_VERSION &&
-    publishedAt !== null &&
-    serverConsent.governanceUpdatedAt !== null &&
-    serverConsent.governanceUpdatedAt.isEqual(publishedAt);
+    (
+      !LOCATION_GOVERNANCE_REQUIRED ||
+      (
+        publishedAt !== null &&
+        serverConsent.governanceUpdatedAt !== null &&
+        serverConsent.governanceUpdatedAt.isEqual(publishedAt)
+      )
+    );
 
   const scopedLocalDecision =
     localDecision?.uid === uid &&
@@ -239,7 +249,11 @@ export function useLocationConsent(uid: string | undefined) {
   function decide(decision: LocationConsentDecision) {
     if (!uid || !stationId || !current || !profile.ready) return;
 
-    if (decision === 'granted' && (!verifiedRevision || !publishedAt)) {
+    if (
+      decision === 'granted' &&
+      LOCATION_GOVERNANCE_REQUIRED &&
+      (!verifiedRevision || !publishedAt)
+    ) {
       return;
     }
 

@@ -337,8 +337,9 @@ service cloud.firestore {
     }
     // ---------- Server-backed personal location consent ----------
     // A consent record is scoped to one authenticated person and
-    // their current response station. A changed governance notice
-    // invalidates previously granted consent.
+    // their current response station. The governance publication
+    // prerequisite is temporarily disabled; explicit server-recorded
+    // consent and station authorization still remain required.
     match /users/{uid}/locationConsents/{stationId} {
       allow get: if isSignedIn() && request.auth.uid == uid;
       allow list: if false;
@@ -359,15 +360,13 @@ service cloud.firestore {
           && data.stationId == stationId
           && data.decision in ['granted', 'declined']
           && data.noticeVersion == '2026-10-23-v5'
+          && data.governanceUpdatedAt is timestamp
           && data.updatedAt == request.time
           && (
             data.decision == 'declined'
             || (
               (isApprovedStationMember(stationId)
                 || isPersonalAdminResponseStation(stationId))
-              && exists(/databases/$(database)/documents/appSettings/locationPrivacy)
-              && data.governanceUpdatedAt ==
-                get(/databases/$(database)/documents/appSettings/locationPrivacy).data.updatedAt
             )
           );
       }
@@ -686,19 +685,15 @@ service cloud.firestore {
 
     // A response-location write requires a currently granted,
     // server-backed personal consent for the responder's station.
-    // Compare Firestore timestamps directly, not browser clock values.
+    // The published-governance timestamp match is temporarily disabled.
     function hasCurrentResponseLocationConsent(stationId) {
       let consentPath = /databases/$(database)/documents/users/$(request.auth.uid)/locationConsents/$(stationId);
-      let privacyPath = /databases/$(database)/documents/appSettings/locationPrivacy;
       return isSignedIn()
         && exists(consentPath)
-        && exists(privacyPath)
         && get(consentPath).data.uid == request.auth.uid
         && get(consentPath).data.stationId == stationId
         && get(consentPath).data.decision == 'granted'
-        && get(consentPath).data.noticeVersion == '2026-10-23-v5'
-        && get(consentPath).data.governanceUpdatedAt ==
-          get(privacyPath).data.updatedAt;
+        && get(consentPath).data.noticeVersion == '2026-10-23-v5';
     }
     function isValidUnitLocation(responseId) {
       let data = request.resource.data;
