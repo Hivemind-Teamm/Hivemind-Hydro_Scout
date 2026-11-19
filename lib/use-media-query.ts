@@ -24,12 +24,14 @@ export function useMediaQuery(query: string): boolean {
 }
 
 /**
- * True for phone-sized screens in either orientation. A landscape phone can
- * be wider than 767 CSS pixels, but still has a short, touch-first viewport.
- * Keep it on the mobile dashboard instead of exposing the desktop overlay.
+ * True for phone-sized screens in either orientation, as well as a desktop
+ * browser window that has been reduced to the same usable viewport. This
+ * keeps a narrow portrait window on the portrait UI and a short, constrained
+ * landscape window on the landscape UI instead of letting desktop chrome
+ * collide with itself.
  */
 export function useIsMobile(): boolean {
-  return useMediaQuery('(max-width: 767px), (pointer: coarse) and (max-height: 900px)');
+  return useMediaQuery('(orientation: portrait) and (max-width: 900px), (pointer: coarse) and (max-height: 900px), (orientation: landscape) and (max-height: 719px) and (max-width: 1180px)');
 }
 
 /**
@@ -41,7 +43,7 @@ export function useIsShort(): boolean {
   return useMediaQuery('(max-height: 719px)');
 }
 
-/** A touch-first device in landscape, including Android and iOS phones. */
+/** A touch-first or compact browser viewport in landscape. */
 export function useIsMobileLandscape(): boolean {
-  return useMediaQuery('(pointer: coarse) and (orientation: landscape)');
+  return useMediaQuery('(pointer: coarse) and (orientation: landscape), (orientation: landscape) and (max-height: 719px) and (max-width: 1180px)');
 }
