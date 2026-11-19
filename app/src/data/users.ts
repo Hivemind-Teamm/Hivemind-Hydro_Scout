@@ -104,6 +104,7 @@ export interface AppUser {
 
   // F1: stable station identifier used across features.
   stationId: string | null;
+  stationMembershipStatus: 'none' | 'pending' | 'approved' | 'rejected';
 
   // F1: barangays inside this station/account's Area of Responsibility.
   aorBarangays: string[];
@@ -212,6 +213,12 @@ export function userFromDoc(
       'Unassigned',
 
     stationId,
+    stationMembershipStatus:
+      d.stationMembershipStatus === 'approved' ||
+      d.stationMembershipStatus === 'pending' ||
+      d.stationMembershipStatus === 'rejected'
+        ? d.stationMembershipStatus
+        : 'none',
 
     aorBarangays: readAorBarangays(
       d.aorBarangays,
