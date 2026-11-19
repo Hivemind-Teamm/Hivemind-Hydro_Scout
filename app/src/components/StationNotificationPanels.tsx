@@ -152,7 +152,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     <button disabled={loading} onClick={() => void openProfile(uid, { name, role }, markRead)}
       className="pointer-events-auto relative font-semibold text-[#e0353b] hover:underline focus-visible:outline-2 focus-visible:outline-red-500 disabled:opacity-50">{name}</button>
   );
-  const panel = 'station-activity-panel pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] h-[70dvh] w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-white font-sans shadow-2xl dark:bg-neutral-900';
+  const panel = 'station-activity-panel pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] flex h-[70dvh] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl bg-white font-sans shadow-2xl dark:bg-neutral-900';
   const scrollActivityFromPanel = (delta: number) => {
     const panel = panelScrollRef.current;
     if (!panel || panel.scrollHeight <= panel.clientHeight) return false;
@@ -172,13 +172,13 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       onClick={activityOpen ? closeActivity : closeMembers}
       className="pointer-events-auto absolute inset-0 z-[4000] bg-black/25" />}
     {(activityOpen || membersOpen) && <section aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}
-      onWheel={event => { if (scrollActivityFromPanel(event.deltaY)) event.preventDefault(); }}
-      onTouchStart={event => { panelTouchY.current = event.touches[0]?.clientY ?? null; }}
-      onTouchMove={event => { const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollActivityFromPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
+      onWheel={event => { if (isMobile && scrollActivityFromPanel(event.deltaY)) event.preventDefault(); }}
+      onTouchStart={event => { if (isMobile) panelTouchY.current = event.touches[0]?.clientY ?? null; }}
+      onTouchMove={event => { if (!isMobile) return; const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollActivityFromPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
       onTouchEnd={() => { panelTouchY.current = null; }}>
-      <button onClick={activityOpen ? closeActivity : closeMembers} aria-label={`Close ${(activityOpen ? 'station activity' : 'member approvals')}`} className={`absolute right-3 top-2 z-20 rounded p-2 transition-colors ${closeOverContent ? 'bg-white/90 text-[#e0353b] shadow-sm hover:bg-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}><FiX /></button>
-      <div ref={panelScrollRef} onScroll={event => setCloseOverContent(event.currentTarget.scrollTop > 28)} className="scroll-fade h-full overflow-y-auto overscroll-contain">
-      <div className={isMobile ? undefined : 'sticky top-0 z-10 bg-white dark:bg-neutral-900'}>
+      <button onClick={activityOpen ? closeActivity : closeMembers} aria-label={`Close ${(activityOpen ? 'station activity' : 'member approvals')}`} className={`absolute right-3 top-2 z-20 rounded p-2 transition-colors ${isMobile && closeOverContent ? 'bg-white/90 text-[#e0353b] shadow-sm hover:bg-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}><FiX /></button>
+      <div ref={isMobile ? panelScrollRef : undefined} onScroll={isMobile ? event => setCloseOverContent(event.currentTarget.scrollTop > 28) : undefined} className={isMobile ? 'scroll-fade h-full overflow-y-auto overscroll-contain' : 'contents'}>
+      <div className={isMobile ? undefined : 'shrink-0 bg-white dark:bg-neutral-900'}>
         {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates') : header('Member approvals', 'Pending membership requests')}
         <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification to read it. In daily response groups, expand each entry to mark it read. Times are shown in PHT.</p>
         {activityOpen && notifications.length > 0 && <div className="flex min-h-10 items-center justify-end gap-2 border-b border-neutral-100 px-4 py-1.5 text-[11px] dark:border-neutral-800">
@@ -190,6 +190,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
         </div>}
         {activityOpen && isGlobalAdmin && <div className="border-b border-neutral-100 px-4 py-2.5 dark:border-neutral-800"><input type="search" value={stationSearch} onChange={event => setStationSearch(event.target.value)} aria-label="Filter station activity by station" placeholder="Search station ID or name" className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-xs text-neutral-800 outline-none focus:border-[#e0353b] dark:border-neutral-700 dark:text-neutral-100" /></div>}
       </div>
+      <div ref={!isMobile ? panelScrollRef : undefined} className={isMobile ? undefined : 'scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain'}>
       {(error || notificationError) && <p role="alert" className="px-4 py-2 text-xs text-red-600">{error || notificationError}</p>}
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}
       <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -289,6 +290,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           </div>
         </article>)}
         {(activityOpen ? !visibleNotifications.length : !requests.length) && <p className="px-4 py-8 text-center text-xs text-neutral-400">{activityOpen ? (isGlobalAdmin && stationSearch ? 'No activity matches that station.' : notificationsCleared ? 'All caught up. New activity will appear here.' : 'No station activity yet.') : 'No pending member requests.'}</p>}
+      </div>
       </div>
       </div>
     </section>}

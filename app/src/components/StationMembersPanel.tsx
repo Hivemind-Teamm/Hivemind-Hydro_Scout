@@ -25,6 +25,7 @@ export default function StationMembersPanel({ stationId, stationName, responding
   const [search, setSearch] = useState('');
   const [profile, setProfile] = useState<ViewingUser | null>(null);
   const isMobile = useIsMobile();
+  const [closeOverContent, setCloseOverContent] = useState(false);
   const panelScrollRef = useRef<HTMLDivElement>(null);
   const panelTouchY = useRef<number | null>(null);
   useEffect(() => {
@@ -68,12 +69,13 @@ export default function StationMembersPanel({ stationId, stationName, responding
   };
   return <>
     <button type="button" aria-label="Close station members" onClick={onClose} className="pointer-events-auto absolute inset-0 z-[4000] bg-black/25" />
-    <section ref={panelScrollRef} aria-label="Station members" className={`station-activity-panel pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] w-[min(28rem,calc(100vw-2rem))] rounded-xl bg-white shadow-2xl dark:bg-neutral-900 ${isMobile ? 'h-[70dvh] overflow-y-auto overscroll-contain' : 'flex max-h-[75dvh] flex-col overflow-hidden'}`}
+    <section aria-label="Station members" className={`station-activity-panel pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900 ${isMobile ? 'h-[70dvh]' : 'flex max-h-[75dvh] flex-col'}`}
       onWheel={event => { if (isMobile && scrollPanel(event.deltaY)) event.preventDefault(); }}
       onTouchStart={event => { if (isMobile) panelTouchY.current = event.touches[0]?.clientY ?? null; }}
       onTouchMove={event => { if (!isMobile) return; const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
       onTouchEnd={() => { panelTouchY.current = null; }}>
-      {isMobile && <button type="button" onClick={onClose} aria-label="Close station members" className="absolute right-3 top-2 z-20 rounded p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>}
+      {isMobile && <button type="button" onClick={onClose} aria-label="Close station members" className={`absolute right-3 top-2 z-20 rounded p-2 transition-colors ${closeOverContent ? 'bg-white/90 text-[#e0353b] shadow-sm hover:bg-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}><FiX /></button>}
+      <div ref={isMobile ? panelScrollRef : undefined} onScroll={isMobile ? event => setCloseOverContent(event.currentTarget.scrollTop > 28) : undefined} className={isMobile ? 'h-full overflow-y-auto overscroll-contain' : 'contents'}>
       <header className="flex items-start justify-between gap-3 bg-[#e0353b] px-4 py-3 pr-12 text-white">
         <div><h2 className="text-sm font-extrabold uppercase tracking-wide">{isGlobalAdmin ? 'Station Members Directory' : 'Station Members'}</h2>
           <p className="mt-0.5 text-[11px] text-white/75">{isGlobalAdmin ? 'All stations' : `${stationName ?? stationId} · ${stationId}`}</p></div>
@@ -102,6 +104,7 @@ export default function StationMembersPanel({ stationId, stationName, responding
         {state.scope === scope && !state.loading && !state.error && !visible.length && <p className="px-4 py-6 text-center text-xs text-neutral-400">{members.length ? 'No matching members.' : 'No assigned members yet.'}</p>}
       </div>
       <p className="border-t border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">{isGlobalAdmin ? 'All assigned station members are shown. Select a member to view their profile.' : 'Pending requests stay in Member Approvals. Select a member to view their profile.'}</p>
+      </div>
     </section>
     {liveProfile && <UserProfileModal user={{ ...profile!, name: liveProfile.name, role: liveProfile.role, status: liveProfile.membership, lastLoginAt: liveProfile.lastLoginAt }} onClose={() => setProfile(null)} />}
   </>;
