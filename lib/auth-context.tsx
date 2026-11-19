@@ -493,6 +493,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <LocationConsentNotice
           granted={locationGranted}
           storageError={locationConsent.storageError}
+          savingConsent={locationConsent.savingConsent}
           onAllow={() => locationConsent.decide("granted")}
           onDecline={() => locationConsent.decide("declined")}
           onClose={locationConsent.closeNotice}

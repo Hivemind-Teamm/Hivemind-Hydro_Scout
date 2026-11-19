@@ -19,6 +19,7 @@ import StationNotificationPanels from './StationNotificationPanels';
 import StationMembersPanel from './StationMembersPanel';
 import type { JoinRequest } from '@/lib/use-station-notifications';
 import { locationTimeoutMs } from '@/lib/unit-location-expiry';
+import { ADMIN_RESPONSE_STATION_ID } from '@/lib/unit-location';
 import { formatDistance, haversineM } from '@/lib/haversine';
 import { INITIAL_SHARING_STATE, planResponseSharing, RESPONSE_VISIBILITY_RADIUS_M } from '@/lib/response-visibility';
 import {
@@ -45,7 +46,7 @@ type ResponseRecord = {
   lastLocationAt?: { toDate?: () => Date } | null;
 }
 
-const ADMIN_RESPONSE_STATION_ID = 'SYSTEM_ADMIN';
+// The shared Admin response identity is defined in lib/unit-location.ts.
 const ADMIN_RESPONSE_STATION_NAME = 'System Administration';
 
 type ResponseEndMode = 'member' | 'station-head';
@@ -71,7 +72,7 @@ function visibilityText(visibility: ResponseVisibility): string {
   switch (visibility.phase) {
     case 'visible': return `Others can see you${away}`;
     case 'hidden': return `Hidden until within ${VISIBILITY_RADIUS_LABEL}${away}`;
-    case 'paused': return 'Location sharing is off · others can’t see you';
+    case 'paused': return 'Location sharing paused · marker removal may still be pending';
     case 'unavailable': return 'Can’t get your location right now';
     default: return 'Finding your location…';
   }
@@ -89,9 +90,16 @@ export default function StationResponseControl({ fireIncident, firePins, actionC
     user, role, accountType, stationId, stationMembershipStatus,
     canUseDeviceLocation, openLocationConsent,
   } = useAuth();
+
+  // Keep the current permission available after asynchronous GPS calls.
+  const responseLocationAllowedRef = useRef(canUseDeviceLocation);
+
+  useEffect(() => {
+    responseLocationAllowedRef.current = canUseDeviceLocation;
+  }, [canUseDeviceLocation]);
   const { stations } = useStations();
   const isGlobalAdmin = role === 'admin';
-  const isPersonalAdmin = isGlobalAdmin && accountType !== 'station';
+  const isPersonalAdmin = isGlobalAdmin && accountType === 'person';
   const assignedStation = stations.find(item => item.id === stationId);
   const canRespond = !!user && (isPersonalAdmin || (accountType === 'person' && !!stationId && stationMembershipStatus === 'approved'));
   const canViewRoster = isGlobalAdmin || (role === 'head' && !!stationId);
@@ -220,6 +228,14 @@ export default function StationResponseControl({ fireIncident, firePins, actionC
     let id: string | null = null;
     try {
       const position = await readResponsePosition();
+
+      // Consent can change while the browser waits for GPS.
+      if (!responseLocationAllowedRef.current) {
+        throw new Error(
+          'Location consent changed while obtaining your position. Review Location privacy before starting a response.',
+        );
+      }
+
       id = crypto.randomUUID();
       // Shown to others right away only when already within 1 km of the fire;
       // otherwise the location loop publishes on entering the radius.
@@ -257,6 +273,12 @@ export default function StationResponseControl({ fireIncident, firePins, actionC
       });
       // Prime before committing: the response listener fires on the local write.
       // The create itself sets lastLocationAt, so it counts as the heartbeat.
+      if (!responseLocationAllowedRef.current) {
+        throw new Error(
+          'Location consent is no longer valid. Review Location privacy before starting a response.',
+        );
+      }
+
       primeResponseSharing(id, { ...plan.next, lastHeartbeatAt: Date.now() }, distanceM, plan.nextCheckMs);
       await batch.commit();
     } catch (err) {

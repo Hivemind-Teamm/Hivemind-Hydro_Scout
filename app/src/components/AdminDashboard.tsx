@@ -12,7 +12,7 @@ import { sortAccountDirectory, type AccountSort } from '@/lib/account-directory-
 // only rendered for admins; Firestore security rules are the real enforcement.
 
 import { useMemo, useRef, useState, type ComponentType, type DragEvent } from 'react';
-import { FiHome, FiMap, FiTag, FiUploadCloud, FiUsers, FiX } from 'react-icons/fi';
+import { FiHome, FiMap, FiShield, FiTag, FiUploadCloud, FiUsers, FiX } from 'react-icons/fi';
 import { useAuth } from '@/lib/auth-context';
 import AvatarPlaceholder from './AvatarPlaceholder';
 import {
@@ -30,11 +30,12 @@ import { type HydrantStatus } from '../data/hydrants';
 import PillBadge from './PillBadge';
 import BuildVersionLog from './BuildVersionLog';
 import StationAorCard from './StationAorCard';
+import PrivacyGovernanceCard from './PrivacyGovernanceCard';
 import { useStations, type Station } from '../data/stations';
 
 /* �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? Root �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? */
 
-type AdminSection = 'builds' | 'stations' | 'aor' | 'accounts' | 'import';
+type AdminSection = 'builds' | 'stations' | 'aor' | 'accounts' | 'import' | 'governance';
 
 const ADMIN_SECTIONS: { id: AdminSection; label: string; short: string; Icon: ComponentType<{ size?: number }> }[] = [
   { id: 'builds',   label: 'Build Version Log',        short: 'Builds',   Icon: FiTag },
@@ -42,6 +43,7 @@ const ADMIN_SECTIONS: { id: AdminSection; label: string; short: string; Icon: Co
   { id: 'aor',      label: 'Areas of Responsibility',  short: 'AOR',      Icon: FiMap },
   { id: 'accounts', label: 'Manage Accounts',          short: 'Accounts', Icon: FiUsers },
   { id: 'import',   label: 'Bulk Hydrant Data Import', short: 'Import',   Icon: FiUploadCloud },
+  { id: 'governance', label: 'Privacy Governance', short: 'Governance', Icon: FiShield },
 ];
 
 // Remembers the open section in this browser only.
@@ -201,6 +203,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
               />
             ))}
             {panel('import', <BulkImportCard adminName={adminName} />)}
+            {panel('governance', <PrivacyGovernanceCard />)}
           </div>
         </main>
       </div>

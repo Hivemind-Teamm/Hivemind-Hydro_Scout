@@ -85,6 +85,14 @@ service cloud.firestore {
         && currentUserData().stationId == stationId;
     }
 
+    // Personal technical administrators use a reserved response identity.
+    // Shared station accounts and ordinary members cannot claim it.
+    function isPersonalAdminResponseStation(stationId) {
+      return isAdmin()
+        && currentUserData().get('accountType', null) == 'person'
+        && stationId == 'SYSTEM_ADMIN';
+    }
+
     function validResponsePointerUpdate(uid) {
       let before = resource.data;
       let after = request.resource.data;
@@ -296,6 +304,79 @@ service cloud.firestore {
         && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
+    // ---------- Public privacy notice configuration ----------
+    // Only the specifically named privacy notice is readable.
+    // Technical Admin accounts alone may change these public details.
+    match /appSettings/{settingId} {
+      allow get: if settingId == 'locationPrivacy';
+      allow list: if false;
+
+      function validPrivacyNotice() {
+        let data = request.resource.data;
+        return data.keys().hasAll([
+            'controller', 'contact', 'updatedAt', 'updatedBy'
+          ])
+          && data.keys().hasOnly([
+            'controller', 'contact', 'updatedAt', 'updatedBy'
+          ])
+          && data.controller is string
+          && data.controller.size() > 0
+          && data.controller.size() <= 120
+          && data.contact is string
+          && data.contact.size() > 0
+          && data.contact.size() <= 254
+          && data.updatedAt == request.time
+          && data.updatedBy == request.auth.uid;
+      }
+
+      allow create, update: if settingId == 'locationPrivacy'
+        && isAdmin()
+        && validPrivacyNotice();
+
+      allow delete: if false;
+    }
+    // ---------- Server-backed personal location consent ----------
+    // A consent record is scoped to one authenticated person and
+    // their current response station. A changed governance notice
+    // invalidates previously granted consent.
+    match /users/{uid}/locationConsents/{stationId} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list: if false;
+
+      function validLocationConsent() {
+        let data = request.resource.data;
+        return request.auth.uid == uid
+          && currentUserData().get('accountType', null) == 'person'
+          && data.keys().hasAll([
+            'uid', 'stationId', 'decision', 'noticeVersion',
+            'governanceUpdatedAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'uid', 'stationId', 'decision', 'noticeVersion',
+            'governanceUpdatedAt', 'updatedAt'
+          ])
+          && data.uid == uid
+          && data.stationId == stationId
+          && data.decision in ['granted', 'declined']
+          && data.noticeVersion == '2026-10-23-v5'
+          && data.updatedAt == request.time
+          && (
+            data.decision == 'declined'
+            || (
+              (isApprovedStationMember(stationId)
+                || isPersonalAdminResponseStation(stationId))
+              && exists(/databases/$(database)/documents/appSettings/locationPrivacy)
+              && data.governanceUpdatedAt ==
+                get(/databases/$(database)/documents/appSettings/locationPrivacy).data.updatedAt
+            )
+          );
+      }
+
+      allow create, update: if isSignedIn()
+        && validLocationConsent();
+
+      allow delete: if false;
+    }
     // ---------- users ----------
 
     match /users/{uid} {
@@ -549,8 +630,11 @@ service cloud.firestore {
         && request.resource.data.displayName == currentUserData().displayName
         && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 120
         && request.resource.data.stationId is string
-        && isApprovedStationMember(request.resource.data.stationId)
-        && request.resource.data.stationName == get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.name
+        && (isApprovedStationMember(request.resource.data.stationId) || isPersonalAdminResponseStation(request.resource.data.stationId))
+        && ((isPersonalAdminResponseStation(request.resource.data.stationId)
+          && request.resource.data.stationName == 'System Administration')
+          || (!isPersonalAdminResponseStation(request.resource.data.stationId)
+            && request.resource.data.stationName == get(/databases/$(database)/documents/stations/$(request.resource.data.stationId)).data.name))
         && request.resource.data.status == 'active'
         && request.resource.data.startedAt == request.time
         && request.resource.data.endedAt == null
@@ -565,7 +649,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && resource.data.uid == request.auth.uid
         && resource.data.status == 'active'
-        && isApprovedStationMember(resource.data.stationId)
+        && (isApprovedStationMember(resource.data.stationId) || isPersonalAdminResponseStation(resource.data.stationId))
         && onlyChangedFields(['lastLocationAt'])
         && request.resource.data.lastLocationAt == request.time;
       allow delete: if false;
@@ -600,6 +684,22 @@ service cloud.firestore {
         && data.updatedAt is timestamp && data.updatedAt == request.time;
     }
 
+    // A response-location write requires a currently granted,
+    // server-backed personal consent for the responder's station.
+    // Compare Firestore timestamps directly, not browser clock values.
+    function hasCurrentResponseLocationConsent(stationId) {
+      let consentPath = /databases/$(database)/documents/users/$(request.auth.uid)/locationConsents/$(stationId);
+      let privacyPath = /databases/$(database)/documents/appSettings/locationPrivacy;
+      return isSignedIn()
+        && exists(consentPath)
+        && exists(privacyPath)
+        && get(consentPath).data.uid == request.auth.uid
+        && get(consentPath).data.stationId == stationId
+        && get(consentPath).data.decision == 'granted'
+        && get(consentPath).data.noticeVersion == '2026-10-23-v5'
+        && get(consentPath).data.governanceUpdatedAt ==
+          get(privacyPath).data.updatedAt;
+    }
     function isValidUnitLocation(responseId) {
       let data = request.resource.data;
       return data.keys().hasAll([
@@ -698,6 +798,7 @@ service cloud.firestore {
     match /responseLocations/{responseId} {
       allow read: if isSignedIn();
       allow create, update: if isApprovedStationMember(request.resource.data.stationId)
+        && hasCurrentResponseLocationConsent(request.resource.data.stationId)
         && isValidUnitLocation(responseId);
       allow delete: if isSignedIn() && (
         isAdmin()
@@ -725,7 +826,8 @@ service cloud.firestore {
         || canManageStation(stationId)
       );
       allow create, update: if (
-        isApprovedStationMember(stationId)
+        (isApprovedStationMember(stationId) || isPersonalAdminResponseStation(stationId))
+        && hasCurrentResponseLocationConsent(stationId)
         && isValidStationUnitLocation(stationId, reportId)
       ) || (
         isLegacyAssignedStation(stationId)
