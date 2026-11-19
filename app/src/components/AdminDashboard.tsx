@@ -1,5 +1,6 @@
 'use client';
 import { lastLoggedInLabel } from '@/lib/account-login-status';
+import { countPersonalHeads } from '@/lib/station-head-coverage';
 import { sortAccountDirectory, type AccountSort } from '@/lib/account-directory-sort';
 
 // System Administration panel — admin-only.
@@ -343,6 +344,21 @@ function StationsCard({
           <div key={station.id} className="grid items-center gap-1.5 px-3 py-3 text-sm hover:bg-neutral-50/70 dark:hover:bg-neutral-800/30 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,0.7fr)] sm:gap-4">
             <div className="min-w-0">
               <p className="break-words font-semibold text-neutral-800 dark:text-neutral-100">{station.name}</p>
+              <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                loading || usersLoading || error || usersError
+                  ? 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'
+                  : countPersonalHeads(users, station.id) > 0
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                    : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+              }`}>
+                {loading || usersLoading
+                  ? 'Checking Head coverage'
+                  : error || usersError
+                    ? 'Head coverage unavailable'
+                    : countPersonalHeads(users, station.id) > 0
+                      ? `${countPersonalHeads(users, station.id)} personal Head${countPersonalHeads(users, station.id) === 1 ? '' : 's'} assigned`
+                      : 'No personal Head assigned'}
+              </span>
             <span className="mt-0.5 block text-[10px] text-neutral-400 dark:text-neutral-500">
               {usersLoading
                 ? 'Loading account date…'
