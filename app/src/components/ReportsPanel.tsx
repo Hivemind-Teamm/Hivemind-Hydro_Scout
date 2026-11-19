@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { FiX } from 'react-icons/fi';
 import { useAuth } from '@/lib/auth-context';
 import { useIsMobile } from '@/lib/use-media-query';
 import { STATUS_COLORS, type Report } from '../data/reports';
@@ -16,9 +17,10 @@ interface ReportsPanelProps {
   hydrants: Hydrant[];
   loading: boolean;
   onViewUser: (name: string, role: string) => void;
+  onClose: () => void;
 }
 
-export default function ReportsPanel({ reports, hydrants, loading, onViewUser }: ReportsPanelProps) {
+export default function ReportsPanel({ reports, hydrants, loading, onViewUser, onClose }: ReportsPanelProps) {
   const { role, canWriteInAor } = useAuth();
   const isMobile = useIsMobile();
   // Resolving/denying writes the hydrant, so it follows the hydrant's AOR.
@@ -57,9 +59,12 @@ export default function ReportsPanel({ reports, hydrants, loading, onViewUser }:
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-700">
+      <div className="flex items-start justify-between gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-700">
         <p className="text-sm font-extrabold uppercase tracking-wide text-neutral-800 dark:text-neutral-100">Reports Register</p>
         <p className="text-[10px] text-neutral-400 dark:text-neutral-500">Service and status reports · QC Diliman, Quezon City</p>
+        <button type="button" onClick={onClose} aria-label="Close reports register" className="-mr-2 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white">
+          <FiX size={18} />
+        </button>
       </div>
 
       {/* Filter tabs */}

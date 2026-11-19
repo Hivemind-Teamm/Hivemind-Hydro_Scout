@@ -86,6 +86,18 @@ export function dedupePlaces(rows: PlaceResult[], skipNames: readonly string[] =
   });
 }
 
+/** Put the exact requested place ahead of broader address or area matches. */
+function rankPlacesForQuery(rows: PlaceResult[], query: string): PlaceResult[] {
+  const requested = fold(query);
+  return [...rows].sort((left, right) => {
+    const leftName = fold(left.name);
+    const rightName = fold(right.name);
+    const leftRank = leftName === requested ? 0 : leftName.startsWith(requested) ? 1 : 2;
+    const rightRank = rightName === requested ? 0 : rightName.startsWith(requested) ? 1 : 2;
+    return leftRank - rightRank;
+  });
+}
+
 interface MapboxSuggestion {
   name: string;
   mapbox_id: string;
@@ -117,14 +129,14 @@ export async function suggestMapboxPlaces(
   const res = await fetchImpl(`${MAPBOX_SEARCH_URL}/suggest?${params}`, { signal });
   if (!res.ok) throw new Error(`Mapbox search failed (${res.status})`);
   const data = await res.json() as { suggestions?: MapboxSuggestion[] };
-  return dedupePlaces((data.suggestions ?? [])
+  return rankPlacesForQuery(dedupePlaces((data.suggestions ?? [])
     .filter((s) => s.mapbox_id && !UNLOCATABLE_KINDS.has(s.feature_type))
     .map((s) => ({
       id: s.mapbox_id,
       name: s.name,
       kind: s.feature_type,
       subtitle: withoutCountry([s.address, s.place_formatted].filter(Boolean).join(', ')),
-    })));
+    }))), query);
 }
 
 function toBbox(value: unknown): Bbox | null {
@@ -186,7 +198,7 @@ export async function searchOsmPlaces(
   const res = await fetchImpl(`${NOMINATIM_URL}?${params}`, { signal, headers: { 'Accept-Language': 'en' } });
   if (!res.ok) throw new Error(`OpenStreetMap search failed (${res.status})`);
   const data = await res.json() as NominatimResult[];
-  const rows = data.map((r): PlaceResult => {
+  const rows = rankPlacesForQuery(data.map((r): PlaceResult => {
     const parts = r.display_name.split(', ');
     const [s, n, w, e] = (r.boundingbox ?? []).map(Number);
     return {
@@ -196,7 +208,7 @@ export async function searchOsmPlaces(
       kind: r.addresstype ?? r.type ?? 'place',
       location: { lat: Number(r.lat), lng: Number(r.lon), bbox: toBbox([w, s, e, n]) },
     };
-  }).filter((row) => Number.isFinite(row.location!.lat) && Number.isFinite(row.location!.lng));
+  }).filter((row) => Number.isFinite(row.location!.lat) && Number.isFinite(row.location!.lng)), q);
 
   if (osmCache.size >= OSM_CACHE_LIMIT) osmCache.delete(osmCache.keys().next().value!);
   osmCache.set(cacheKey, rows);

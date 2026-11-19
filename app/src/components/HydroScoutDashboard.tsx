@@ -1724,7 +1724,7 @@ export default function HydroScoutDashboard() {
       {showReports && (
         <>
           <div className="pointer-events-auto absolute inset-0 z-[1400]" onClick={() => setShowReports(false)} />
-          <ReportsPanel reports={reports} hydrants={hydrants} loading={reportsLoading || loading} onViewUser={handleViewUser} />
+          <ReportsPanel reports={reports} hydrants={hydrants} loading={reportsLoading || loading} onViewUser={handleViewUser} onClose={() => setShowReports(false)} />
         </>
       )}
 

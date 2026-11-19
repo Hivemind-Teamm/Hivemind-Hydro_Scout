@@ -6,7 +6,7 @@ import NotificationCountBadge from './NotificationCountBadge';
 import MapSearchBar, { type SearchPlaceSelection } from './MapSearchBar';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
-import { useIsMobile } from '@/lib/use-media-query';
+import { useIsMobile, useIsShort } from '@/lib/use-media-query';
 import {
   STATUS_META,
   STATUS_ORDER,
@@ -110,6 +110,7 @@ function DashboardOverlay({
   const { unreadActivityCount, unreadMemberCount, canViewActivity, canApproveMembers } = useStationNotifications();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
+  const isShort = useIsShort();
   const canViewDashboard = role === 'head' || role === 'admin';
   const canManageStation = canViewActivity;
   const canApproveStationMembers = canApproveMembers;
@@ -264,7 +265,12 @@ function DashboardOverlay({
 
         {/* Bottom-right FAB cluster — locate, reports, pin (zoom is pinch on touch).
             Raised to clear the Mapbox attribution/info button in the corner. */}
-        <div className="pointer-events-auto absolute bottom-12 right-4 z-[1000] flex flex-col items-end gap-3">
+        <div
+          className={`pointer-events-auto absolute z-[1000] ${isShort
+            ? 'inset-x-2 bottom-2 flex items-center justify-start gap-2 overflow-x-auto rounded-xl bg-white/95 p-2 shadow-xl backdrop-blur dark:bg-neutral-900/95 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+            : 'bottom-12 right-4 flex flex-col items-end gap-3'}`}
+          style={isShort ? { paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' } : undefined}
+        >
           {canPin && (
             <button
               aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
@@ -306,6 +312,12 @@ function DashboardOverlay({
               <TargetGlyph />
             </ToolButton>
           )}
+          <ToolButton label="Zoom in" onClick={onZoomIn} rounded tooltipSide={isShort ? 'top' : 'left'}>
+            <PlusGlyph />
+          </ToolButton>
+          <ToolButton label="Zoom out" onClick={onZoomOut} rounded tooltipSide={isShort ? 'top' : 'left'}>
+            <MinusGlyph />
+          </ToolButton>
           <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide="left">
             <GpsGlyph />
           </ToolButton>

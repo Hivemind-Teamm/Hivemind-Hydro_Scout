@@ -23,9 +23,13 @@ export function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-/** True on phone-sized viewports (< 768px). Drives the mobile layout swap. */
+/**
+ * True for phone-sized screens in either orientation. A landscape phone can
+ * be wider than 767 CSS pixels, but still has a short, touch-first viewport.
+ * Keep it on the mobile dashboard instead of exposing the desktop overlay.
+ */
 export function useIsMobile(): boolean {
-  return useMediaQuery('(max-width: 767px)');
+  return useMediaQuery('(max-width: 767px), (pointer: coarse) and (max-height: 900px)');
 }
 
 /**
