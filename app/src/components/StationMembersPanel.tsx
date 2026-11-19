@@ -79,7 +79,7 @@ export default function StationMembersPanel({ stationId, stationName, responding
       <header className="flex items-start justify-between gap-3 bg-[#e0353b] px-4 py-3 pr-12 text-white">
         <div><h2 className="text-sm font-extrabold uppercase tracking-wide">{isGlobalAdmin ? 'Station Members Directory' : 'Station Members'}</h2>
           <p className="mt-0.5 text-[11px] text-white/75">{isGlobalAdmin ? 'All stations' : `${stationName ?? stationId} · ${stationId}`}</p></div>
-        {!isMobile && <button type="button" onClick={onClose} aria-label="Close station members" className="rounded-lg p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>}
+        {!isMobile && <button type="button" onClick={onClose} aria-label="Close station members" className="absolute right-3 top-2 z-20 rounded p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>}
       </header>
       <div className="space-y-2 border-b border-neutral-100 px-4 py-3 dark:border-neutral-800">
         <p className="text-[11px] text-neutral-500">{members.length} members · {members.filter(member => online(member.uid)).length} active now · {responsesReady ? `${members.filter(member => respondingUids.has(member.uid)).length} responding` : 'Response status unavailable'}</p>
