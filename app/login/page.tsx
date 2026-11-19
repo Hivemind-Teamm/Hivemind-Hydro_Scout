@@ -88,11 +88,11 @@ function LoginContent() {
   };
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const attemptedRedirectUid = useRef<string | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) {
@@ -126,6 +126,7 @@ function LoginContent() {
 
     setError(null);
     setSubmitting(true);
+    const password = passwordInputRef.current?.value ?? "";
 
     try {
       await login(email, password);
@@ -133,6 +134,10 @@ function LoginContent() {
       setError(signInErrorMessage(err));
       console.error(err);
     } finally {
+      // Do not retain a submitted password in React state or in the input
+      // after an authentication attempt has completed.
+      if (passwordInputRef.current) passwordInputRef.current.value = "";
+      setShowPassword(false);
       setSubmitting(false);
     }
   }
@@ -246,9 +251,8 @@ function LoginContent() {
 
           <div style={{ position: "relative" }}>
             <input
+              ref={passwordInputRef}
               type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
               className="auth-input"
