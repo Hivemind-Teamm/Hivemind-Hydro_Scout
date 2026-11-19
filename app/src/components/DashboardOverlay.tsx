@@ -138,6 +138,7 @@ function DashboardOverlay({
       <ToolButton label="Zoom in" onClick={onZoomIn} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><PlusGlyph /></ToolButton>
       <ToolButton label="Zoom out" onClick={onZoomOut} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><MinusGlyph /></ToolButton>
       <ToolButton label={is3D ? 'Switch to 2D view' : 'Switch to 3D view'} onClick={onToggle3D} rounded active={is3D} tooltipSide={isMobileLandscape ? 'top' : 'left'}><ThreeDGlyph /></ToolButton>
+      <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><GpsGlyph /></ToolButton>
       {role !== 'general' && role !== null && (
         <div className="relative">
           <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports} tooltipSide={isMobileLandscape ? 'top' : 'left'}><ReportGlyph /></ToolButton>

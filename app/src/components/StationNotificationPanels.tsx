@@ -12,6 +12,7 @@ import NotificationCountBadge from './NotificationCountBadge';
 import { accountLoginStatus } from '@/lib/account-login-status';
 import { useAuth } from '@/lib/auth-context';
 import { resolveStationControlRequest } from '@/lib/station-control-session';
+import { useIsMobile } from '@/lib/use-media-query';
 
 function time(value?: { toDate?: () => Date } | null) {
   const date = value?.toDate?.();
@@ -61,6 +62,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
 }) {
   const { notifications, requests, error: notificationError, activityUnreadCount, isMemberUnread, readActivity, readMember, fullDetails, clearNotifications, notificationsCleared } = useStationNotifications();
   const { role, stationId, user, accountType } = useAuth();
+  const isMobile = useIsMobile();
   const isGlobalAdmin = role === 'admin';
   const [profile, setProfile] = useState<ViewingUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -176,16 +178,18 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       onTouchEnd={() => { panelTouchY.current = null; }}>
       <button onClick={activityOpen ? closeActivity : closeMembers} aria-label={`Close ${(activityOpen ? 'station activity' : 'member approvals')}`} className={`absolute right-3 top-2 z-10 rounded p-2 transition-colors ${closeOverContent ? 'bg-white/90 text-[#e0353b] shadow-sm hover:bg-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}><FiX /></button>
       <div ref={panelScrollRef} onScroll={event => setCloseOverContent(event.currentTarget.scrollTop > 28)} className="scroll-fade h-full overflow-y-auto overscroll-contain">
-      {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates') : header('Member approvals', 'Pending membership requests')}
-      <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification to read it. In daily response groups, expand each entry to mark it read. Times are shown in PHT.</p>
-      {activityOpen && notifications.length > 0 && <div className="flex min-h-10 items-center justify-end gap-2 border-b border-neutral-100 px-4 py-1.5 text-[11px] dark:border-neutral-800">
-        {confirmingClear ? <>
-          <p role="alert" className="mr-auto text-neutral-600 dark:text-neutral-300">Clear all {notifications.length} from this device only?</p>
-          <button type="button" autoFocus onClick={() => setConfirmingClear(false)} className="rounded-md px-2.5 py-1 font-semibold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800">Cancel</button>
-          <button type="button" onClick={() => { clearNotifications(); setConfirmingClear(false); setSelectedKey(null); }} className="rounded-md bg-[#e0353b] px-2.5 py-1 font-semibold text-white hover:bg-[#c42d33]">Clear</button>
-        </> : <button type="button" onClick={() => setConfirmingClear(true)} title="Hide these notifications on this device. Nothing is deleted." className="rounded-md px-2.5 py-1 font-semibold text-[#e0353b] hover:bg-red-50 dark:hover:bg-red-950/40">Clear all</button>}
-      </div>}
-      {activityOpen && isGlobalAdmin && <div className="border-b border-neutral-100 px-4 py-2.5 dark:border-neutral-800"><input type="search" value={stationSearch} onChange={event => setStationSearch(event.target.value)} aria-label="Filter station activity by station" placeholder="Search station ID or name" className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-xs text-neutral-800 outline-none focus:border-[#e0353b] dark:border-neutral-700 dark:text-neutral-100" /></div>}
+      <div className={isMobile ? undefined : 'sticky top-0 z-10 bg-white dark:bg-neutral-900'}>
+        {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates') : header('Member approvals', 'Pending membership requests')}
+        <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification to read it. In daily response groups, expand each entry to mark it read. Times are shown in PHT.</p>
+        {activityOpen && notifications.length > 0 && <div className="flex min-h-10 items-center justify-end gap-2 border-b border-neutral-100 px-4 py-1.5 text-[11px] dark:border-neutral-800">
+          {confirmingClear ? <>
+            <p role="alert" className="mr-auto text-neutral-600 dark:text-neutral-300">Clear all {notifications.length} from this device only?</p>
+            <button type="button" autoFocus onClick={() => setConfirmingClear(false)} className="rounded-md px-2.5 py-1 font-semibold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800">Cancel</button>
+            <button type="button" onClick={() => { clearNotifications(); setConfirmingClear(false); setSelectedKey(null); }} className="rounded-md bg-[#e0353b] px-2.5 py-1 font-semibold text-white hover:bg-[#c42d33]">Clear</button>
+          </> : <button type="button" onClick={() => setConfirmingClear(true)} title="Hide these notifications on this device. Nothing is deleted." className="rounded-md px-2.5 py-1 font-semibold text-[#e0353b] hover:bg-red-50 dark:hover:bg-red-950/40">Clear all</button>}
+        </div>}
+        {activityOpen && isGlobalAdmin && <div className="border-b border-neutral-100 px-4 py-2.5 dark:border-neutral-800"><input type="search" value={stationSearch} onChange={event => setStationSearch(event.target.value)} aria-label="Filter station activity by station" placeholder="Search station ID or name" className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-xs text-neutral-800 outline-none focus:border-[#e0353b] dark:border-neutral-700 dark:text-neutral-100" /></div>}
+      </div>
       {(error || notificationError) && <p role="alert" className="px-4 py-2 text-xs text-red-600">{error || notificationError}</p>}
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}
       <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
