@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { findNearestHydrants, type RankedHydrant, type NearestHydrantResult } from '../../../lib/nearest-hydrant';
 import { FiAlertTriangle, FiSearch, FiMap } from 'react-icons/fi';
 
@@ -29,6 +29,8 @@ interface NearestHydrantPanelProps {
   isOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
+  /** Mobile dashboard renders the trigger inside its control group. */
+  hideTrigger?: boolean;
 }
 
 function formatDistance(metres: number): string {
@@ -43,6 +45,7 @@ export default function NearestHydrantPanel({
   isOpen,
   onOpen,
   onClose,
+  hideTrigger = false,
 }: NearestHydrantPanelProps) {
   const [result, setResult] = useState<NearestHydrantResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -79,11 +82,17 @@ export default function NearestHydrantPanel({
     onClose();
   };
 
+  useEffect(() => {
+    const onRequest = () => { void handleSearch(); };
+    window.addEventListener('hydroscout:find-nearest', onRequest);
+    return () => window.removeEventListener('hydroscout:find-nearest', onRequest);
+  }, [handleSearch]);
+
   return (
     <div className="flex flex-col items-start gap-2" style={{ width: 280 }}>
 
       {/* ── Button — hidden while panel is open ── */}
-      {!isOpen && (
+      {!isOpen && !hideTrigger && (
         <button
           onClick={handleSearch}
           disabled={loading}

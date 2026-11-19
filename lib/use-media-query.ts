@@ -40,3 +40,8 @@ export function useIsMobile(): boolean {
 export function useIsShort(): boolean {
   return useMediaQuery('(max-height: 719px)');
 }
+
+/** A touch-first device in landscape, including Android and iOS phones. */
+export function useIsMobileLandscape(): boolean {
+  return useMediaQuery('(pointer: coarse) and (orientation: landscape)');
+}

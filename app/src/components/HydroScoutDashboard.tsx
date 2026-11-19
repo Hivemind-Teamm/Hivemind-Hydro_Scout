@@ -1465,6 +1465,7 @@ export default function HydroScoutDashboard() {
           isOpen={nearestPanelOpen}
           onOpen={() => { setNearestPanelOpen(true); if (isMobile) setFirePanelMinimized(true); }}
           onClose={() => { controllerRef.current?.zoomOut(); setNearestPanelOpen(false); setNearestHydrant(null); }}
+          hideTrigger={isMobile}
         />
       </div>
 

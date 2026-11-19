@@ -103,8 +103,22 @@ body {
 
 .station-takeover-button:hover { filter: brightness(1.08); }
 
+@keyframes mobile-controls-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mobile-controls-ring {
+  background: conic-gradient(from 0deg, #e0353b, #fed42e, #ff6b35, #e0353b);
+  animation: mobile-controls-ring-spin 3.2s linear infinite;
+}
+
+.mobile-controls-ring > span {
+  animation: mobile-controls-ring-spin 3.2s linear infinite reverse;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .station-takeover-button { animation: none; }
+  .mobile-controls-ring, .mobile-controls-ring > span { animation: none; }
 }
 
 /* Shared detail treatment for station activity: the same charcoal, red, and

@@ -6,7 +6,7 @@ import NotificationCountBadge from './NotificationCountBadge';
 import MapSearchBar, { type SearchPlaceSelection } from './MapSearchBar';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
-import { useIsMobile, useIsShort } from '@/lib/use-media-query';
+import { useIsMobile, useIsMobileLandscape } from '@/lib/use-media-query';
 import {
   STATUS_META,
   STATUS_ORDER,
@@ -16,7 +16,7 @@ import {
 import { HYDRANT_PIN_FILTER } from './hydrantIcon';
 import OtwHazardPanel from './OtwHazardPanel';
 import { DILIMAN_CENTER, DEFAULT_ZOOM } from './mapConfig';
-import { FiAlertTriangle, FiBell, FiUsers, FiUserCheck } from 'react-icons/fi';
+import { FiAlertTriangle, FiBell, FiSearch, FiUsers, FiUserCheck } from 'react-icons/fi';
 import { MdLocalFireDepartment } from 'react-icons/md';
 
 interface DashboardOverlayProps {
@@ -110,7 +110,7 @@ function DashboardOverlay({
   const { unreadActivityCount, unreadMemberCount, canViewActivity, canApproveMembers } = useStationNotifications();
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
-  const isShort = useIsShort();
+  const isMobileLandscape = useIsMobileLandscape();
   const canViewDashboard = role === 'head' || role === 'admin';
   const canManageStation = canViewActivity;
   const canApproveStationMembers = canApproveMembers;
@@ -131,7 +131,38 @@ function DashboardOverlay({
   };
   const [showCounts] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const setHazardPanelMinimized = onHazardPanelMinimizedChange ?? (() => {});
+  const mobileActionControls = (
+    <>
+      {canPin && (
+        <button aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'} onClick={onToggleAddHydrant} className="relative flex h-12 w-12 items-center justify-center transition-transform active:scale-90">
+          {addHydrantMode && <span className="hydrant-pin-ripple" />}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/Hydrant%20Pin%20Red.png" alt="Pin hydrant" className="relative h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]" />
+          <span className={`pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full text-white shadow ${addHydrantMode ? 'bg-[#e0353b]' : 'bg-[#2fbf4f]'}`}>
+            <svg style={{ display: 'block' }} width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
+              {addHydrantMode ? <><line x1="2.5" y1="2.5" x2="7.5" y2="7.5" /><line x1="7.5" y1="2.5" x2="2.5" y2="7.5" /></> : <><line x1="5" y1="2" x2="5" y2="8" /><line x1="2" y1="5" x2="8" y2="5" /></>}
+            </svg>
+          </span>
+        </button>
+      )}
+      {canPinFire && onToggleFirePin && <FirePinButton label={firePinLabel} onClick={onToggleFirePin} active={firePinMode} pinned={fireActive} tooltipSide={isMobileLandscape ? 'top' : 'left'} />}
+      {role !== 'general' && role !== null && (
+        <div className="relative">
+          <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports} tooltipSide={isMobileLandscape ? 'top' : 'left'}><ReportGlyph /></ToolButton>
+          {hasPendingReports && <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e0353b] text-[9px] font-bold text-white">!</span>}
+        </div>
+      )}
+      {canUseChecking && onToggleChecking && <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><HydrantCheckingGlyph /></ToolButton>}
+      {(addHydrantMode || firePinMode) && <ToolButton label={pinHereLabel} onClick={onTargetLocation} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><TargetGlyph /></ToolButton>}
+      <NearestHydrantButton onClick={() => window.dispatchEvent(new Event('hydroscout:find-nearest'))} tooltipSide={isMobileLandscape ? 'top' : 'left'} />
+      <ToolButton label="Zoom in" onClick={onZoomIn} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><PlusGlyph /></ToolButton>
+      <ToolButton label="Zoom out" onClick={onZoomOut} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><MinusGlyph /></ToolButton>
+      <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><GpsGlyph /></ToolButton>
+      <ToolButton label={is3D ? 'Switch to 2D view' : 'Switch to 3D view'} onClick={onToggle3D} rounded active={is3D} tooltipSide={isMobileLandscape ? 'top' : 'left'}><ThreeDGlyph /></ToolButton>
+    </>
+  );
 
   // Prefer the personal name entered at sign-up (Firebase Auth profile); only
   // fall back to a prettified email prefix when no name is set.
@@ -263,68 +294,26 @@ function DashboardOverlay({
           </button>
         )}
 
-        {/* Bottom-right FAB cluster — locate, reports, pin (zoom is pinch on touch).
-            Raised to clear the Mapbox attribution/info button in the corner. */}
-        <div
-          className={`pointer-events-auto absolute z-[1000] ${isShort
-            ? 'inset-x-2 bottom-2 flex items-center justify-start gap-2 overflow-x-auto rounded-xl bg-white/95 p-2 shadow-xl backdrop-blur dark:bg-neutral-900/95 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
-            : 'bottom-12 right-4 flex flex-col items-end gap-3'}`}
-          style={isShort ? { paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' } : undefined}
-        >
-          {canPin && (
-            <button
-              aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'}
-              onClick={onToggleAddHydrant}
-              className="relative flex h-12 w-12 items-center justify-center transition-transform active:scale-90"
-            >
-              {addHydrantMode && <span className="hydrant-pin-ripple" />}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/Hydrant%20Pin%20Red.png" alt="Pin hydrant" className="relative h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]" />
-              <span className={`pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full text-white shadow ${addHydrantMode ? 'bg-[#e0353b]' : 'bg-[#2fbf4f]'}`}>
-                <svg style={{ display: 'block' }} width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
-                  {addHydrantMode ? (
-                    <><line x1="2.5" y1="2.5" x2="7.5" y2="7.5" /><line x1="7.5" y1="2.5" x2="2.5" y2="7.5" /></>
-                  ) : (
-                    <><line x1="5" y1="2" x2="5" y2="8" /><line x1="2" y1="5" x2="8" y2="5" /></>
-                  )}
-                </svg>
-              </span>
+        {/* Portrait retains its lower-right stack. Landscape keeps the map clear until the ring is tapped. */}
+        {isMobileLandscape ? (
+          <>
+            {mobileControlsOpen && (
+              <>
+                <button aria-label="Close map controls" onClick={() => setMobileControlsOpen(false)} className="pointer-events-auto absolute inset-0 z-[990] cursor-default" />
+                <div className="pointer-events-auto absolute bottom-16 left-3 z-[1000] flex max-w-[calc(100vw-1.5rem)] flex-wrap gap-2">
+                  {mobileActionControls}
+                </div>
+              </>
+            )}
+            <button type="button" aria-label="Open map controls" aria-expanded={mobileControlsOpen} onClick={() => setMobileControlsOpen((open) => !open)} className="mobile-controls-ring pointer-events-auto absolute bottom-3 left-3 z-[1100] flex h-11 w-11 items-center justify-center rounded-full p-[3px] shadow-[0_0_16px_rgba(224,53,59,0.6)]">
+              <span className="flex h-full w-full items-center justify-center rounded-full bg-neutral-950/90 text-white"><MenuGlyph /></span>
             </button>
-          )}
-          {canPinFire && onToggleFirePin && (
-            <FirePinButton label={firePinLabel} onClick={onToggleFirePin} active={firePinMode} pinned={fireActive} tooltipSide="left" />
-          )}
-          {role !== 'general' && role !== null && (
-            <div className="relative">
-              <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports} tooltipSide="left">
-                <ReportGlyph />
-              </ToolButton>
-              {hasPendingReports && (
-                <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e0353b] text-[9px] font-bold text-white">!</span>
-              )}
-            </div>
-          )}
-          {canUseChecking && onToggleChecking && (
-            <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded tooltipSide="left"><HydrantCheckingGlyph /></ToolButton>
-          )}
-          {(addHydrantMode || firePinMode) && (
-            <ToolButton label={pinHereLabel} onClick={onTargetLocation} rounded tooltipSide="left">
-              <TargetGlyph />
-            </ToolButton>
-          )}
-          <ToolButton label="Zoom in" onClick={onZoomIn} rounded tooltipSide={isShort ? 'top' : 'left'}>
-            <PlusGlyph />
-          </ToolButton>
-          <ToolButton label="Zoom out" onClick={onZoomOut} rounded tooltipSide={isShort ? 'top' : 'left'}>
-            <MinusGlyph />
-          </ToolButton>
-          <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide="left">
-            <GpsGlyph />
-          </ToolButton>
-          <ToolButton label={is3D ? 'Switch to 2D view' : 'Switch to 3D view'} onClick={onToggle3D} rounded active={is3D} tooltipSide="left">
-            <ThreeDGlyph />
-          </ToolButton>
-        </div>
+          </>
+        ) : (
+          <div className="pointer-events-auto absolute bottom-12 right-4 z-[1000] flex flex-col items-end gap-3">
+            {mobileActionControls}
+          </div>
+        )}
 
         {/* Slide-in menu drawer */}
         {mobileMenuOpen && (
@@ -777,6 +766,22 @@ export default memo(DashboardOverlay);
 /* ---------------------------------------------------------------- */
 /* Small presentational helpers                                      */
 /* ---------------------------------------------------------------- */
+
+function NearestHydrantButton({ onClick, tooltipSide }: { onClick: () => void; tooltipSide: 'left' | 'top' }) {
+  const tooltipClass = tooltipSide === 'top'
+    ? 'bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2'
+    : 'right-[calc(100%+8px)] top-1/2 -translate-y-1/2';
+  return (
+    <div className="group relative">
+      <button type="button" aria-label="Find nearest hydrant" onClick={onClick} className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e0353b] text-white shadow-[0_4px_16px_rgba(224,53,59,0.48)] transition-all hover:scale-110 hover:bg-[#c92d34] active:scale-90">
+        <FiSearch size={20} strokeWidth={2.7} />
+      </button>
+      <div className={`pointer-events-none absolute z-[9999] opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-hover:[transition-delay:500ms] ${tooltipClass}`}>
+        <span className="block whitespace-nowrap rounded-lg bg-neutral-900/95 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-xl">Find nearest hydrant</span>
+      </div>
+    </div>
+  );
+}
 
 function ToolButton({
   children,
