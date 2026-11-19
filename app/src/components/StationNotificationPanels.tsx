@@ -69,7 +69,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   const [now, setNow] = useState(() => Date.now());
   const [stationSearch, setStationSearch] = useState('');
   const [confirmingClear, setConfirmingClear] = useState(false);
-  const panelRef = useRef<HTMLElement>(null);
+  const panelScrollRef = useRef<HTMLDivElement>(null);
   const panelTouchY = useRef<number | null>(null);
   // A pending confirmation never survives closing the panel.
   if (confirmingClear && !activityOpen) setConfirmingClear(false);
@@ -146,32 +146,33 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     <button disabled={loading} onClick={() => void openProfile(uid, { name, role }, markRead)}
       className="pointer-events-auto relative font-semibold text-[#e0353b] hover:underline focus-visible:outline-2 focus-visible:outline-red-500 disabled:opacity-50">{name}</button>
   );
-  const panel = 'station-activity-panel scroll-fade pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] h-[70dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl bg-white font-sans shadow-2xl dark:bg-neutral-900';
+  const panel = 'station-activity-panel pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] h-[70dvh] w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-white font-sans shadow-2xl dark:bg-neutral-900';
   const scrollActivityFromPanel = (delta: number) => {
-    const panel = panelRef.current;
+    const panel = panelScrollRef.current;
     if (!panel || panel.scrollHeight <= panel.clientHeight) return false;
     panel.scrollTop += delta;
     return true;
   };
-  const header = (title: string, subtitle: string, close: () => void) => (
-    <header className="flex items-center justify-between gap-3 bg-[#e0353b] px-4 py-3 text-white">
+  const header = (title: string, subtitle: string) => (
+    <header className="pr-12 bg-[#e0353b] px-4 py-3 text-white">
       <div>
         <h2 className="text-sm font-extrabold uppercase tracking-wide">{title}</h2>
         <p className="text-[10px] text-white/75">{isGlobalAdmin ? subtitle : `${stationName} · ${subtitle}`}</p>
       </div>
-      <button onClick={close} aria-label={`Close ${title.toLowerCase()}`} className="rounded p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>
     </header>
   );
   return <>
     {(activityOpen || membersOpen) && <button type="button" aria-label="Close notifications"
       onClick={activityOpen ? closeActivity : closeMembers}
       className="pointer-events-auto absolute inset-0 z-[4000] bg-black/25" />}
-    {(activityOpen || membersOpen) && <section ref={panelRef} aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}
+    {(activityOpen || membersOpen) && <section aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}
       onWheel={event => { if (scrollActivityFromPanel(event.deltaY)) event.preventDefault(); }}
       onTouchStart={event => { panelTouchY.current = event.touches[0]?.clientY ?? null; }}
       onTouchMove={event => { const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollActivityFromPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
       onTouchEnd={() => { panelTouchY.current = null; }}>
-      {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates', closeActivity) : header('Member approvals', 'Pending membership requests', closeMembers)}
+      <button onClick={activityOpen ? closeActivity : closeMembers} aria-label={`Close ${(activityOpen ? 'station activity' : 'member approvals')}`} className="absolute right-3 top-2 z-10 rounded p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>
+      <div ref={panelScrollRef} className="scroll-fade h-full overflow-y-auto overscroll-contain">
+      {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates') : header('Member approvals', 'Pending membership requests')}
       <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification to read it. In daily response groups, expand each entry to mark it read. Times are shown in PHT.</p>
       {activityOpen && notifications.length > 0 && <div className="flex min-h-10 items-center justify-end gap-2 border-b border-neutral-100 px-4 py-1.5 text-[11px] dark:border-neutral-800">
         {confirmingClear ? <>
@@ -280,6 +281,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
           </div>
         </article>)}
         {(activityOpen ? !visibleNotifications.length : !requests.length) && <p className="px-4 py-8 text-center text-xs text-neutral-400">{activityOpen ? (isGlobalAdmin && stationSearch ? 'No activity matches that station.' : notificationsCleared ? 'All caught up. New activity will appear here.' : 'No station activity yet.') : 'No pending member requests.'}</p>}
+      </div>
       </div>
     </section>}
     {selected && <NotificationDialog category={notificationStyle(selected.response || selected.responseGroup ? (selected.response?.status === 'active' || (selected.responseGroup?.activeCount ?? 0) > 0 ? 'response-started' : 'response-ended') : selected.type).label} categoryColor={notificationStyle(selected.response || selected.responseGroup ? (selected.response?.status === 'active' || (selected.responseGroup?.activeCount ?? 0) > 0 ? 'response-started' : 'response-ended') : selected.type).color} title={selected.type === 'personal-station-assigned' && selected.uid && selected.targetUid
