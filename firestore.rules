@@ -308,7 +308,11 @@ service cloud.firestore {
             && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeResponseId'])
               || validResponsePointerUpdate(uid)))
         || (isSignedIn() && resource.data.requestedStationId is string
-            && canManageStation(resource.data.requestedStationId)
+            && isPersonalHeadForStation(resource.data.requestedStationId)
+            && get(/databases/$(database)/documents/stationJoinRequests/$(uid)).data.status == 'pending'
+            && getAfter(/databases/$(database)/documents/stationJoinRequests/$(uid)).data.status == request.resource.data.stationMembershipStatus
+            && getAfter(/databases/$(database)/documents/stationJoinRequests/$(uid)).data.reviewedBy == request.auth.uid
+            && getAfter(/databases/$(database)/documents/stationJoinRequests/$(uid)).data.reviewedAt == request.time
             && onlyChangedFields(['stationId', 'station', 'stationMembershipStatus', 'requestedStationId'])
             && request.resource.data.stationMembershipStatus in ['approved', 'rejected']
             && ((request.resource.data.stationMembershipStatus == 'approved'
