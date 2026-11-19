@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { collection, onSnapshot, query, Timestamp, where } from 'firebase/firestore';
 import { FiX } from 'react-icons/fi';
 import { db } from '@/lib/firebase';
@@ -9,6 +9,7 @@ import { stationMemberFromProfile, searchStationMembers, type StationMember } fr
 import { accountIsPresent, PRESENCE_EXPIRY_MS, type PresenceRecord } from '@/lib/account-presence-state';
 import { lastLoggedInLabel } from '@/lib/account-login-status';
 import { useLoginClock } from '@/lib/use-login-clock';
+import { useIsMobile } from '@/lib/use-media-query';
 import UserProfileModal, { type ViewingUser } from './UserProfileModal';
 
 export default function StationMembersPanel({ stationId, stationName, respondingUids, responsesReady, onClose, allStations = false }: {
@@ -23,6 +24,9 @@ export default function StationMembersPanel({ stationId, stationName, responding
   const [presence, setPresence] = useState<{ scope: string | null; records: PresenceRecord[]; receivedAt: number }>({ scope: null, records: [], receivedAt: 0 });
   const [search, setSearch] = useState('');
   const [profile, setProfile] = useState<ViewingUser | null>(null);
+  const isMobile = useIsMobile();
+  const panelScrollRef = useRef<HTMLDivElement>(null);
+  const panelTouchY = useRef<number | null>(null);
   useEffect(() => {
     if (!scope) return;
     const membersQuery = isGlobalAdmin
@@ -56,19 +60,30 @@ export default function StationMembersPanel({ stationId, stationName, responding
   const visible = searchStationMembers(members, search);
   const online = (uid: string) => user?.uid === uid || (presence.scope === scope && accountIsPresent(presence.records, uid, Math.max(now, presence.receivedAt)));
   const liveProfile = profile && members.find(member => member.uid === profile.uid);
+  const scrollPanel = (delta: number) => {
+    const panel = panelScrollRef.current;
+    if (!panel || panel.scrollHeight <= panel.clientHeight) return false;
+    panel.scrollTop += delta;
+    return true;
+  };
   return <>
     <button type="button" aria-label="Close station members" onClick={onClose} className="pointer-events-auto absolute inset-0 z-[4000] bg-black/25" />
-    <section aria-label="Station members" className="pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] flex max-h-[75dvh] w-[min(28rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900">
-      <header className="flex items-start justify-between gap-3 bg-[#e0353b] px-4 py-3 text-white">
+    <section ref={panelScrollRef} aria-label="Station members" className={`station-activity-panel pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] w-[min(28rem,calc(100vw-2rem))] rounded-xl bg-white shadow-2xl dark:bg-neutral-900 ${isMobile ? 'h-[70dvh] overflow-y-auto overscroll-contain' : 'flex max-h-[75dvh] flex-col overflow-hidden'}`}
+      onWheel={event => { if (isMobile && scrollPanel(event.deltaY)) event.preventDefault(); }}
+      onTouchStart={event => { if (isMobile) panelTouchY.current = event.touches[0]?.clientY ?? null; }}
+      onTouchMove={event => { if (!isMobile) return; const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
+      onTouchEnd={() => { panelTouchY.current = null; }}>
+      {isMobile && <button type="button" onClick={onClose} aria-label="Close station members" className="absolute right-3 top-2 z-20 rounded p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>}
+      <header className="flex items-start justify-between gap-3 bg-[#e0353b] px-4 py-3 pr-12 text-white">
         <div><h2 className="text-sm font-extrabold uppercase tracking-wide">{isGlobalAdmin ? 'Station Members Directory' : 'Station Members'}</h2>
           <p className="mt-0.5 text-[11px] text-white/75">{isGlobalAdmin ? 'All stations' : `${stationName ?? stationId} · ${stationId}`}</p></div>
-        <button type="button" onClick={onClose} aria-label="Close station members" className="rounded-lg p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>
+        {!isMobile && <button type="button" onClick={onClose} aria-label="Close station members" className="rounded-lg p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>}
       </header>
       <div className="space-y-2 border-b border-neutral-100 px-4 py-3 dark:border-neutral-800">
         <p className="text-[11px] text-neutral-500">{members.length} members · {members.filter(member => online(member.uid)).length} active now · {responsesReady ? `${members.filter(member => respondingUids.has(member.uid)).length} responding` : 'Response status unavailable'}</p>
         <input type="search" value={search} onChange={event => setSearch(event.target.value)} aria-label="Search station members" placeholder={isGlobalAdmin ? 'Search name, role, or station' : 'Search name or role'} className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-xs text-neutral-800 outline-none focus:border-[#e0353b] dark:border-neutral-700 dark:text-neutral-100" />
       </div>
-      <div className="min-h-0 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
+      <div className={`${isMobile ? '' : 'min-h-0 flex-1 overflow-y-auto'} divide-y divide-neutral-100 dark:divide-neutral-800`}>
         {(state.scope !== scope || state.loading) && <p role="status" className="px-4 py-6 text-center text-xs text-neutral-400">Loading station members…</p>}
         {state.scope === scope && state.error && <p role="alert" className="px-4 py-4 text-xs text-red-600">{state.error}</p>}
         {visible.map(member => <button key={member.uid} type="button"
