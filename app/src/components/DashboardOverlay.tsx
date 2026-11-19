@@ -147,10 +147,10 @@ function DashboardOverlay({
       {canUseChecking && onToggleChecking && <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><HydrantCheckingGlyph /></ToolButton>}
       {canPinFire && onToggleFirePin && <FirePinButton label={firePinLabel} onClick={onToggleFirePin} active={firePinMode} pinned={fireActive} tooltipSide={isMobileLandscape ? 'top' : 'left'} />}
       {canPin && (
-        <button aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'} onClick={onToggleAddHydrant} className="relative flex h-12 w-12 items-center justify-center transition-transform active:scale-90">
+        <button aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'} onClick={onToggleAddHydrant} className="relative flex h-11 w-11 items-center justify-center transition-transform active:scale-90">
           {addHydrantMode && <span className="hydrant-pin-ripple" />}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/Hydrant%20Pin%20Red.png" alt="Pin hydrant" className="relative h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]" />
+          <img src="/Hydrant%20Pin%20Red.png" alt="Pin hydrant" className="relative h-11 w-11 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]" />
           <span className={`pointer-events-none absolute bottom-0 right-0 flex h-5 w-5 items-center justify-center rounded-full text-white shadow ${addHydrantMode ? 'bg-[#e0353b]' : 'bg-[#2fbf4f]'}`}>
             <svg style={{ display: 'block' }} width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
               {addHydrantMode ? <><line x1="2.5" y1="2.5" x2="7.5" y2="7.5" /><line x1="7.5" y1="2.5" x2="2.5" y2="7.5" /></> : <><line x1="5" y1="2" x2="5" y2="8" /><line x1="2" y1="5" x2="8" y2="5" /></>}
@@ -298,7 +298,7 @@ function DashboardOverlay({
           <>
             {mobileControlsOpen && (
               <>
-                <div className="pointer-events-auto absolute bottom-3 left-[3.75rem] right-3 z-[1000] flex gap-2 whitespace-nowrap">
+                <div className="pointer-events-auto absolute bottom-3 left-[4.5rem] right-3 z-[1000] flex items-center gap-3 whitespace-nowrap">
                   {mobileActionControls}
                 </div>
               </>
@@ -843,8 +843,8 @@ function FirePinButton({ label, onClick, active, pinned, tooltipSide }: {
   return (
     <div className="group relative">
       <button type="button" aria-label={label} onClick={onClick}
-        className={`relative flex h-12 w-12 items-center justify-center transition-all duration-150 ease-out hover:scale-110 active:scale-90 ${active ? 'drop-shadow-[0_4px_10px_rgba(245,158,11,0.65)]' : 'drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]'}`}>
-        <MdLocalFireDepartment className={`h-12 w-12 ${active ? 'fire-pin-control-active text-[#f5c20a]' : 'text-[#f97316]'}`} />
+        className={`relative flex h-11 w-11 items-center justify-center transition-all duration-150 ease-out hover:scale-110 active:scale-90 ${active ? 'drop-shadow-[0_4px_10px_rgba(245,158,11,0.65)]' : 'drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]'}`}>
+        <MdLocalFireDepartment className={`h-11 w-11 ${active ? 'fire-pin-control-active text-[#f5c20a]' : 'text-[#f97316]'}`} />
       </button>
       {pinned && !active && (
         <span className="pointer-events-none absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-[#e0353b] dark:border-neutral-800">
