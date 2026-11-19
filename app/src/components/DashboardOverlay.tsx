@@ -151,7 +151,7 @@ function DashboardOverlay({
           {addHydrantMode && <span className="hydrant-pin-ripple" />}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Hydrant%20Pin%20Red.png" alt="Pin hydrant" className="relative h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]" />
-          <span className={`pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full text-white shadow ${addHydrantMode ? 'bg-[#e0353b]' : 'bg-[#2fbf4f]'}`}>
+          <span className={`pointer-events-none absolute bottom-0 right-0 flex h-5 w-5 items-center justify-center rounded-full text-white shadow ${addHydrantMode ? 'bg-[#e0353b]' : 'bg-[#2fbf4f]'}`}>
             <svg style={{ display: 'block' }} width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
               {addHydrantMode ? <><line x1="2.5" y1="2.5" x2="7.5" y2="7.5" /><line x1="7.5" y1="2.5" x2="2.5" y2="7.5" /></> : <><line x1="5" y1="2" x2="5" y2="8" /><line x1="2" y1="5" x2="8" y2="5" /></>}
             </svg>
@@ -298,8 +298,7 @@ function DashboardOverlay({
           <>
             {mobileControlsOpen && (
               <>
-                <button aria-label="Close map controls" onClick={() => setMobileControlsOpen(false)} className="pointer-events-auto absolute inset-0 z-[990] cursor-default" />
-                <div className="pointer-events-auto absolute bottom-3 left-16 right-3 z-[1000] flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="pointer-events-auto absolute bottom-3 left-[3.75rem] right-3 z-[1000] flex gap-2 whitespace-nowrap">
                   {mobileActionControls}
                 </div>
               </>

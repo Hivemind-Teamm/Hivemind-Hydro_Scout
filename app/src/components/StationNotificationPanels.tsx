@@ -171,7 +171,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       {activityOpen && isGlobalAdmin && <div className="border-b border-neutral-100 px-4 py-2.5 dark:border-neutral-800"><input type="search" value={stationSearch} onChange={event => setStationSearch(event.target.value)} aria-label="Filter station activity by station" placeholder="Search station ID or name" className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-xs text-neutral-800 outline-none focus:border-[#e0353b] dark:border-neutral-700 dark:text-neutral-100" /></div>}
       {(error || notificationError) && <p role="alert" className="px-4 py-2 text-xs text-red-600">{error || notificationError}</p>}
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}
-      <div className="scroll-fade min-h-0 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800">
+      <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain divide-y divide-neutral-100 dark:divide-neutral-800">
         {activityOpen ? visibleNotifications.map(item => {
           const stationSessionRequest = item.type === 'station-session-request';
           if (stationSessionRequest) {
