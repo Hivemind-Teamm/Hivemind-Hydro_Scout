@@ -114,6 +114,14 @@ body {
   animation: mobile-controls-ring-spin 3.2s linear infinite;
 }
 
+/* Station Activity owns touch scrolling while open. Its component forwards
+   the gesture to the notification list, preventing the dashboard behind it
+   from receiving a chained page scroll. */
+.station-activity-panel {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .station-takeover-button { animation: none; }
   .mobile-controls-ring { animation: none; }
