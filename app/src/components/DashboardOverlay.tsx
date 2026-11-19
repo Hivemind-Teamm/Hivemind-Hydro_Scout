@@ -135,6 +135,17 @@ function DashboardOverlay({
   const setHazardPanelMinimized = onHazardPanelMinimizedChange ?? (() => {});
   const mobileActionControls = (
     <>
+      <ToolButton label="Zoom in" onClick={onZoomIn} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><PlusGlyph /></ToolButton>
+      <ToolButton label="Zoom out" onClick={onZoomOut} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><MinusGlyph /></ToolButton>
+      <ToolButton label={is3D ? 'Switch to 2D view' : 'Switch to 3D view'} onClick={onToggle3D} rounded active={is3D} tooltipSide={isMobileLandscape ? 'top' : 'left'}><ThreeDGlyph /></ToolButton>
+      {role !== 'general' && role !== null && (
+        <div className="relative">
+          <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports} tooltipSide={isMobileLandscape ? 'top' : 'left'}><ReportGlyph /></ToolButton>
+          {hasPendingReports && <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e0353b] text-[9px] font-bold text-white">!</span>}
+        </div>
+      )}
+      {canUseChecking && onToggleChecking && <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><HydrantCheckingGlyph /></ToolButton>}
+      {canPinFire && onToggleFirePin && <FirePinButton label={firePinLabel} onClick={onToggleFirePin} active={firePinMode} pinned={fireActive} tooltipSide={isMobileLandscape ? 'top' : 'left'} />}
       {canPin && (
         <button aria-label={addHydrantMode ? 'Exit Add Hydrant mode' : 'Pin new hydrant'} onClick={onToggleAddHydrant} className="relative flex h-12 w-12 items-center justify-center transition-transform active:scale-90">
           {addHydrantMode && <span className="hydrant-pin-ripple" />}
@@ -147,20 +158,8 @@ function DashboardOverlay({
           </span>
         </button>
       )}
-      {canPinFire && onToggleFirePin && <FirePinButton label={firePinLabel} onClick={onToggleFirePin} active={firePinMode} pinned={fireActive} tooltipSide={isMobileLandscape ? 'top' : 'left'} />}
-      {role !== 'general' && role !== null && (
-        <div className="relative">
-          <ToolButton label="Reports" onClick={onToggleReports} rounded active={showReports} tooltipSide={isMobileLandscape ? 'top' : 'left'}><ReportGlyph /></ToolButton>
-          {hasPendingReports && <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e0353b] text-[9px] font-bold text-white">!</span>}
-        </div>
-      )}
-      {canUseChecking && onToggleChecking && <ToolButton label="Hydrant checking" onClick={onToggleChecking} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><HydrantCheckingGlyph /></ToolButton>}
       {(addHydrantMode || firePinMode) && <ToolButton label={pinHereLabel} onClick={onTargetLocation} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><TargetGlyph /></ToolButton>}
       <NearestHydrantButton onClick={() => window.dispatchEvent(new Event('hydroscout:find-nearest'))} tooltipSide={isMobileLandscape ? 'top' : 'left'} />
-      <ToolButton label="Zoom in" onClick={onZoomIn} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><PlusGlyph /></ToolButton>
-      <ToolButton label="Zoom out" onClick={onZoomOut} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><MinusGlyph /></ToolButton>
-      <ToolButton label="Go to my location" onClick={onLocate} rounded tooltipSide={isMobileLandscape ? 'top' : 'left'}><GpsGlyph /></ToolButton>
-      <ToolButton label={is3D ? 'Switch to 2D view' : 'Switch to 3D view'} onClick={onToggle3D} rounded active={is3D} tooltipSide={isMobileLandscape ? 'top' : 'left'}><ThreeDGlyph /></ToolButton>
     </>
   );
 
@@ -300,14 +299,12 @@ function DashboardOverlay({
             {mobileControlsOpen && (
               <>
                 <button aria-label="Close map controls" onClick={() => setMobileControlsOpen(false)} className="pointer-events-auto absolute inset-0 z-[990] cursor-default" />
-                <div className="pointer-events-auto absolute bottom-16 left-3 z-[1000] flex max-w-[calc(100vw-1.5rem)] flex-wrap gap-2">
+                <div className="pointer-events-auto absolute bottom-3 left-16 right-3 z-[1000] flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {mobileActionControls}
                 </div>
               </>
             )}
-            <button type="button" aria-label="Open map controls" aria-expanded={mobileControlsOpen} onClick={() => setMobileControlsOpen((open) => !open)} className="mobile-controls-ring pointer-events-auto absolute bottom-3 left-3 z-[1100] flex h-11 w-11 items-center justify-center rounded-full p-[3px] shadow-[0_0_16px_rgba(224,53,59,0.6)]">
-              <span className="flex h-full w-full items-center justify-center rounded-full bg-neutral-950/90 text-white"><MenuGlyph /></span>
-            </button>
+            <button type="button" aria-label="Open map controls" aria-expanded={mobileControlsOpen} onClick={() => setMobileControlsOpen((open) => !open)} className="mobile-controls-ring pointer-events-auto absolute bottom-3 left-3 z-[1100] h-11 w-11 rounded-full shadow-[0_0_16px_rgba(224,53,59,0.6)]" />
           </>
         ) : (
           <div className="pointer-events-auto absolute bottom-12 right-4 z-[1000] flex flex-col items-end gap-3">

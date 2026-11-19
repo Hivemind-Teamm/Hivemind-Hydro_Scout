@@ -109,16 +109,14 @@ body {
 
 .mobile-controls-ring {
   background: conic-gradient(from 0deg, #e0353b, #fed42e, #ff6b35, #e0353b);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
   animation: mobile-controls-ring-spin 3.2s linear infinite;
-}
-
-.mobile-controls-ring > span {
-  animation: mobile-controls-ring-spin 3.2s linear infinite reverse;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .station-takeover-button { animation: none; }
-  .mobile-controls-ring, .mobile-controls-ring > span { animation: none; }
+  .mobile-controls-ring { animation: none; }
 }
 
 /* Shared detail treatment for station activity: the same charcoal, red, and
