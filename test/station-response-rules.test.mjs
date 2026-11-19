@@ -34,6 +34,44 @@ try {
     });
   });
 
+  // STEP 48B.5D.14E: SERVER CONSENT FIXTURES
+  // Test-only setup. Bypass rules to seed server-owned governance
+  // and already-approved, current consent for authorized responders.
+  await env.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    const governanceRef = db.doc('appSettings/locationPrivacy');
+
+    await governanceRef.set({
+      controller: 'HydroScout Test Controller',
+      contact: 'privacy@example.test',
+      updatedAt: serverTimestamp(),
+      updatedBy: 'admin',
+    });
+
+    const governanceSnapshot = await governanceRef.get();
+    assert.equal(governanceSnapshot.exists, true);
+
+    const governanceUpdatedAt = governanceSnapshot.data().updatedAt;
+    assert.ok(governanceUpdatedAt);
+
+    const noticeVersion = '2026-10-23-v5';
+
+    for (const [uid, stationId] of [
+      ['member-1', 'DILIMAN-01'],
+      ['admin', 'SYSTEM_ADMIN'],
+    ]) {
+      await db.doc(
+        `users/${uid}/locationConsents/${stationId}`,
+      ).set({
+        uid,
+        stationId,
+        decision: 'granted',
+        noticeVersion,
+        governanceUpdatedAt,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  });
   const dbFor = uid => env.authenticatedContext(uid).firestore();
   const newMemberDb = dbFor('new-member');
   const headDb = dbFor('head-1');
@@ -290,17 +328,24 @@ try {
     type: 'response-started', uid: 'admin', displayName: 'Admin', responseId: adminResponseId,
     message: 'Admin started responding.', createdAt: serverTimestamp(),
   });
-  // Administrators may manage stations but cannot start a responder
-  // session without the approved personal station membership required
-  // by the stationResponses creation rule.
-  await assertFails(adminStart.commit());
+  // Personal administrators may start using the reserved SYSTEM_ADMIN
+  // identity without requiring ordinary station membership.
+  await assertSucceeds(adminStart.commit());
 
   await env.withSecurityRulesDisabled(async context => {
     const storedResponse = await context.firestore()
       .doc(adminResponsePath).get();
 
-    assert.equal(storedResponse.exists, false);
+    assert.equal(storedResponse.exists, true);
   });
+  // An authorized personal Admin may update the response heartbeat
+  // and delete their published marker.
+  await assertSucceeds(adminDb.doc(adminResponsePath).update({
+    lastLocationAt: serverTimestamp(),
+  }));
+  await assertSucceeds(adminDb.doc(adminLocationPath).delete());
+
+  // An ordinary station member must never forge SYSTEM_ADMIN.
   const forgedSystemResponse = otherDb.batch();
   const forgedResponseId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   forgedSystemResponse.update(otherDb.doc('users/member-2'), { activeResponseId: forgedResponseId });

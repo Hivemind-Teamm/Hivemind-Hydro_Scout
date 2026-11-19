@@ -50,6 +50,10 @@ const sharingStates = new Map<string, ResponseSharingState>();
 /** First check delay for a response that was just started. */
 const primedDelays = new Map<string, number>();
 
+// Coordinate pending writes with consent-withdrawal cleanup.
+const inFlightResponseWrites = new Map<string, Promise<void>>();
+const pendingResponseCleanups = new Map<string, Promise<void>>();
+
 function setVisibility(next: ResponseVisibility | null) {
   if (current === next) return;
   if (current && next && current.responseId === next.responseId
@@ -138,18 +142,85 @@ export function useResponseLocationSharing(target: ResponseSharingTarget | null,
     const marker = doc(db, 'stations', stationId, 'unitLocations', responseId);
 
     if (!enabled) {
-      // Consent withdrawn: take the marker (and any legacy copy) down once.
+      // A local state of "unpublished" does not prove the marker is absent.
       setVisibility({ responseId, phase: 'paused', distanceM: null });
-      const state = sharingStates.get(responseId) ?? INITIAL_SHARING_STATE;
-      if (state.published !== false) {
-        const batch = writeBatch(db);
-        batch.delete(marker);
-        batch.delete(doc(db, 'responseLocations', responseId));
-        void batch.commit()
-          .then(() => { sharingStates.set(responseId, { ...state, inside: null, published: false }); })
-          .catch(err => { console.error('Could not remove the location after consent withdrawal:', err); });
-      }
-      return;
+
+      let cleanupActive = true;
+      let runningCleanup: Promise<void> | null = null;
+      let removalConfirmed = false;
+
+      const removePublishedLocation = () => {
+        if (!cleanupActive || runningCleanup || removalConfirmed || !navigator.onLine) return;
+
+        const task = (async () => {
+          // Wait for publication already submitted before consent withdrawal.
+          const inFlight = inFlightResponseWrites.get(responseId);
+
+          if (inFlight) {
+            await inFlight.catch(() => undefined);
+          }
+
+          if (!cleanupActive || !navigator.onLine) return;
+
+          const batch = writeBatch(db);
+          batch.delete(marker);
+          batch.delete(doc(db, 'responseLocations', responseId));
+
+          await batch.commit();
+
+          // A completed deletion must update the shared state even if
+          // consent was restored while the deletion was in flight.
+          // The renewed sharing loop waits for this cleanup promise.
+          sharingStates.set(responseId, {
+            ...INITIAL_SHARING_STATE,
+            published: false,
+          });
+
+          if (cleanupActive) {
+            removalConfirmed = true;
+          }
+        })();
+
+        runningCleanup = task;
+        pendingResponseCleanups.set(responseId, task);
+
+        void task.catch(err => {
+          console.error(
+            'Could not remove response location after consent withdrawal:',
+            err,
+          );
+        }).finally(() => {
+          if (pendingResponseCleanups.get(responseId) === task) {
+            pendingResponseCleanups.delete(responseId);
+          }
+          runningCleanup = null;
+        });
+      };
+
+      const retryCleanup = () => {
+        if (document.visibilityState === 'visible') {
+          removePublishedLocation();
+        }
+      };
+
+      window.addEventListener('online', removePublishedLocation);
+      window.addEventListener('focus', retryCleanup);
+      document.addEventListener('visibilitychange', retryCleanup);
+
+      const cleanupTimer = setInterval(
+        removePublishedLocation,
+        RESPONSE_RETRY_MS,
+      );
+
+      removePublishedLocation();
+
+      return () => {
+        cleanupActive = false;
+        clearInterval(cleanupTimer);
+        window.removeEventListener('online', removePublishedLocation);
+        window.removeEventListener('focus', retryCleanup);
+        document.removeEventListener('visibilitychange', retryCleanup);
+      };
     }
 
     let stopped = false;
@@ -170,8 +241,25 @@ export function useResponseLocationSharing(target: ResponseSharingTarget | null,
       lastCheckAt = Date.now();
       let delay = RESPONSE_RETRY_MS;
       try {
-        if (!fireRef.current) return;
-        if (!sharingStates.has(responseId)) setVisibility({ responseId, phase: 'locating', distanceM: null });
+        // Avoid overlapping with writes or cleanup from a previous effect.
+        const priorCleanup = pendingResponseCleanups.get(responseId);
+
+        if (priorCleanup) {
+          await priorCleanup.catch(() => undefined);
+        }
+
+        const priorWrite = inFlightResponseWrites.get(responseId);
+
+        if (priorWrite) {
+          await priorWrite.catch(() => undefined);
+        }
+
+        if (stopped || !fireRef.current) return;
+
+        if (!sharingStates.has(responseId)) {
+          setVisibility({ responseId, phase: 'locating', distanceM: null });
+        }
+
         const position = await readResponsePosition();
         const fire = fireRef.current;
         if (stopped || !fire) return;
@@ -193,11 +281,26 @@ export function useResponseLocationSharing(target: ResponseSharingTarget | null,
           if (plan.publish) batch.set(marker, responseMarker({ responseId, stationId, stationName }, position.coords));
           if (plan.remove) batch.delete(marker);
           if (plan.heartbeat) batch.update(doc(db, 'stationResponses', responseId), { lastLocationAt: serverTimestamp() });
-          await batch.commit();
+
+          if (stopped) return;
+
+          // Track commits so withdrawal cleanup can wait for them.
+          const write = batch.commit();
+          inFlightResponseWrites.set(responseId, write);
+
+          try {
+            await write;
+          } finally {
+            if (inFlightResponseWrites.get(responseId) === write) {
+              inFlightResponseWrites.delete(responseId);
+            }
+          }
         }
-        // Keep the outcome even if the effect stopped mid-write: the write happened.
-        sharingStates.set(responseId, plan.next);
+        // A stopped effect must not replace the state established by
+        // withdrawal cleanup or by a newer sharing effect.
         if (stopped) return;
+
+        sharingStates.set(responseId, plan.next);
         setVisibility({ responseId, phase: phaseFor(plan.next), distanceM: roundDistance(distanceM) });
         delay = plan.nextCheckMs;
       } catch (err) {

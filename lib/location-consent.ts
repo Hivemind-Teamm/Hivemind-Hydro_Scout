@@ -6,6 +6,26 @@ export interface LocationConsentRecord {
   stationId: string;
   decision: LocationConsentDecision;
   decidedAt: number;
+  /** Revision of the published privacy notice acknowledged on this device. */
+  governanceRevision?: string;
+}
+/**
+ * A browser consent decision only authorizes location sharing for
+ * the exact verified privacy-governance revision it acknowledged.
+ *
+ * Null means the published revision is not currently verified.
+ * Legacy records with no governanceRevision must be acknowledged again.
+ */
+export function consentMatchesGovernance(
+  record: LocationConsentRecord | null,
+  verifiedRevision: string | null,
+): boolean {
+  return typeof verifiedRevision === 'string'
+    && verifiedRevision.length > 0
+    && record !== null
+    && record.version === LOCATION_NOTICE_VERSION
+    && record.decision === 'granted'
+    && record.governanceRevision === verifiedRevision;
 }
 export function consentKey(uid: string, stationId: string) {
   return `hydroscout-location-consent:${uid}:${stationId}`;

@@ -1,9 +1,28 @@
 export interface StationProfile {
   accountType?: unknown;
+  role?: unknown;
   stationId?: unknown;
   stationMembershipStatus?: unknown;
 }
 
+/**
+ * Personal Admin responders use the same explicit consent scope
+ * as their SYSTEM_ADMIN response identity.
+ */
+export const ADMIN_RESPONSE_STATION_ID = 'SYSTEM_ADMIN';
+
+export function consentScopeForResponse(
+  profile: StationProfile | undefined,
+): string | null {
+  if (
+    profile?.accountType === 'person' &&
+    profile.role === 'admin'
+  ) {
+    return ADMIN_RESPONSE_STATION_ID;
+  }
+
+  return assignedStationIdForResponse(profile);
+}
 export interface UnitPosition {
   stationId: string;
   updatedBy: string;
