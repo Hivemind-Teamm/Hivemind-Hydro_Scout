@@ -69,7 +69,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   const [now, setNow] = useState(() => Date.now());
   const [stationSearch, setStationSearch] = useState('');
   const [confirmingClear, setConfirmingClear] = useState(false);
-  const activityListRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const panelTouchY = useRef<number | null>(null);
   // A pending confirmation never survives closing the panel.
   if (confirmingClear && !activityOpen) setConfirmingClear(false);
@@ -146,11 +146,11 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     <button disabled={loading} onClick={() => void openProfile(uid, { name, role }, markRead)}
       className="pointer-events-auto relative font-semibold text-[#e0353b] hover:underline focus-visible:outline-2 focus-visible:outline-red-500 disabled:opacity-50">{name}</button>
   );
-  const panel = 'station-activity-panel pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] flex h-[70dvh] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl bg-white font-sans shadow-2xl dark:bg-neutral-900';
+  const panel = 'station-activity-panel scroll-fade pointer-events-auto absolute right-4 top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-[4001] h-[70dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl bg-white font-sans shadow-2xl dark:bg-neutral-900';
   const scrollActivityFromPanel = (delta: number) => {
-    const list = activityListRef.current;
-    if (!list || list.scrollHeight <= list.clientHeight) return false;
-    list.scrollTop += delta;
+    const panel = panelRef.current;
+    if (!panel || panel.scrollHeight <= panel.clientHeight) return false;
+    panel.scrollTop += delta;
     return true;
   };
   const header = (title: string, subtitle: string, close: () => void) => (
@@ -166,7 +166,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     {(activityOpen || membersOpen) && <button type="button" aria-label="Close notifications"
       onClick={activityOpen ? closeActivity : closeMembers}
       className="pointer-events-auto absolute inset-0 z-[4000] bg-black/25" />}
-    {(activityOpen || membersOpen) && <section aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}
+    {(activityOpen || membersOpen) && <section ref={panelRef} aria-label={activityOpen ? 'Station activity' : 'Member approvals'} className={panel}
       onWheel={event => { if (scrollActivityFromPanel(event.deltaY)) event.preventDefault(); }}
       onTouchStart={event => { panelTouchY.current = event.touches[0]?.clientY ?? null; }}
       onTouchMove={event => { const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollActivityFromPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
@@ -183,7 +183,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       {activityOpen && isGlobalAdmin && <div className="border-b border-neutral-100 px-4 py-2.5 dark:border-neutral-800"><input type="search" value={stationSearch} onChange={event => setStationSearch(event.target.value)} aria-label="Filter station activity by station" placeholder="Search station ID or name" className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-xs text-neutral-800 outline-none focus:border-[#e0353b] dark:border-neutral-700 dark:text-neutral-100" /></div>}
       {(error || notificationError) && <p role="alert" className="px-4 py-2 text-xs text-red-600">{error || notificationError}</p>}
       {loading && <p role="status" className="px-4 py-2 text-xs text-neutral-500">Opening account…</p>}
-      <div ref={activityListRef} className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain divide-y divide-neutral-100 dark:divide-neutral-800">
+      <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
         {activityOpen ? visibleNotifications.map(item => {
           const stationSessionRequest = item.type === 'station-session-request';
           if (stationSessionRequest) {
