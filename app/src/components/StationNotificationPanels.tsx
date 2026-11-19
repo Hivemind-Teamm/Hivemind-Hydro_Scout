@@ -69,10 +69,14 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
   const [now, setNow] = useState(() => Date.now());
   const [stationSearch, setStationSearch] = useState('');
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [closeOverContent, setCloseOverContent] = useState(false);
   const panelScrollRef = useRef<HTMLDivElement>(null);
   const panelTouchY = useRef<number | null>(null);
   // A pending confirmation never survives closing the panel.
   if (confirmingClear && !activityOpen) setConfirmingClear(false);
+  useEffect(() => {
+    if (!activityOpen && !membersOpen) setCloseOverContent(false);
+  }, [activityOpen, membersOpen]);
   const selected = notifications.find(item => stationNotificationCardKey(item) === selectedKey);
   const visibleNotifications = useMemo(() => {
     const term = stationSearch.trim().toLowerCase();
@@ -170,8 +174,8 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       onTouchStart={event => { panelTouchY.current = event.touches[0]?.clientY ?? null; }}
       onTouchMove={event => { const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollActivityFromPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
       onTouchEnd={() => { panelTouchY.current = null; }}>
-      <button onClick={activityOpen ? closeActivity : closeMembers} aria-label={`Close ${(activityOpen ? 'station activity' : 'member approvals')}`} className="absolute right-3 top-2 z-10 rounded p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>
-      <div ref={panelScrollRef} className="scroll-fade h-full overflow-y-auto overscroll-contain">
+      <button onClick={activityOpen ? closeActivity : closeMembers} aria-label={`Close ${(activityOpen ? 'station activity' : 'member approvals')}`} className={`absolute right-3 top-2 z-10 rounded p-2 transition-colors ${closeOverContent ? 'bg-white/90 text-[#e0353b] shadow-sm hover:bg-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}><FiX /></button>
+      <div ref={panelScrollRef} onScroll={event => setCloseOverContent(event.currentTarget.scrollTop > 28)} className="scroll-fade h-full overflow-y-auto overscroll-contain">
       {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates') : header('Member approvals', 'Pending membership requests')}
       <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification to read it. In daily response groups, expand each entry to mark it read. Times are shown in PHT.</p>
       {activityOpen && notifications.length > 0 && <div className="flex min-h-10 items-center justify-end gap-2 border-b border-neutral-100 px-4 py-1.5 text-[11px] dark:border-neutral-800">
