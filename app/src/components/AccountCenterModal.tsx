@@ -20,7 +20,7 @@ const ROLE_ACCESS: Record<string, {
   mapAccess: string; routing: string; editHydrant: string; fileReports: string;
 }> = {
   general:    { mapAccess: 'View Only', routing: 'Disabled', editHydrant: 'Locked',   fileReports: 'Locked'   },
-  authorized: { mapAccess: 'Full',      routing: 'Enabled',  editHydrant: 'Locked',   fileReports: 'Locked'   },
+  authorized: { mapAccess: 'Full',      routing: 'Enabled',  editHydrant: 'Status only (AOR)', fileReports: 'Enabled (AOR)' },
   head:       { mapAccess: 'Full',      routing: 'Enabled',  editHydrant: 'Enabled',  fileReports: 'Enabled'  },
   admin:      { mapAccess: 'Full',      routing: 'Enabled',  editHydrant: 'Enabled',  fileReports: 'Enabled'  },
 };
@@ -55,7 +55,7 @@ export default function AccountCenterModal({ onClose }: AccountCenterModalProps)
 
   function handleSignIn() { onClose(); router.push('/login');  }
   function handleSignUp() { onClose(); router.push('/signup'); }
-  function green(val: string) { return val === 'Full' || val === 'Enabled'; }
+  function green(val: string) { return val === 'Full' || val.startsWith('Enabled') || val.startsWith('Status only'); }
 
   function clearPasswordFields() {
     setCurrentPassword('');
