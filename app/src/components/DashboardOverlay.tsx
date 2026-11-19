@@ -446,7 +446,7 @@ function DashboardOverlay({
       <header className="pointer-events-auto absolute inset-x-0 top-0 z-[1000]">
         <div className="flex h-16 w-full items-stretch justify-between overflow-visible bg-neutral-600/60 pl-2 pr-4 [backdrop-filter:blur(4px)] dark:bg-black/55">
           {/* Logo + subtitle */}
-          <div className="flex items-center gap-0 border-r border-white/15 pr-4">
+          <div className="flex shrink-0 items-center gap-0 border-r border-white/15 pr-4">
             <Logo />
           </div>
 
@@ -870,7 +870,7 @@ function Logo() {
         height={52}
         className="h-[3.25rem] w-[3.25rem] translate-y-1 object-contain dark:drop-shadow-[0_0_10px_rgba(224,53,59,0.7)]"
       />
-      <span className="text-2xl font-extrabold tracking-tight text-white">
+      <span className="text-2xl font-extrabold tracking-tight text-white max-[1180px]:hidden">
         Hydro-<span className="text-[#e0353b]">Scout</span>
       </span>
     </div>
