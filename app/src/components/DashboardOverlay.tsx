@@ -299,7 +299,7 @@ function DashboardOverlay({
           <>
             {mobileControlsOpen && (
               <>
-                <div className="mobile-landscape-controls-enter pointer-events-auto absolute bottom-3 left-[4.5rem] right-3 z-[1000] flex items-center gap-3 whitespace-nowrap">
+                <div className="pointer-events-auto absolute bottom-3 left-[4.5rem] right-3 z-[1000] flex items-center gap-3 whitespace-nowrap">
                   {mobileActionControls}
                 </div>
               </>

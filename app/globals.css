@@ -114,37 +114,17 @@ body {
   animation: mobile-controls-ring-spin 3.2s linear infinite;
 }
 
-/* The landscape controls originate at the glowing ring, then fan across the
-   bottom bar. The ring makes one brisk clockwise turn to acknowledge the tap
-   before returning to its slower ambient rotation. */
+/* The ring makes one brisk clockwise turn to acknowledge the tap before
+   returning to its slower ambient rotation. */
 @keyframes mobile-controls-ring-open {
   from { transform: rotate(0deg) scale(1); }
   70% { transform: rotate(390deg) scale(1.08); }
   to { transform: rotate(450deg) scale(1); }
 }
 
-@keyframes mobile-landscape-control-enter {
-  from { opacity: 0; transform: translateX(-3rem) scale(0.55); }
-  65% { opacity: 1; transform: translateX(0.2rem) scale(1.05); }
-  to { opacity: 1; transform: translateX(0) scale(1); }
-}
-
 .mobile-controls-ring-opening {
   animation: mobile-controls-ring-open 460ms cubic-bezier(0.2, 0.85, 0.28, 1) both;
 }
-
-.mobile-landscape-controls-enter > * {
-  transform-origin: left center;
-  animation: mobile-landscape-control-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.mobile-landscape-controls-enter > *:nth-child(2) { animation-delay: 45ms; }
-.mobile-landscape-controls-enter > *:nth-child(3) { animation-delay: 90ms; }
-.mobile-landscape-controls-enter > *:nth-child(4) { animation-delay: 135ms; }
-.mobile-landscape-controls-enter > *:nth-child(5) { animation-delay: 180ms; }
-.mobile-landscape-controls-enter > *:nth-child(6) { animation-delay: 225ms; }
-.mobile-landscape-controls-enter > *:nth-child(7) { animation-delay: 270ms; }
-.mobile-landscape-controls-enter > *:nth-child(8) { animation-delay: 315ms; }
-.mobile-landscape-controls-enter > *:nth-child(9) { animation-delay: 360ms; }
 
 /* Station Activity owns touch scrolling while open. Its component forwards
    the gesture to the notification list, preventing the dashboard behind it
@@ -156,8 +136,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .station-takeover-button { animation: none; }
-  .mobile-controls-ring, .mobile-controls-ring-opening,
-  .mobile-landscape-controls-enter > * { animation: none; }
+  .mobile-controls-ring, .mobile-controls-ring-opening { animation: none; }
 }
 
 /* Shared detail treatment for station activity: the same charcoal, red, and
