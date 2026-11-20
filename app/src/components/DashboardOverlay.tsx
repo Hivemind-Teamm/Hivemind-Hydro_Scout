@@ -299,12 +299,12 @@ function DashboardOverlay({
           <>
             {mobileControlsOpen && (
               <>
-                <div className="pointer-events-auto absolute bottom-3 left-[4.5rem] right-3 z-[1000] flex items-center gap-3 whitespace-nowrap">
+                <div className="mobile-landscape-controls-enter pointer-events-auto absolute bottom-3 left-[4.5rem] right-3 z-[1000] flex items-center gap-3 whitespace-nowrap">
                   {mobileActionControls}
                 </div>
               </>
             )}
-            <button type="button" aria-label="Open map controls" aria-expanded={mobileControlsOpen} onClick={() => setMobileControlsOpen((open) => !open)} className="mobile-controls-ring pointer-events-auto absolute bottom-3 left-3 z-[1100] h-11 w-11 rounded-full shadow-[0_0_16px_rgba(224,53,59,0.6)]" />
+            <button type="button" aria-label="Open map controls" aria-expanded={mobileControlsOpen} onClick={() => setMobileControlsOpen((open) => !open)} className={`mobile-controls-ring pointer-events-auto absolute bottom-3 left-3 z-[1100] h-11 w-11 rounded-full shadow-[0_0_16px_rgba(224,53,59,0.6)] ${mobileControlsOpen ? 'mobile-controls-ring-opening' : ''}`} />
           </>
         ) : (
           <div className="pointer-events-auto absolute bottom-12 right-4 z-[1000] flex flex-col items-end gap-3">
