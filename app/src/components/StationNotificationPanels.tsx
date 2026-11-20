@@ -160,7 +160,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
     return true;
   };
   const header = (title: string, subtitle: string) => (
-    <header className="pr-12 bg-[#e0353b] px-4 py-3 text-white">
+    <header className={`pr-12 bg-[#e0353b] px-4 py-3 text-white ${isMobile ? 'station-panel-mobile-header' : ''}`}>
       <div>
         <h2 className="text-sm font-extrabold uppercase tracking-wide">{title}</h2>
         <p className="text-[10px] text-white/75">{isGlobalAdmin ? subtitle : `${stationName} · ${subtitle}`}</p>
@@ -177,7 +177,7 @@ export default function StationNotificationPanels({ stationName, activityOpen, m
       onTouchMove={event => { if (!isMobile) return; const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollActivityFromPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
       onTouchEnd={() => { panelTouchY.current = null; }}>
       <button onClick={activityOpen ? closeActivity : closeMembers} aria-label={`Close ${(activityOpen ? 'station activity' : 'member approvals')}`} className={`absolute right-3 top-2 z-20 rounded p-2 transition-colors ${isMobile && closeOverContent ? 'bg-white/90 text-[#e0353b] shadow-sm hover:bg-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}><FiX /></button>
-      <div ref={isMobile ? panelScrollRef : undefined} onScroll={isMobile ? event => setCloseOverContent(event.currentTarget.scrollTop > 28) : undefined} className={isMobile ? 'scroll-fade h-full overflow-y-auto overscroll-contain' : 'contents'}>
+      <div ref={isMobile ? panelScrollRef : undefined} onScroll={isMobile ? event => setCloseOverContent(event.currentTarget.scrollTop > 28) : undefined} className={isMobile ? 'station-panel-mobile-scroll scroll-fade h-full overflow-x-hidden overflow-y-auto overscroll-contain' : 'contents'}>
       <div className={isMobile ? undefined : 'shrink-0 bg-white dark:bg-neutral-900'}>
         {activityOpen ? header(isGlobalAdmin ? 'Station activity' : fullDetails ? 'Station activity' : 'Notifications', isGlobalAdmin ? 'All stations' : fullDetails ? 'Map, account and response updates' : 'Station operations and your updates') : header('Member approvals', 'Pending membership requests')}
         <p className="border-b border-neutral-100 px-4 py-2 text-[10px] text-neutral-400 dark:border-neutral-800">Open a notification to read it. In daily response groups, expand each entry to mark it read. Times are shown in PHT.</p>

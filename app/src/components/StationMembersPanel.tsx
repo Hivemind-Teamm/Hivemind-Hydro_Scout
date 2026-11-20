@@ -75,8 +75,8 @@ export default function StationMembersPanel({ stationId, stationName, responding
       onTouchMove={event => { if (!isMobile) return; const currentY = event.touches[0]?.clientY; if (currentY === undefined || panelTouchY.current === null) return; const moved = scrollPanel(panelTouchY.current - currentY); panelTouchY.current = currentY; if (moved) event.preventDefault(); }}
       onTouchEnd={() => { panelTouchY.current = null; }}>
       {isMobile && <button type="button" onClick={onClose} aria-label="Close station members" className={`absolute right-3 top-2 z-20 rounded p-2 transition-colors ${closeOverContent ? 'bg-white/90 text-[#e0353b] shadow-sm hover:bg-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}><FiX /></button>}
-      <div ref={isMobile ? panelScrollRef : undefined} onScroll={isMobile ? event => setCloseOverContent(event.currentTarget.scrollTop > 28) : undefined} className={isMobile ? 'h-full overflow-y-auto overscroll-contain' : 'contents'}>
-      <header className="flex items-start justify-between gap-3 bg-[#e0353b] px-4 py-3 pr-12 text-white">
+      <div ref={isMobile ? panelScrollRef : undefined} onScroll={isMobile ? event => setCloseOverContent(event.currentTarget.scrollTop > 28) : undefined} className={isMobile ? 'station-panel-mobile-scroll h-full overflow-x-hidden overflow-y-auto overscroll-contain' : 'contents'}>
+      <header className={`flex items-start justify-between gap-3 bg-[#e0353b] px-4 py-3 pr-12 text-white ${isMobile ? 'station-panel-mobile-header' : ''}`}>
         <div><h2 className="text-sm font-extrabold uppercase tracking-wide">{isGlobalAdmin ? 'Station Members Directory' : 'Station Members'}</h2>
           <p className="mt-0.5 text-[11px] text-white/75">{isGlobalAdmin ? 'All stations' : `${stationName ?? stationId} · ${stationId}`}</p></div>
         {!isMobile && <button type="button" onClick={onClose} aria-label="Close station members" className="absolute right-3 top-2 z-20 rounded p-2 text-white/80 hover:bg-white/15 hover:text-white"><FiX /></button>}
