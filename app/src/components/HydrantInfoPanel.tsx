@@ -34,8 +34,6 @@ const PRESSURE_COLOR: Record<string, string> = {
   None:     '#9aa0a6',
 };
 
-type FlashState = 'idle' | 'red1' | 'off1' | 'red2' | 'active';
-
 export default function HydrantInfoPanel({
   hydrant, onClose, onOpenFullDetails, onEdit, onReport,
   onFlyTo, onRoute, onRouteDismiss, isOtw, routeCalculating = false, scrollRef, checkingSession = null, check = null, onRecordCheck,
@@ -88,22 +86,12 @@ export default function HydrantInfoPanel({
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
   const dragStartY  = useRef(0);
   const dragStartH  = useRef(0);
-  const lastTapTime = useRef(0);
-
-  // Scale mode — persists until the user double-taps again to turn it off
-  const scaleModeRef = useRef(false);
-  const [scaleMode, setScaleMode] = useState(false);
-  const [flash, setFlash] = useState<FlashState>('idle');
 
   // Reset everything when a new hydrant is selected
   useEffect(() => {
     // Deliberately resync local panel UI state to the newly selected hydrant.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPanelHeight(null);
-    scaleModeRef.current = false;
-    setScaleMode(false);
-    setFlash('idle');
-    lastTapTime.current = 0;
   }, [hydrant.id]);
 
   // Touch devices (mobile + tablet): scroll past the photo so info shows first.
@@ -116,45 +104,13 @@ export default function HydrantInfoPanel({
     });
   }, [hydrant.id, scrollRef, isTouchDevice]);
 
-  // Flash animation played when scale mode is activated
-  const runFlash = useCallback(() => {
-    setFlash('red1');
-    setTimeout(() => setFlash('off1'),  220);
-    setTimeout(() => setFlash('red2'),  440);
-    setTimeout(() => setFlash('active'), 660); // stays red until deactivated
-  }, []);
-
   const onDragHandlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // Buttons retain their normal tap behaviour. Every other part of the
+    // header and the grip begins resizing immediately on first contact.
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select')) return;
     e.preventDefault();
-    const el      = e.currentTarget;
-    const pid     = e.pointerId;
-    const isTouch = e.pointerType !== 'mouse';
-    const now     = Date.now();
-
-    if (isTouch) {
-      const elapsed    = now - lastTapTime.current;
-      lastTapTime.current = now;
-      const isDoubleTap = elapsed <= 1000;
-
-      if (isDoubleTap) {
-        if (scaleModeRef.current) {
-          // Second double-tap → deactivate
-          scaleModeRef.current = false;
-          setScaleMode(false);
-          setFlash('idle');
-          return; // no drag on deactivation tap
-        }
-        // First double-tap → activate and fall through to start drag
-        scaleModeRef.current = true;
-        setScaleMode(true);
-        runFlash();
-      } else {
-        // Single tap: only allow drag if scale mode is already on
-        if (!scaleModeRef.current) return;
-      }
-    }
-
-    // ── Start resize drag (mouse: always; touch: when scale mode is active) ──
+    const el = e.currentTarget;
+    const pid = e.pointerId;
     el.setPointerCapture(pid);
     dragStartY.current = e.clientY;
     dragStartH.current = panelRef.current?.offsetHeight ?? 0;
@@ -180,20 +136,8 @@ export default function HydrantInfoPanel({
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
-  }, [runFlash]);
+  }, []);
 
-  // ── Visual state ──
-  const pillBg = flash === 'red1' || flash === 'red2'
-    ? 'bg-[#e0353b]'
-    : flash === 'active'
-      ? 'bg-[#e0353b]/70'
-      : 'bg-neutral-300 dark:bg-neutral-600';
-
-  const handleBg = flash === 'red1' || flash === 'red2'
-    ? 'bg-[#e0353b]/20 dark:bg-[#e0353b]/25'
-    : flash === 'active'
-      ? 'bg-[#e0353b]/10 dark:bg-[#e0353b]/15'
-      : 'bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700';
 
   return (
     <div
@@ -218,14 +162,14 @@ export default function HydrantInfoPanel({
       <div
         onPointerDown={onDragHandlePointerDown}
         style={{ touchAction: 'none' }}
-        className={`shrink-0 flex items-center justify-center h-5 select-none transition-colors cursor-s-resize ${handleBg}`}
-        title={scaleMode ? 'Scale mode ON — double-tap to exit' : 'Double-tap to resize'}
+        className="shrink-0 flex h-5 items-center justify-center select-none cursor-s-resize bg-neutral-50 dark:bg-neutral-800"
+        title="Press and drag to resize"
       >
-        <span className={`w-10 h-1 rounded-full transition-colors duration-150 ${pillBg}`} />
+        <span className="h-1 w-10 rounded-full bg-neutral-300 dark:bg-neutral-600" />
       </div>
 
       {/* ── Header ── */}
-      <div className="flex shrink-0 items-start justify-between bg-neutral-50 dark:bg-neutral-700 px-5 pb-4">
+      <div onPointerDown={onDragHandlePointerDown} style={{ touchAction: 'none' }} className="flex shrink-0 cursor-s-resize select-none items-start justify-between bg-neutral-50 px-5 pb-4 dark:bg-neutral-700">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">{hydrant.id}</p>
           <button
