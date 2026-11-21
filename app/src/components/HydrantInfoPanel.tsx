@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
-import { useIsMobile } from '@/lib/use-media-query';
+import { useIsMobile, useIsMobileLandscape } from '@/lib/use-media-query';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { type Hydrant, STATUS_META } from '../data/hydrants';
 import { proxiedPhotoUrl } from '@/lib/photo-url';
@@ -40,6 +40,7 @@ export default function HydrantInfoPanel({
 }: HydrantInfoPanelProps) {
   const { role, accountType, aorBarangays } = useAuth();
   const isMobile = useIsMobile();
+  const isMobileLandscape = useIsMobileLandscape();
   const meta = STATUS_META[hydrant.status];
   // Editing and reporting are limited to the station's Area of Responsibility.
   const inAor     = role === 'admin' || ((accountType === 'station' || role === 'authorized' || role === 'head') && aorBarangays.includes(hydrant.barangay));
@@ -119,7 +120,7 @@ export default function HydrantInfoPanel({
     const headerH = (panelRef.current?.children[1] as HTMLElement | undefined)?.offsetHeight ?? 60;
     const infoH   = infoRef.current?.offsetHeight ?? 200;
     const MIN_H   = 20 + headerH + infoH; // drag handle + header + info
-    const MAX_H   = Math.floor(window.innerHeight * 0.72);
+    const MAX_H = Math.floor(window.innerHeight * (isMobileLandscape ? 0.9 : 0.72));
 
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
@@ -136,7 +137,7 @@ export default function HydrantInfoPanel({
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
-  }, []);
+  }, [isMobileLandscape]);
 
 
   return (
@@ -149,7 +150,7 @@ export default function HydrantInfoPanel({
       }
       style={{
         width:     isMobile ? '100%' : 'clamp(13rem, 22vw, 17rem)',
-        maxHeight: isMobile ? '72dvh' : 'calc(100dvh - 16rem)',
+        maxHeight: isMobile ? (isMobileLandscape ? '90dvh' : '72dvh') : 'calc(100dvh - 16rem)',
         ...(panelHeight !== null ? { height: panelHeight } : {}),
       }}
     >
