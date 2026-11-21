@@ -116,11 +116,13 @@ export default function HydrantInfoPanel({
     dragStartY.current = e.clientY;
     dragStartH.current = panelRef.current?.offsetHeight ?? 0;
 
-    // MIN keeps the info section (rows + buttons + "Open full details") always visible
     const headerH = (panelRef.current?.children[1] as HTMLElement | undefined)?.offsetHeight ?? 60;
-    const infoH   = infoRef.current?.offsetHeight ?? 200;
-    const MIN_H   = 20 + headerH + infoH; // drag handle + header + info
     const MAX_H = Math.floor(window.innerHeight * (isMobileLandscape ? 0.9 : 0.72));
+    // A touch sheet scrolls internally, so it must not use the full details
+    // content as its minimum height. On a short landscape screen that can be
+    // taller than the maximum and would leave the drag with no valid range.
+    const contentMinimum = isTouchDevice ? 96 : (infoRef.current?.offsetHeight ?? 200);
+    const MIN_H = Math.min(MAX_H - 24, 20 + headerH + contentMinimum);
 
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
@@ -137,7 +139,7 @@ export default function HydrantInfoPanel({
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
-  }, [isMobileLandscape]);
+  }, [isMobileLandscape, isTouchDevice]);
 
 
   return (
